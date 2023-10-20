@@ -25,17 +25,24 @@
 🦁 We will always be aware of the <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">latest developments of code review</span> into the project
 
 
-# Project structure 🚗
-![img.png](./doc/img/project_framework.png)
+# [Project structure 🚗](https://vze9i86ezn.feishu.cn/docx/BuFidAogAoH1ecxQstscBUdhnfb?openbrd=1&doc_app_id=501&blockId=YneudO6sRoXPFIxkohtcgbwenye&blockType=whiteboard&blockToken=Yd3CwIPdphgGmFbWcRfcx9aNnrf#YneudO6sRoXPFIxkohtcgbwenye)
+
+<p align="center">
+  <img src="doc/img/project_framework.png" style="width:500px;"/>
+</p>
 
 
 # Results preview 🌈
 
 ### 1. Gitlab Code Review for Merge Request
-![img.png](doc/img/gpt_code_review_gitlab.png)
+<p align="center">
+  <img src="doc/img/gpt_code_review_gitlab.png" style="width:500px;"/>
+</p>
 
 ### 2. Dingding-code-review message 
-![img.png](doc/img/img.png)
+<p align="center">
+  <img src="doc/img/img.png" style="width:500px;"/>
+</p>
 
 
 # Usage 📖
@@ -59,7 +66,9 @@ vim config/config.py
 python3 app.py
 ```
 5.**config gitlab webhook**
-
+<p align="center">
+  <img src="doc/img/webhookconfig.png" style="width:300px;"/>
+</p>
 6.**make a mr 🎉**
 
 
