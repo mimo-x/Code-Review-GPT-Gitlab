@@ -7,21 +7,16 @@
   <a href="README.en.md">English README</a> | <a href="README.md">中文 README</a>
 </p>
 
-![github license](https://img.shields.io/github/license/mimo-x/Code-Review-GPT-Gitlab)
 
 # Description 📚
-    A project using LLM to empower Code Review 💪🏻 ((LLM not only includes GPT 🎁))
+> A project using LLM to empower Code Review 💪🏻 ((LLM not only includes GPT 🎁))
 
 ### What are the characteristics of the project? ✨
 
 * We <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">customize it for gitlab</span>
- 
 * We combine the powers of <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">GPT</span> 🚀
-
-* We're going to access <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">privatization LLM</span>
- to solve code security issues
-* We will always be aware of the <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">latest developments of code review</span>
- into the project
+* We're going to access <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">privatization LLM</span> to solve code security issues
+* We will always be aware of the <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">latest developments of code review</span> into the project
 
 # Project structure 🚗
 ![img.png](./doc/img/project_framework.png)
@@ -80,6 +75,7 @@ todo dockerfile
 
 
 # License 📑
+![github license](https://img.shields.io/github/license/mimo-x/Code-Review-GPT-Gitlab)
 **This project is licensed under the [MIT License](https://chat.openai.com/c/9be6b422-f10c-4379-b152-e756230d54f8#:~:text=%E7%9A%84%E5%AE%8C%E6%95%B4%E6%96%87%E6%9C%AC%EF%BC%9A-,MIT%20License,-%E4%BD%A0%E5%8F%AF%E4%BB%A5%E8%AE%BF%E9%97%AE).**
 
 
