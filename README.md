@@ -6,7 +6,9 @@
 <p align="center">
   <a href="README.en.md">English README</a> | <a href="README.md">中文 README</a>
 </p>
-
+<p align="center">
+  ![github license](https://img.shields.io/github/license/mimo-x/Code-Review-GPT-Gitlab)
+</p>
 # Description 📚
     A project using LLM to empower Code Review 💪🏻 ((LLM not only includes GPT 🎁))
 
