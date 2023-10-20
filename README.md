@@ -69,7 +69,8 @@ python3 app.py
 <p align="center">
   <img src="doc/img/webhookconfig.png" style="width:300px;"/>
 </p>
-6.**make a mr 🎉**
+
+6.**make a mr🎉**
 
 
 
