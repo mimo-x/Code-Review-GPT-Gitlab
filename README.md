@@ -11,6 +11,7 @@
     A project using LLM to empower Code Review 💪🏻 ((LLM not only includes GPT 🎁))
 
 ### What are the characteristics of the project? ✨
+
 * We <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">customize it for gitlab</span>
  
 * We combine the powers of <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">GPT</span> 🚀
