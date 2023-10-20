@@ -1,6 +1,7 @@
-<p style="text-align:center;">
+<p align="center">
   <img src="doc/img/log.png" style="width:500px;"/>
 </p>
+
 
 
 <p align="center">
@@ -9,14 +10,20 @@
 
 
 # Description 📚
+
 > A project using LLM to empower Code Review 💪🏻 ((LLM not only includes GPT 🎁))
 
-### What are the characteristics of the project? ✨
 
-* We <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">customize it for gitlab</span>
-* We combine the powers of <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">GPT</span> 🚀
-* We're going to access <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">privatization LLM</span> to solve code security issues
-* We will always be aware of the <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">latest developments of code review</span> into the project
+**What are the characteristics of the project? ✨** 
+
+🐶 We customize it for gitlab
+
+🐱 We combine the powers of <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">GPT</span> 🚀
+
+🦊 We're going to access <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">privatization LLM</span> to solve code security issues
+
+🦁 We will always be aware of the <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">latest developments of code review</span> into the project
+
 
 # Project structure 🚗
 ![img.png](./doc/img/project_framework.png)
@@ -35,14 +42,29 @@
 
 ### install
 #### Run by Source code
-
+1.**clone repo**
 ```bash
 git clone git@github.com:mimo-x/Code-Review-GPT-Gitlab.git
-cd Code-Review-GPT-Gitlab
+```
+2.**install requirements**
+```bash
 pip install -r requirements.txt
-vim ./config/config.py 
+```
+3.**modify config file**
+```bash
+vim config/config.py
+```
+4.**run**
+```bash
 python3 app.py
 ```
+5.**config gitlab webhook**
+
+6.**make a mr 🎉**
+
+
+
+   
 #### Docker
 
 ```bash
@@ -50,7 +72,7 @@ todo dockerfile
 ```
 
 
-# Todo List
+# Todo List 📌
 
 - ✅ Use GPT to Code Review
 - [ ] Try to access the privatization LLM to Address code security issues
