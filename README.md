@@ -5,7 +5,7 @@
 
 
 <p align="center">
-  <a href="./README.EN.md">English README</a> | <a href="./README.md">中文 README</a>
+  <a href="./README_EN.md">English README</a> | <a href="./README.md">中文 README</a>
 </p>
 
 <p align="center">
@@ -15,6 +15,7 @@
   <a href="#待办清单">📌 待办清单</a>
   <a href="#联系我们">🚗 联系我们 </a>
 </p>
+
 # 项目描述 📚
 
 > 一个利用大模型帮助我们在 Gitlab 上进行 Code Review 提升研发效能的项目 💪🏻 (( 包括但不限于 GPT 🎁))
