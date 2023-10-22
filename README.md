@@ -5,71 +5,77 @@
 
 
 <p align="center">
-  <a href="README.en.md">English README</a> | <a href="README.md">中文 README</a>
+  <a href="./README.EN.md">English README</a> | <a href="./README.md">中文 README</a>
 </p>
 
+<p align="center">
+  <a href="#项目描述">🔍 项目描述</a> •
+  <a href="#功能预览">🍭 功能预览</a> •
+  <a href="#部署">🔧 部署安装</a> •
+  <a href="#待办清单">📌 待办清单</a>
+  <a href="#联系我们">🚗 联系我们 </a>
+</p>
+# 项目描述 📚
 
-# Description 📚
-
-> A project using LLM to empower Code Review 💪🏻 ((LLM not only includes GPT 🎁))
-
-
-**What are the characteristics of the project? ✨** 
-
-🐶 We customize it for gitlab
-
-🐱 We combine the powers of <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">GPT</span> 🚀
-
-🦊 We're going to access <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">privatization LLM</span> to solve code security issues
-
-🦁 We will always be aware of the <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">latest developments of code review</span> into the project
+> 一个利用大模型帮助我们在 Gitlab 上进行 Code Review 提升研发效能的项目 💪🏻 (( 包括但不限于 GPT 🎁))
 
 
-# [Project structure 🚗](https://vze9i86ezn.feishu.cn/docx/BuFidAogAoH1ecxQstscBUdhnfb?openbrd=1&doc_app_id=501&blockId=YneudO6sRoXPFIxkohtcgbwenye&blockType=whiteboard&blockToken=Yd3CwIPdphgGmFbWcRfcx9aNnrf#YneudO6sRoXPFIxkohtcgbwenye)
+**这个项目有什么特点? ✨** 
+
+🐶 针对于 <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">Gitlab 定制</span>
+
+🐱 结合了<span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">GPT</span>的能力  🚀
+
+🦊 正在尝试接入私有化 LLM  <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">代码安全问题</span> 
+
+🦁 我们将一直关注效能研发 <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">最新的Coder Review动态</span> 融入这个项目
+
+
+# [项目架构 🚗](https://vze9i86ezn.feishu.cn/docx/BuFidAogAoH1ecxQstscBUdhnfb?openbrd=1&doc_app_id=501&blockId=YneudO6sRoXPFIxkohtcgbwenye&blockType=whiteboard&blockToken=Yd3CwIPdphgGmFbWcRfcx9aNnrf#YneudO6sRoXPFIxkohtcgbwenye)
 
 <p align="center">
   <img src="doc/img/project_framework.png" style="width:500px;"/>
 </p>
 
 
-# Results preview 🌈
+# 功能预览 🌈
 
-### 1. Gitlab Code Review for Merge Request
+### 1. Gitlab Merge Request 触发评论
 <p align="center">
   <img src="doc/img/gpt_code_review_gitlab.png" style="width:500px;"/>
 </p>
 
-### 2. Dingding-code-review message 
+### 2. 钉钉消息通知
 <p align="center">
   <img src="doc/img/img.png" style="width:500px;"/>
 </p>
 
 
-# Usage 📖
+# 部署 📖
 
-### install
-#### Run by Source code
-1.**clone repo**
+#### 源代码运行 💻
+1.**克隆仓库**
 ```bash
 git clone git@github.com:mimo-x/Code-Review-GPT-Gitlab.git
 ```
-2.**install requirements**
+2.**安装依赖**
 ```bash
 pip install -r requirements.txt
 ```
-3.**modify config file**
+3.**修改配置文件**
 ```bash
 vim config/config.py
 ```
-4.**run**
+4.**运行**
 ```bash
 python3 app.py
 ```
-5.**config gitlab webhook**
+5.**配置Gitlab webhook**
 <p align="center">
   <img src="doc/img/webhookconfig.png" style="width:300px;"/>
 </p>
-6.**make a mr 🎉**
+
+6.**尝试发起一个 Merge Request 吧🎉**
 
 
 
@@ -81,26 +87,27 @@ todo dockerfile
 ```
 
 
-# Todo List 📌
+# 待办清单 📌
 
-- ✅ Use GPT to Code Review
-- [ ] Try to access the privatization LLM to Address code security issues
-- [ ] Enable more trigger methods
+- ✅ 使用 GPT 进行Code Review
+- [ ] 尝试接入私有化大模型解决代码安全问题
+- [ ] 可以配置更多的触发方式
   - ✅ Merge Request
-  - [ ] for every commit
-  - [ ] for tag
-- [ ] FeiShu(飞书) Code Review message notification
-- [ ] Static code analysis to Analyze the risk level of modifying code
+  - [ ] commit
+  - [ ] tag
+- [ ] 兼容飞书的消息通知
+- [ ] 兼容钉钉的消息通知
+- [ ] 结合静态代码分析来提供修改代码的风险等级
 
-# Communication 👨‍👨‍👦‍👦
-👏🏻You're welcome to ask us questions（issue，pr）, Thank you for your star ⭐️ 
+# 交流 👨‍👨‍👦‍👦
+👏🏻 很高兴你能向我们提出一些问题和修改建议（issue，pr）, 欢迎 star 项目 ⭐️ 
 
 📮 Email：mixuxin@163.com 
 
-👨‍👨‍👦‍👦 This is our WeChat group
+👨‍👨‍👦‍👦 如果有任何使用问题，欢迎来这里交流 👋🏻
 <img src="doc/img/wechat.jpg" style="width:400px">
 
-# reference 📚
+# 参考文献 📚
 - [(字节)基于大模型 + 知识库的 Code Review 实践](https://mp.weixin.qq.com/s?__biz=Mzg2ODQ1OTExOA==&mid=2247504479&idx=1&sn=1ec09afbb5b5b9b2aaf151994be5fd27&chksm=cea9655ef9deec48b17cbab05ddd1ab04c86736d8b469eaac6f5a707ca110ce4186e8985ff41&mpshare=1&scene=1&srcid=1011C8l5RmCM2EL4Rpl3wdRy&sharer_shareinfo=96d0a83631aaa25db87709baa250085d&sharer_shareinfo_first=96d0a83631aaa25db87709baa250085d#rd)
 - [(美团)代码变更风险可视化系统建设与实践](https://tech.meituan.com/2023/09/22/construction-and-practice-of-code-change-risk-visualization-system.html)
 
