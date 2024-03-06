@@ -4,3 +4,7 @@ app/mrmax.py
 db/*
 !db/.gitkeep
 /venv/
+
+/config/config_local.py
+
+.idea/
