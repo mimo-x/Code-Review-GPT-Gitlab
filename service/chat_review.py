@@ -161,36 +161,36 @@ def review_code_for_mr(project_id, merge_id, gitlab_message):
 
 
 @retry(stop_max_attempt_number=3, wait_fixed=2000)
-def review_code_for_add_commit(project_id, merge_id, commit_change_files, gitlab_message):
+def review_code_for_add_commit(project_id, merge_request_id, changed_files, gitlab_payload):
     """
     code review for gitlab commit
     :param project_id:
-    :param merge_id:
-    :param commit_change_files:
-    :param gitlab_message:
+    :param merge_request_id:
+    :param changed_files:
+    :param gitlab_payload:
     :return: 
     """
-    if len(commit_change_files) > 50:
+    if len(changed_files) > 50:
         send_dingtalk_message_by_sign(
-            f"project_name:{gitlab_message['project']['name']}\n备注：(增量commit)修改文件{len(commit_change_files)}个 > 50个 不进行codereview ⚠️ \n分支名：{gitlab_message.get('ref')}")
+            f"project_name:{gitlab_payload['project']['name']}\n备注：(增量commit)修改文件{len(changed_files)}个 > 50个 不进行codereview ⚠️ \n分支名：{gitlab_payload.get('ref')}")
 
     # 获取diff分支的修改文件列表
-    merge_change_files = get_merge_request_changes(project_id, merge_id)
+    merge_request_files = get_merge_request_changes(project_id, merge_request_id)
 
     # 根据增量commit 修改文件列表过滤merge request二次修改的文件
-    change_files = [file_content for file_content in merge_change_files if
-                    file_content["new_path"] in commit_change_files]
+    filtered_files = [file_content for file_content in merge_request_files if
+                      file_content["new_path"] in changed_files]
 
-    print("😊增量commit 修改文件列表", change_files)
-    if len(change_files) <= 50:
-        review_info = chat_review("", project_id, "", change_files, "", "")
+    print("😊增量commit 修改文件列表", filtered_files)
+    if len(filtered_files) <= 50:
+        review_info = chat_review("", project_id, "", filtered_files, "", "")
         if review_info:
-            add_comment_to_mr(project_id, merge_id, review_info)
+            add_comment_to_mr(project_id, merge_request_id, review_info)
             send_dingtalk_message_by_sign(
-                f"project_name:{gitlab_message['project']['name']}\n增量修改文件个数：{len(change_files)}\ncodereview状态：✅")
+                f"project_name:{gitlab_payload['project']['name']}\n增量修改文件个数：{len(filtered_files)}\ncodereview状态：✅")
 
     else:
         send_dingtalk_message_by_sign(
-            f"project_name:{gitlab_message['project']['name']}\n备注：增量commit 修改{len(change_files)} > 50个文件不进行codereview ⚠️ \n")
+            f"project_name:{gitlab_payload['project']['name']}\n备注：增量commit 修改{len(filtered_files)} > 50个文件不进行codereview ⚠️ \n")
 
 
