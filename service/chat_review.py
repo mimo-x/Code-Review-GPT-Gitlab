@@ -82,55 +82,53 @@ def generate_review_note(change):
         log.error(f"GPT error:{e}")
 
 
-def chat_review(index, project_id, project_commit_id, content, context, merge_comment_info):
+def chat_review(commit_index, project_id, commit_id, changes, context_info, merge_comment_details):
     log.info('开始code review')
-    if index:
-        review_info = f"\n# {index}.commit_id {project_commit_id} \n"
+    if commit_index:
+        review_summary = f"\n# {commit_index}.commit_id {commit_id} \n"
     else:
-        log.info(f"🚚 mr_changes{content}")
+        log.info(f"🚚 mr_changes{changes}")
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        results = []
+        review_results = []
         result_lock = threading.Lock()
 
-        def process_input(val):
-            result = generate_review_note(val)
+        def process_change(change):
+            result = generate_review_note(change)
             with result_lock:
-                results.append(result)
+                review_results.append(result)
 
         futures = []
-        for change in content:
+        for change in changes:
             if any(change["new_path"].endswith(ext) for ext in ['.py', '.java', '.class', '.vue', ".go"]) and not any(
                 change["new_path"].endswith(ext) for ext in ["mod.go"]):
-                futures.append(executor.submit(process_input, change))
+                futures.append(executor.submit(process_change, change))
             else:
                 log.info(f"{change['new_path']} 非目标检测文件！")
 
         concurrent.futures.wait(futures)
 
-    return "\n\n".join(results) if results else ""
+    return "\n\n".join(review_results) if review_results else ""
 
 
 # 针对于每个 commit 进行 cr
 @retry(stop_max_attempt_number=3, wait_fixed=2000)
-def review_code(project_id, project_commit_id, merge_id, context):
-    review_info = ""
-    index = 0
-    for commit_id in project_commit_id:
-        index += 1
+def review_code(project_id, commit_ids, merge_request_id, context):
+    review_summary = ""
+    for index, commit_id in enumerate(commit_ids, start=1):
         url = f'{gitlab_server_url}/api/v4/projects/{project_id}/repository/commits/{commit_id}/diff'
         log.info(f"开始请求gitlab的{url}   ,commit: {commit_id}的diff内容")
 
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
-            content = response.json()
+            diff_content = response.json()
             # 开始处理请求的类容
-            log.info(f"开始处理All请求的类容: {content}")
-            review_info += chat_review(index, project_id, commit_id, content, context, "")
+            log.info(f"开始处理All请求的类容: {diff_content}")
+            review_summary += chat_review(index, project_id, commit_id, diff_content, context, "")
 
         else:
             log.error(f"请求gitlab的{url}commit失败，状态码：{response.status_code}")
             raise Exception(f"请求gitlab的{url}commit失败，状态码：{response.status_code}")
-    add_comment_to_mr(project_id, merge_id, review_info)
+    add_comment_to_mr(project_id, merge_request_id, review_summary)
 
 
 # 针对mr进行cr
