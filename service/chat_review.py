@@ -3,7 +3,8 @@ import threading
 import openai
 from openai import OpenAIError
 from app.gitlab_utils import *
-from config.config import gitlab_server_url, gitlab_private_token, openai_api_key, openai_baseurl, openai_model_name
+from config.config import gitlab_server_url, gitlab_private_token, api_config
+from llm_api.load_api import create_llm_api_instance
 from service.content_handle import filter_diff_content
 from utils.logger import log
 from utils.dingding import send_dingtalk_message_by_sign
@@ -45,8 +46,6 @@ def wait_and_retry(exception):
 def generate_review_note(change):
     try:
         content = filter_diff_content(change['diff'])
-        openai.api_key = openai_api_key
-        openai.api_base = openai_baseurl
         messages = [
             {"role": "system",
              "content": gpt_message
@@ -56,14 +55,13 @@ def generate_review_note(change):
              },
         ]
         log.info(f"发送给gpt 内容如下：{messages}")
-        response = openai.ChatCompletion.create(
-            model=openai_model_name,
-            messages=messages,
-        )
+        api = create_llm_api_instance()
+        api.set_config(api_config)
+        api.generate_text(messages)
         new_path = change['new_path']
         log.info(f'对 {new_path} review中...')
-        response_content = response['choices'][0]['message']['content'].replace('\n\n', '\n')
-        total_tokens = response['usage']['total_tokens']
+        response_content = api.get_respond_content().replace('\n\n', '\n')
+        total_tokens = api.get_respond_tokens()
         review_note = f'# 📚`{new_path}`' + '\n\n'
         review_note += f'({total_tokens} tokens) {"AI review 意见如下:"}' + '\n\n'
         review_note += response_content + """

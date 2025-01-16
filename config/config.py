@@ -2,16 +2,18 @@
 # model list
 model_quester_anster = "text-davinci-003"
 model_gpt_35_turbo = "gpt-3.5-turbo"
+model_gpt_4o = "gpt-4o"
 model_programming_translate = "code-davinci-002"
 
-# gpt key
-openai_api_key = "your openai key"
+# api 接口封装类
+llm_api_impl = "llm_api_default.LLMApiDefault"
 
-# openai api
-openai_baseurl = "https://api.openai.com/v1"
-
-# gpt model
-openai_model_name = model_gpt_35_turbo
+# api 配置，参考LiteLLM文档：https://docs.litellm.ai/docs
+api_config = {
+    "OPENAI_API_KEY": "Your OpenAI API Key",
+    "OPENAI_API_BASE": "https://api.openai.com/v1",
+    "MODEL_NAME": model_gpt_4o,
+}
 
 # 2. 提示词
 gpt_message = """
