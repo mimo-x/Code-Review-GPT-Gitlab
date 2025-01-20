@@ -5,6 +5,7 @@ from litellm import completion
 from config.config import api_config as out_config
 from llm_api.llm_api_interface import LLMApiInterface
 from llm_api.load_api import create_llm_api_instance
+from unionllm import unionchat
 
 
 class LLMApiDefault(LLMApiInterface):
@@ -12,6 +13,7 @@ class LLMApiDefault(LLMApiInterface):
     def __init__(self):
         self.model_name = None
         self.response = None
+        self.provider = None
 
     def set_config(self, api_config: dict) -> bool:
         if api_config is None:
@@ -19,16 +21,16 @@ class LLMApiDefault(LLMApiInterface):
         for key in api_config:
             if key == "MODEL_NAME":
                 self.model_name = api_config[key]
-                continue
+            if key == "PROVIDER":
+                self.provider = api_config[key]
             os.environ[key] = api_config[key]
         return True
 
     def generate_text(self, messages: list) -> bool:
 
-        self.response = completion(
-            model=self.model_name,
-            messages=messages,
-        )
+        self.response = unionchat(provider=self.provider, model=self.model_name,
+                                  messages=messages)
+
         return True
 
     def get_respond_content(self) -> str:
@@ -36,8 +38,6 @@ class LLMApiDefault(LLMApiInterface):
 
     def get_respond_tokens(self) -> int:
         return trunc(int(self.response['usage']['total_tokens']))
-
-
 
 
 # 示例使用
@@ -54,4 +54,3 @@ if __name__ == "__main__":
     ])
     print(api.get_respond_content())
     print(api.get_respond_tokens())
-

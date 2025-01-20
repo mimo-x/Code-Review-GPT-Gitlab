@@ -2,7 +2,7 @@ import json
 import threading
 from os import abort
 from flask import Blueprint, request, jsonify
-from config.config import WEBHOOK_VERIFY_TOKEN
+# from config.config import WEBHOOK_VERIFY_TOKEN
 from service.chat_review import review_code, review_code_for_mr, review_code_for_add_commit
 from utils.logger import log
 from app.gitlab_utils import get_commit_list, get_merge_request_id, get_commit_change_file
@@ -23,10 +23,10 @@ def webhook():
         webhook_token = request.headers.get('X-Gitlab-Token')
 
         # gitlab的webhook的token验证
-        if webhook_token == WEBHOOK_VERIFY_TOKEN:
-            return jsonify({'status': 'success'}), 200
-        else:
-            return jsonify({'status': 'bad token'}), 401
+        # if webhook_token == WEBHOOK_VERIFY_TOKEN:
+        return jsonify({'status': 'success'}), 200
+        #else:
+        #    return jsonify({'status': 'bad token'}), 401
 
     elif request.method == 'POST':
         """
