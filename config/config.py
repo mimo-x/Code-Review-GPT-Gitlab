@@ -6,13 +6,15 @@ model_gpt_4o = "gpt-4o"
 model_programming_translate = "code-davinci-002"
 
 # api 接口封装类
-llm_api_impl = "llm_api_default.LLMApiDefault"
+llm_api_impl = "llm_api.llm_api_default.LLMApiDefault"
 
-# api 配置，参考LiteLLM文档：https://docs.litellm.ai/docs
+# api 配置默使用认UnionLLM，参考：https://github.com/EvalsOne/UnionLLM/tree/main/docs
+# UnionLLM兼容LiteLLM，参考LiteLLM文档：https://docs.litellm.ai/docs
 api_config = {
-    "OPENAI_API_KEY": "Your OpenAI API Key",
+    "OPENAI_API_KEY": "your openai key",
     "OPENAI_API_BASE": "https://api.openai.com/v1",
     "MODEL_NAME": model_gpt_4o,
+    "PROVIDER": "openai",
 }
 
 # 2. 提示词
@@ -41,7 +43,7 @@ gpt_message = """
 
 # -------------Gitlab info------------------
 # Gitlab url
-gitlab_server_url = "https://gitlab.example.com"
+gitlab_server_url = "https://gitlab.com"
 
 # Gitlab private token
 gitlab_private_token = "gitlab private token"
