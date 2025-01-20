@@ -70,6 +70,8 @@ pip install -r requirements.txt
 ```bash
 vim config/config.py
 ```
+参数配置方式与多模型支持参见[config.md](doc/config.md)
+
 4.**运行**
 ```bash
 python3 app.py
@@ -94,6 +96,7 @@ todo dockerfile
 # 待办清单 📌
 
 - ✅ 使用 GPT 进行Code Review
+- ✅ 实现多模型支持
 - [ ] 尝试接入私有化大模型解决代码安全问题
 - [ ] 可以配置更多的触发方式
   - ✅ Merge Request
