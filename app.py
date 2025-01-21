@@ -1,6 +1,7 @@
 import os
 from flask import Flask, jsonify, make_response
 from app.gitlab_webhook import git
+from utils.args_check import check_config
 from utils.logger import log
 
 app = Flask(__name__)
@@ -20,5 +21,7 @@ def handle_error(error):
 if __name__ == '__main__':
     os.environ['STABILITY_HOST'] = 'grpc.stability.ai:443'
     app.config['JSON_AS_ASCII'] = False
+    log.info('Starting args check...')
+    check_config()
     log.info('Starting the app...')
     app.run(debug=True, host="0.0.0.0", port=80, use_reloader=False)

@@ -12,11 +12,11 @@
   <a href="https://tqz0rsrhsvf.feishu.cn/docx/FlgzdMrj0oYOg2xXY7EcrsZZnjb?from=from_copylink">📚 官方文档</a>
 </p>
 <p align="center">
-  <a href="#项目描述">🔍 项目描述</a> •
-  <a href="#功能预览">🍭 功能预览</a> •
-  <a href="#部署">🔧 部署安装</a> •
-  <a href="#待办清单">📌 待办清单</a>
-  <a href="#联系我们">🚗 联系我们 </a>
+  <a href="#项目描述-">🔍 项目描述</a> •
+  <a href="#功能预览-">🍭 功能预览</a> •
+  <a href="#部署-">🔧 部署安装</a> •
+  <a href="#待办清单-">📌 待办清单</a>
+  <a href="#交流-">🚗 联系我们 </a>
 </p>
 
 # 项目描述 📚
@@ -159,6 +159,7 @@ vim config/config.py
 python3 app.py
 ```
 5.**配置Gitlab webhook**
+> 填写```Webhook URL```时，请在域名后添加路径```/git/webhook```，例如：```http://example.com/git/webhook```
 <p align="center">
   <img src="doc/img/webhookconfig.png" style="width:300px;"/>
 </p>
