@@ -1,4 +1,5 @@
 import importlib
+import warnings
 
 from config.config import llm_api_impl
 
@@ -12,5 +13,7 @@ def get_llm_api_class():
 
 # 使用工厂函数获取类实例
 def create_llm_api_instance():
-    cls = get_llm_api_class()
-    return cls()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=UserWarning)
+        cls = get_llm_api_class()
+        return cls()

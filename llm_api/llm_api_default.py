@@ -27,10 +27,10 @@ class LLMApiDefault(LLMApiInterface):
         return True
 
     def generate_text(self, messages: list) -> bool:
-
-        self.response = unionchat(provider=self.provider, model=self.model_name,
-                                  messages=messages)
-
+        try:
+            self.response = unionchat(provider=self.provider, model=self.model_name, messages=messages)
+        except Exception as e:
+            raise e
         return True
 
     def get_respond_content(self) -> str:
