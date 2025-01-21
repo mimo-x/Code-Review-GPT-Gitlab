@@ -15,13 +15,9 @@ DEBUG = 10
 NOTSET = 0
 # Set the current directory
 current_dir = os.path.abspath(os.path.dirname(__file__))
-# Set the parent directory
 parent_dir = os.path.abspath(os.path.join(current_dir, ".."))
-# Set the current path
 CURRENT_PATH = os.path.dirname(os.path.abspath(__file__))
-# Set the root path
 ROOT_PATH = os.path.join(CURRENT_PATH, os.pardir)
-# Set the log path
 LOG_PATH = os.path.join(parent_dir, 'logs')
 
 
@@ -64,29 +60,21 @@ class LogHandler(logging.Logger):
 
     def __setStreamHandler__(self, level=None):
 
-        # Create a stream handler
         stream_handler = logging.StreamHandler()
-        # Set the format of the handler
         formatter = logging.Formatter(
             '%(asctime)s.%(msecs)03d %(levelname)s | [%(threadName)s] %(name)s [%(lineno)d] | %(filename)s %(funcName)s | %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S')
         stream_handler.setFormatter(formatter)
-        # If no level is specified, set the level to the level of the handler
+
         if not level:
             stream_handler.setLevel(self.level)
-        # Otherwise, set the level to the specified level
         else:
             stream_handler.setLevel(level)
-        # Add the handler to the logger
         self.addHandler(stream_handler)
 
     def resetName(self, name):
-
-        # Set the name of the logger
         self.name = name
-        # Remove the existing file handler
         self.removeHandler(self.file_handler)
-        # Set a new file handler
         self.__setFileHandler__()
 
 project_name = 'chat'

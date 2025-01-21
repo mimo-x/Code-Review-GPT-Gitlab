@@ -54,6 +54,89 @@
   <img src="doc/img/img.png" style="width:500px;"/>
 </p>
 
+### 3. 更多种大模型接入
+1. 可通过实现项目接口快速接入自定义模型，具体配置方式参见[config.md](doc/config.md)。
+2. 项目通过[UnionLLM](https://github.com/EvalsOne/UnionLLM/)进行多模型支持，
+兼容[LiteLLM](https://docs.litellm.ai/docs)，默认支持模型如下表所示。
+
+<table style="width:100%; text-align:center; border-collapse:collapse;">
+  <tr>
+    <td>OpenAI</td>
+    <td>Azure</td>
+    <td>AWS - SageMaker</td>
+    <td>AWS - Bedrock</td>
+  </tr>
+  <tr>
+    <td>Google - Vertex_AI</td>
+    <td>Google - Palm</td>
+    <td>Google AI Studio - Gemini</td>
+    <td>Mistral AI API</td>
+  </tr>
+  <tr>
+    <td>Cloudflare AI Workers</td>
+    <td>Cohere</td>
+    <td>Anthropic</td>
+    <td>Empower</td>
+  </tr>
+  <tr>
+    <td>Huggingface</td>
+    <td>Replicate</td>
+    <td>Together_AI</td>
+    <td>OpenRouter</td>
+  </tr>
+  <tr>
+    <td>AI21</td>
+    <td>Baseten</td>
+    <td>Vllm</td>
+    <td>NLP_Cloud</td>
+  </tr>
+  <tr>
+    <td>Aleph Alpha</td>
+    <td>Petals</td>
+    <td>Ollama</td>
+    <td>Deepinfra</td>
+  </tr>
+  <tr>
+    <td>Perplexity-AI</td>
+    <td>Groq AI</td>
+    <td>DeepSeek</td>
+    <td>Anyscale</td>
+  </tr>
+  <tr>
+    <td>IBM - Watsonx.ai</td>
+    <td>Voyage AI</td>
+    <td>Xinference [Xorbits Inference]</td>
+    <td>FriendliAI</td>
+  </tr>
+  <tr>
+    <td>Galadriel</td>
+    <td>智谱AI</td>
+    <td>月之暗面 Moonshot</td>
+    <td>百度文心一言</td>
+  </tr>
+  <tr>
+    <td>阿里巴巴通义千问</td>
+    <td>MiniMax</td>
+    <td>讯飞星火</td>
+    <td>百川智能</td>
+  </tr>
+  <tr>
+    <td>昆仑天工</td>
+    <td>零一万物</td>
+    <td>阶跃星辰</td>
+    <td>字节豆包</td>
+  </tr>
+  <tr>
+    <td>深度求索 DeepSeek</td>
+    <td>More</td>
+    <td></td>
+    <td></td>
+  </tr>
+</table>
+
+
+
+
 
 # 部署 📖
 
@@ -70,6 +153,7 @@ pip install -r requirements.txt
 ```bash
 vim config/config.py
 ```
+
 4.**运行**
 ```bash
 python3 app.py
@@ -94,6 +178,7 @@ todo dockerfile
 # 待办清单 📌
 
 - ✅ 使用 GPT 进行Code Review
+- ✅ 实现多模型支持
 - [ ] 尝试接入私有化大模型解决代码安全问题
 - [ ] 可以配置更多的触发方式
   - ✅ Merge Request
@@ -127,4 +212,6 @@ todo dockerfile
 **This project is licensed under the [MIT License](https://chat.openai.com/c/9be6b422-f10c-4379-b152-e756230d54f8#:~:text=%E7%9A%84%E5%AE%8C%E6%95%B4%E6%96%87%E6%9C%AC%EF%BC%9A-,MIT%20License,-%E4%BD%A0%E5%8F%AF%E4%BB%A5%E8%AE%BF%E9%97%AE).**
 
 
+## Star History
 
+[![Star History Chart](https://api.star-history.com/svg?repos=mimo-x/Code-Review-GPT-Gitlab&type=Date)](https://star-history.com/#mimo-x/Code-Review-GPT-Gitlab&Date)

@@ -6,7 +6,7 @@ from utils.logger import log
 app = Flask(__name__)
 app.config['debug'] = True
 
-# 路由组
+# router group
 app.register_blueprint(git, url_prefix='/git')
 
 
