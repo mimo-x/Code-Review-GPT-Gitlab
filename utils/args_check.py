@@ -29,7 +29,13 @@ def check_config():
             results.append(["Gitlab configuration", "Failed",
                             "\n".join(gitlab_check['errors']),
                             "❌ Code review function cannot be used.\n❌ Comment function cannot be used."])
-
+        dingding_check = check_dingding_config(config)
+        if dingding_check['passed']:
+            results.append(["Dingding configuration", "Passed", "", "✅ Notification on Dingtalk function can be used."])
+        else:
+            results.append(["Dingding configuration", "Failed",
+                            "\n".join(dingding_check['errors']),
+                            "⚠️ Notification on Dingtalk function cannot be used."])
     except ImportError:
         results.append(["Configuration file", "Failed", "config.py not found",
                         "❌ Cannot run any Service, please create a config.py file"])
@@ -40,6 +46,26 @@ def check_config():
         return print_results(results)
 
     return print_results(results)
+
+def check_dingding_config(config):
+    """
+    Check the dingding configuration
+    :return: dict
+    """
+    result = {'passed': True, 'errors': []}
+    try:
+        from utils.dingding import send_dingtalk_message_by_sign
+        response = send_dingtalk_message_by_sign("连通性测试：测试消息，请勿回复。")
+        if not response:
+            error_msg = "Dingding configuration is invalid"
+            result['errors'].append(error_msg)
+            result['passed'] = False
+
+    except Exception as e:
+        result['errors'].append(str(e))
+        result['passed'] = False
+
+    return result
 
 def check_gitlab_config(config):
     """

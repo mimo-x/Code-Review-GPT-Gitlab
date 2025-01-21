@@ -97,11 +97,9 @@ def send_dingtalk_message_by_sign(message_text):
     )
 
     # 检查响应
-    if response.status_code == 200:
-        print("消息已发送成功。")
+    if response.status_code == 200 and response.json()["errcode"] == 0:
         return True
     else:
-        print("消息发送失败，HTTP状态码：", response.status_code)
         return False
 
 if __name__ == "__main__":
