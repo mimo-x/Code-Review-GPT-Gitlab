@@ -3,7 +3,3 @@ logs
 app/mrmax.py
 db
 /venv/
-.idea
-.venv
-*.iml
-*.pyc
