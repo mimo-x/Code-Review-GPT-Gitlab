@@ -8,13 +8,14 @@ model_programming_translate = "code-davinci-002"
 # api 接口封装类
 llm_api_impl = "llm_api.llm_api_default.LLMApiDefault"
 
-# api 配置默使用认UnionLLM，参考：https://github.com/EvalsOne/UnionLLM/tree/main/docs
+# api 配置方式参考 docs/llm_api.md
+# 默认使用认UnionLLM，参考：https://github.com/EvalsOne/UnionLLM/tree/main/docs
 # UnionLLM兼容LiteLLM，参考LiteLLM文档：https://docs.litellm.ai/docs
 api_config = {
-    "OPENAI_API_KEY": "your openai key",
-    "OPENAI_API_BASE": "https://api.openai.com/v1",
-    "MODEL_NAME": model_gpt_4o,
-    "PROVIDER": "openai",
+    "api_key": "your openai key",
+    "api_base": "https://api.openai.com/v1",
+    "model": model_gpt_4o,
+    "provider": "openai",
 }
 
 # Prompt
