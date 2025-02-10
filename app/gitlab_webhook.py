@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from webhook_processor.webhook_listener import webhook_listener
+from gitlab_integration.webhook_listener import webhook_listener
 
 git = Blueprint('git', __name__)
 
