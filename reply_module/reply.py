@@ -4,11 +4,14 @@ from reply_module.reply_target.reply_factory import ReplyFactory
 
 
 class Reply:
-    def __init__(self, project_id, merge_request_iid):
+    def __init__(self, config):
+        if not isinstance(config, dict):
+            raise Exception('Reply config should be a dict.')
+        if 'type' not in config:
+            raise Exception('Reply config should contain a type field.')
+        self.config = config
         self.replies = []
         self.lock = threading.Lock()
-        self.project_id = project_id
-        self.merge_request_iid = merge_request_iid
 
     def add_reply(self, reply_msg):
         # reply 格式检查：title, content 必选
@@ -40,7 +43,7 @@ class Reply:
             self.__parse_msg(main_msg, msg_list)
         ret = True
         for target, msg in msg_list.items():
-            reply_target = ReplyFactory.get_reply_instance(target, self.project_id, self.merge_request_iid)
+            reply_target = ReplyFactory.get_reply_instance(target, self.config)
             ret &= reply_target.send(msg)
         return ret
 
@@ -53,7 +56,7 @@ class Reply:
             targets = ReplyFactory.get_all_targets()
         ret = True
         for target in targets:
-            reply_target = ReplyFactory.get_reply_instance(target, self.project_id, self.merge_request_iid)
+            reply_target = ReplyFactory.get_reply_instance(target, self.config)
             # 如果title不为__IGNORE__ or __MAIN_REVIEW__, 则发送带有标题的消息
             if 'title' not in reply or reply['title'] not in ['__IGNORE__', '__MAIN_REVIEW__']:
                 ret &= reply_target.send(f"## {reply['title']}\n\n{reply['content']}\n\n")
@@ -75,7 +78,9 @@ class Reply:
 
 
 if __name__ == '__main__':
-    reply = Reply(9885, 18)
+    reply = Reply({'type': 'merge_request',
+                   'project_id': 9885,
+                   'merge_request_iid': 18})
     threads = []
     for i in range(10):
         threads.append(threading.Thread(target=reply.add_reply, args=(

@@ -11,11 +11,18 @@ from reply_module.reply_target.abstract_reply import AbstractReply
 
 
 class DingtalkReply(AbstractReply):
-    def __init__(self, project_id, merge_request_id):
-        super().__init__(project_id, merge_request_id)
+    def __init__(self, config):
+        super().__init__(config)
+        self.type = config['type']
+        if self.type == 'merge_request':
+            self.project_id = config['project_id']
+            self.merge_request_id = config['merge_request_iid']
 
     def send(self, message):
-        return self.send_dingtalk_message_by_sign(message)
+        if self.type == 'merge_request':
+            return self.send_dingtalk_message_by_sign(message)
+        else:
+            return False
 
     def send_dingtalk_message_by_sign(self, message_text):
         """

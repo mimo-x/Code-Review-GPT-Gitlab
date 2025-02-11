@@ -9,14 +9,14 @@ class ReplyFactory:
         cls._registry[target] = target_class
 
     @classmethod
-    def get_reply_instance(cls, target, project_id, merge_request_id):
+    def get_reply_instance(cls, target, config):
         if target not in cls._registry:
             raise ValueError(f"Unknown target: {target}")
-        return cls._registry[target](project_id, merge_request_id)
+        return cls._registry[target](config)
 
     @classmethod
-    def get_all_reply_instance(cls, project_id, merge_request_id):
-        return [target_class(project_id, merge_request_id) for target_class in cls._registry.values()]
+    def get_all_reply_instance(cls, config):
+        return [target_class(config) for target_class in cls._registry.values()]
 
     @classmethod
     def get_all_targets(cls):

@@ -28,12 +28,28 @@ class WebhookListener:
         return self.call_handle(gitlab_payload, event_type)
 
     def call_handle(self, gitlab_payload, event_type):
-        reply = Reply(gitlab_payload.get('project')['id'], gitlab_payload.get("object_attributes")["iid"])
         if event_type == 'merge_request':
+            config = {
+                'type': 'merge_request',
+                'project_id': gitlab_payload.get('project')['id'],
+                'merge_request_iid': gitlab_payload.get('object_attributes')['iid']
+            }
+            reply = Reply(config)
             return self.handle_merge_request(gitlab_payload, reply)
         elif event_type == 'push':
+            config = {
+                'type': 'push',
+                'project_id': gitlab_payload.get('project')['id']
+            }
+            reply = Reply(config)
+
             return self.handle_push(gitlab_payload, reply)
         else:
+            config = {
+                'type': 'other',
+                'project_id': gitlab_payload.get('project')['id']
+            }
+            reply = Reply(config)
             return self.handle_other(gitlab_payload, reply)
 
     def handle_merge_request(self, gitlab_payload, reply):

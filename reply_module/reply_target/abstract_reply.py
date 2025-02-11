@@ -2,9 +2,8 @@ from abc import ABC, abstractmethod
 
 class AbstractReply(ABC):
     @abstractmethod
-    def __init__(self, project_id, merge_request_id):
-        self.project_id = project_id
-        self.merge_request_id = merge_request_id
+    def __init__(self, config):
+        self.config = config
 
     @abstractmethod
     def send(self, message):

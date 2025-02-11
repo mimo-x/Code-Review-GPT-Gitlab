@@ -4,7 +4,7 @@ import threading
 from retrying import retry
 
 from config.config import api_config, gpt_message
-from load_api import create_llm_api_instance
+from llm_api.load_api import create_llm_api_instance
 from review_engine.handler.abstract_handler import ReviewHandle
 from utils.gitlab_parser import filter_diff_content
 from utils.logger import log
@@ -147,7 +147,9 @@ if __name__ == '__main__':
     fetcher = GitlabMergeRequestFetcher(9885, 18)
     changes = fetcher.get_changes()
     info = fetcher.get_info()
-    reply = Reply(9885, 18)
+    reply = Reply({'type': 'merge_request',
+                     'project_id': 9885,
+                     'merge_request_iid': 18})
     hook_info = {
         "object_kind": "merge_request",
         "event_type": "merge_request",

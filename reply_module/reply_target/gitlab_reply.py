@@ -6,11 +6,21 @@ from utils.logger import log
 
 # 继承AbstractReply类，实现send方法
 class GitlabReply(AbstractReply):
-    def __init__(self, project_id, merge_request_id):
-        super().__init__(project_id, merge_request_id)
+    def __init__(self, config):
+        super().__init__(config)
+        self.type = config['type']
+        if self.type == 'merge_request':
+            self.project_id = config['project_id']
+            self.merge_request_id = config['merge_request_iid']
+
+    def send(self, message):
+        if self.type == 'merge_request':
+            return self.send_merge(message)
+        else:
+            return False
 
     @retry(stop_max_attempt_number=3, wait_fixed=2000)
-    def send(self, message):
+    def send_merge(self, message):
         headers = {
             "Private-Token": gitlab_private_token,
             "Content-Type": "application/json"
@@ -31,7 +41,3 @@ class GitlabReply(AbstractReply):
             log.error(
                 f"评论信息发送成功：project_id:{project_id}  merge_request_id:{merge_request_id} response:{response}")
             return False
-
-if __name__ == '__main__':
-    gitlab_reply = GitlabReply(9885, 18)
-    gitlab_reply.send("test")
