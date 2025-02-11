@@ -1,5 +1,6 @@
 import threading
 
+from large_model.llm_generator import LLMGenerator
 from utils.tools import import_submodules
 
 import_submodules('review_engine.handler')
@@ -15,7 +16,8 @@ class ReviewEngine:
 
     def handle_merge(self, changes, merge_info, webhook_info):
         # 多线程处理
-        threads = [threading.Thread(target=handle.merge_handle, args=(changes, merge_info, webhook_info, self.reply))
+        threads = [threading.Thread(target=handle.merge_handle, args=(changes, merge_info, webhook_info,
+                                                                      self.reply, LLMGenerator.new_model()))
                    for handle in self.handles]
         for thread in threads:
             thread.start()

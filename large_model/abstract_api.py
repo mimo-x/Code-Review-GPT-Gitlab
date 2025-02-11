@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-class LLMApiInterface(ABC):
+class AbstractApi(ABC):
 
     @abstractmethod
     def set_config(self, api_config: dict) -> bool:

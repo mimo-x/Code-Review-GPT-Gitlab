@@ -6,7 +6,7 @@ model_gpt_4o = "gpt-4o"
 model_programming_translate = "code-davinci-002"
 
 # api 接口封装类
-llm_api_impl = "llm_api.llm_api_default.LLMApiDefault"
+llm_api_impl = "large_model.api.default_api.DefaultApi"
 
 # api 配置方式参考 docs/llm_api.md
 # 默认使用认UnionLLM，参考：https://github.com/EvalsOne/UnionLLM/tree/main/docs

@@ -54,8 +54,9 @@ def check_dingding_config(config):
     """
     result = {'passed': True, 'errors': []}
     try:
-        from utils.dingding import send_dingtalk_message_by_sign
-        response = send_dingtalk_message_by_sign("连通性测试：测试消息，请勿回复。")
+        from reply_module.reply_target.dingtalk_reply import DingtalkReply
+        dingtalk_reply = DingtalkReply({'type': 'merge_request', 'project_id': 1, 'merge_request_iid': 1})
+        response = dingtalk_reply.send("连通性测试：测试消息，请勿回复。")
         if not response:
             error_msg = "Dingding configuration is invalid"
             result['errors'].append(error_msg)
@@ -100,9 +101,8 @@ def check_api_config(config):
     """
     result = {'passed': True, 'errors': []}
     try:
-        from llm_api.load_api import create_llm_api_instance
-        api = create_llm_api_instance()
-        api.set_config(config.api_config)
+        from large_model.llm_generator import LLMGenerator
+        api = LLMGenerator.new_model()
         api.generate_text([
             {"role": "system",
              "content": "你是一个有用的助手"

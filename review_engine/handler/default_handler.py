@@ -4,20 +4,19 @@ import threading
 from retrying import retry
 
 from config.config import api_config, gpt_message
-from llm_api.load_api import create_llm_api_instance
 from review_engine.handler.abstract_handler import ReviewHandle
 from utils.gitlab_parser import filter_diff_content
 from utils.logger import log
 
 
-def chat_review(changes):
+def chat_review(changes, model):
     log.info('开始code review')
     with concurrent.futures.ThreadPoolExecutor() as executor:
         review_results = []
         result_lock = threading.Lock()
 
         def process_change(change):
-            result = generate_review_note(change)
+            result = generate_review_note(change, model)
             with result_lock:
                 review_results.append(result)
 
@@ -34,7 +33,7 @@ def chat_review(changes):
     return "\n\n".join(review_results) if review_results else ""
 
 @retry(stop_max_attempt_number=3, wait_fixed=60000)
-def generate_review_note(change):
+def generate_review_note(change, model):
     try:
         content = filter_diff_content(change['diff'])
         messages = [
@@ -46,13 +45,11 @@ def generate_review_note(change):
              },
         ]
         log.info(f"发送给gpt 内容如下：{messages}")
-        api = create_llm_api_instance()
-        api.set_config(api_config)
-        api.generate_text(messages)
+        model.generate_text(messages)
         new_path = change['new_path']
         log.info(f'对 {new_path} review中...')
-        response_content = api.get_respond_content().replace('\n\n', '\n')
-        total_tokens = api.get_respond_tokens()
+        response_content = model.get_respond_content().replace('\n\n', '\n')
+        total_tokens = model.get_respond_tokens()
         review_note = f'# 📚`{new_path}`' + '\n\n'
         review_note += f'({total_tokens} tokens) {"AI review 意见如下:"}' + '\n\n'
         review_note += response_content + """
@@ -71,14 +68,14 @@ def generate_review_note(change):
 
 
 class MainReviewHandle(ReviewHandle):
-    def merge_handle(self, changes, merge_info, hook_info, reply):
-        self.default_handle(changes, merge_info, hook_info, reply)
+    def merge_handle(self, changes, merge_info, hook_info, reply, model):
+        self.default_handle(changes, merge_info, hook_info, reply, model)
 
-    def default_handle(self, changes, merge_info, hook_info, reply):
+    def default_handle(self, changes, merge_info, hook_info, reply, model):
         maximum_files = 50
         if changes and len(changes) <= maximum_files:
             # Code Review 信息
-            review_info = chat_review(changes)
+            review_info = chat_review(changes, model)
             if review_info:
                 reply.add_reply({
                     'title': '__MAIN_REVIEW__',
@@ -150,6 +147,8 @@ if __name__ == '__main__':
     reply = Reply({'type': 'merge_request',
                      'project_id': 9885,
                      'merge_request_iid': 18})
+    from large_model.llm_generator import LLMGenerator
+    model = LLMGenerator.new_model()
     hook_info = {
         "object_kind": "merge_request",
         "event_type": "merge_request",
@@ -198,4 +197,4 @@ if __name__ == '__main__':
             ]
         }
     }
-    main_handle.merge_handle(changes, info, hook_info, reply)
+    main_handle.merge_handle(changes, info, hook_info, reply, model)
