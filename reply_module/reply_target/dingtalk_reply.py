@@ -7,7 +7,7 @@ import requests
 import json
 from config.config import *
 from utils.logger import *
-from reply_module.reply_target.abstract_reply import AbstractReply
+from reply_module.abstract_reply import AbstractReply
 
 
 class DingtalkReply(AbstractReply):

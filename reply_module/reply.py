@@ -1,6 +1,6 @@
 import threading
 
-from reply_module.reply_target.reply_factory import ReplyFactory
+from reply_module.reply_factory import ReplyFactory
 
 
 class Reply:

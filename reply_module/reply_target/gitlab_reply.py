@@ -1,7 +1,7 @@
 import requests
 from retrying import retry
 from config.config import *
-from reply_module.reply_target.abstract_reply import AbstractReply
+from reply_module.abstract_reply import AbstractReply
 from utils.logger import log
 
 # 继承AbstractReply类，实现send方法
