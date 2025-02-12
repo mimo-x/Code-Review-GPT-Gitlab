@@ -42,13 +42,14 @@
   <img src="doc/img/project_framework.png" style="width:500px;"/>
 </p>
 
-🌟  **丰富的模型接入**  支持轻松接入<span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">更多的模型</span> ，无论是经典模型还是最新的AI模型，都能轻松集成！
+🌟 **丰富的模型接入**　支持轻松接入<span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">更多的模型</span>，无论是经典模型还是最新的 AI 模型，都能轻松集成！  
 
-🔧  **高度定制化**     开发者可以<span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">便捷地自定义处理逻辑和回复机制</span>，打造专属于你的解决方案！
+🔧 **高度定制化**　　　开发者可以<span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">便捷地自定义处理逻辑和回复机制</span>，打造专属于你的解决方案！  
 
-🔗  **扩展性强**       模块化设计使得功能扩展更加方便，未来可以<span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">轻松添加新功能</span>，满足不断变化的需求！
+🔗 **扩展性强**　　　　模块化设计使得功能扩展更加方便，未来可以<span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">轻松添加新功能</span>，满足不断变化的需求！  
 
-🛠️  **高可维护性**     代码结构清晰，注释详细，便于维护和二次开发，减少开发者的负担！
+🛠️ **高可维护性**　　　代码结构清晰，注释详细，便于维护和二次开发，减少开发者的负担！  
+
 
 **快来体验我们的新架构吧，享受前所未有的强大功能和极致体验！✨**
 
