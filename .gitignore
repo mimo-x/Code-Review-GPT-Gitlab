@@ -1,5 +1,10 @@
-/logs/
-logs
+/logs/*
+!logs/.gitkeep
 app/mrmax.py
-db
+db/*
+!db/.gitkeep
 /venv/
+
+/config/config_local.py
+
+.idea/

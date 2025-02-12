@@ -10,6 +10,7 @@ app.config['debug'] = True
 # router group
 app.register_blueprint(git, url_prefix='/git')
 
+
 @app.errorhandler(400)
 @app.errorhandler(404)
 def handle_error(error):
@@ -23,4 +24,4 @@ if __name__ == '__main__':
     log.info('Starting args check...')
     check_config()
     log.info('Starting the app...')
-    app.run(debug=True, host="0.0.0.0", port=80,use_reloader=False)
+    app.run(debug=True, host="0.0.0.0", port=80, use_reloader=False)
