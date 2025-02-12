@@ -5,6 +5,11 @@ from reply_module.reply_factory import ReplyFactory
 
 class Reply:
     def __init__(self, config):
+        """
+        初始化 Reply 实例
+        Args:
+            config (dict): 配置字典，包含初始化所需的配置信息
+        """
         if not isinstance(config, dict):
             raise Exception('Reply config should be a dict.')
         if 'type' not in config:
@@ -14,42 +19,68 @@ class Reply:
         self.lock = threading.Lock()
 
     def add_reply(self, reply_msg):
-        # reply 格式检查：title, content 必选
+        """
+        添加回复消息
+        Args:
+            reply_msg (dict): 回复消息字典，必须包含 'content' 字段
+        """
         if 'content' not in reply_msg:
             raise Exception('Reply format error, title and content are required.')
-        if 'priority' in reply_msg:
-            if not isinstance(reply_msg['priority'], int):
-                raise Exception('Reply format error, priority should be an integer.')
-            elif reply_msg['priority'] == 0:
+        if 'msg_type' in reply_msg:
+            if not isinstance(reply_msg['msg_type'], str):
+                raise Exception('Reply format error, msg_type should be a string.')
+            reply_msg['msg_type'] = [t.strip() for t in reply_msg['msg_type'].split(',')]
+            if 'SINGLE' in reply_msg['msg_type']:
                 self.send_single_message(reply_msg)
                 return
-
+        else:
+            reply_msg['msg_type'] = ['NORMAL']
+        if 'target' not in reply_msg:
+            reply_msg['target'] = 'all'
+        if 'title' not in reply_msg:
+            reply_msg['title'] = ''
+        if 'group_id' not in reply_msg:
+            reply_msg['group_id'] = 0
         with self.lock:  # 加锁
             self.replies.append(reply_msg)
 
     def send(self):
-        msg_list = {}
-        main_msg = None
+        """
+        实时发送单条消息
+        Args:
+            reply (dict): 单条回复消息字典，必须包含 'content' 字段
+        Returns:
+            bool: 表示发送是否成功
+        """
+        msg_groups = {}
+        main_msg_group = []
         with self.lock:  # 加锁
             # 发送所有消息的逻辑
             for msg in self.replies:
-                if msg['title'] == '__MAIN_REVIEW__':
-                    main_msg = msg
+                if 'MAIN' in msg['msg_type']:
+                    # msg 加入到 main_msg 中
+                    main_msg_group.append(msg)
                     continue
-                self.__parse_msg(msg, msg_list)
+                self.__parse_msg(msg, msg_groups)
 
             self.replies = []  # 清空已发送的消息
-        if main_msg:
-            self.__parse_msg(main_msg, msg_list)
+        for main_msg in main_msg_group:
+            self.__parse_msg(main_msg, msg_groups)
         ret = True
-        for target, msg in msg_list.items():
+        for target, msg_group in msg_groups.items():
             reply_target = ReplyFactory.get_reply_instance(target, self.config)
-            ret &= reply_target.send(msg)
+            for msg in msg_group:
+                ret &= reply_target.send(msg)
         return ret
 
     def send_single_message(self, reply):
         """
-        实时发送消息
+        实时发送单条消息
+
+        Args:
+            reply (dict): 单条回复消息字典，必须包含 'content' 字段
+        Returns:
+            bool: 表示发送是否成功
         """
         targets = [t.strip() for t in reply['target'].split(',')]
         if 'all' in targets:
@@ -57,25 +88,29 @@ class Reply:
         ret = True
         for target in targets:
             reply_target = ReplyFactory.get_reply_instance(target, self.config)
-            # 如果title不为__IGNORE__ or __MAIN_REVIEW__, 则发送带有标题的消息
-            if 'title' not in reply or reply['title'] not in ['__IGNORE__', '__MAIN_REVIEW__']:
-                ret &= reply_target.send(f"## {reply['title']}\n\n{reply['content']}\n\n")
-            else:
+            if ('TITLE_IGNORE' in reply['msg_type'] or 'MAIN' in reply['msg_type']
+                    or 'title' not in reply or not reply['title']):
                 ret &= reply_target.send(reply['content'])
+            else:
+                title = f"## {reply['title']}\n\n" if 'title' in reply else ''
+                ret &= reply_target.send(f"{title}{reply['content']}\n\n")
         return ret
 
-    def __parse_msg(self, msg, msg_list):
+    def __parse_msg(self, msg, msg_groups):
         targets = [t.strip() for t in msg['target'].split(',')]
-        if 'all' in targets:
+        if 'target' not in msg or 'all' in targets:
             targets = ReplyFactory.get_all_targets()
         for target in targets:
-            msg_list[target] = msg_list.get(target, '')
-            # 如果msg['title']不存在
-            if 'title' not in msg or msg['title'] in ['__IGNORE__', '__MAIN_REVIEW__']:
-                msg_list[target] = f"{msg['content']}\n\n" + msg_list[target]
+            if target not in msg_groups:
+                msg_groups[target] = {}
+            if msg['group_id'] not in msg_groups[target]:
+                msg_groups[target][msg['group_id']] = []
+            if ('TITLE_IGNORE' in msg['msg_type'] or 'MAIN' in msg['msg_type']
+                    or 'title' not in msg or not msg['title']):
+                msg_groups[target][msg['group_id']].insert(0, msg['content'])
             else:
-                msg_list[target] += f"## {msg['title']}\n\n{msg['content']}\n\n"
-
+                title = f"## {msg['title']}\n\n" if 'title' in msg else ''
+                msg_groups[target][msg['group_id']].append(f"{title}{msg['content']}\n\n")
 
 if __name__ == '__main__':
     reply = Reply({'type': 'merge_request',

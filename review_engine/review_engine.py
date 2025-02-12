@@ -10,7 +10,7 @@ class ReviewEngine:
         self.handles = []
         self.reply = reply
         # 动态导入所有的handle，位置在handle目录下
-        from .handler.abstract_handler import ReviewHandle
+        from review_engine.abstract_handler import ReviewHandle
         for handle in ReviewHandle.__subclasses__():
             self.handles.append(handle())
 
@@ -24,9 +24,3 @@ class ReviewEngine:
         for thread in threads:
             thread.join()
         self.reply.send()
-
-
-
-
-
-

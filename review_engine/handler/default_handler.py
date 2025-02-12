@@ -3,8 +3,8 @@ import threading
 
 from retrying import retry
 
-from config.config import api_config, gpt_message
-from review_engine.handler.abstract_handler import ReviewHandle
+from config.config import gpt_message
+from review_engine.abstract_handler import ReviewHandle
 from utils.gitlab_parser import filter_diff_content
 from utils.logger import log
 
@@ -78,10 +78,9 @@ class MainReviewHandle(ReviewHandle):
             review_info = chat_review(changes, model)
             if review_info:
                 reply.add_reply({
-                    'title': '__MAIN_REVIEW__',
                     'content': review_info,
+                    'msg_type': 'MAIN, SINGLE',
                     'target': 'all',
-                    'priority': 0
                 })
                 reply.add_reply({
                     'title': '__MAIN_REVIEW__',
@@ -96,7 +95,7 @@ class MainReviewHandle(ReviewHandle):
                         f"- **Code Review 状态**: ✅\n"
                     ),
                     'target': 'dingtalk',
-                    'priority': 0
+                    'msg_type': 'MAIN, SINGLE',
                 })
             else:
                 reply.add_reply({
@@ -113,7 +112,7 @@ class MainReviewHandle(ReviewHandle):
                         f"- **Code Review 状态**: pass ✅\n"
                     ),
                     'target': 'dingtalk',
-                    'priority': 0
+                    'msg_type': 'MAIN, SINGLE',
                 })
 
 
@@ -130,7 +129,7 @@ class MainReviewHandle(ReviewHandle):
                     f"- **目标分支**: `{hook_info['object_attributes']['target_branch']}`\n"
                 ),
                 'target': 'dingtalk',
-                'priority': 0
+                'msg_type': 'MAIN, SINGLE',
             })
 
         else:
