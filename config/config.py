@@ -1,22 +1,33 @@
-# ------------------GPT info--------------------------
-# model list
-model_quester_anster = "text-davinci-003"
-model_gpt_35_turbo = "gpt-3.5-turbo"
-model_gpt_4o = "gpt-4o"
-model_programming_translate = "code-davinci-002"
-
 # api 接口封装类
-llm_api_impl = "llm_api.llm_api_default.LLMApiDefault"
+llm_api_impl = "large_model.api.default_api.DefaultApi"
 
-# api 配置方式参考 docs/llm_api.md
+# DeepSeek配置示例
+# api 配置方式参考 docs/config.md
 # 默认使用认UnionLLM，参考：https://github.com/EvalsOne/UnionLLM/tree/main/docs
 # UnionLLM兼容LiteLLM，参考LiteLLM文档：https://docs.litellm.ai/docs
 api_config = {
-    "api_key": "your openai key",
-    "api_base": "https://api.openai.com/v1",
-    "model": model_gpt_4o,
-    "provider": "openai",
+    "api_key": "your deepseek key",
+    "model": 'deepseek-chat',
+    "provider": "deepseek",
 }
+# # GPT API 配置示例
+# # model list
+# model_gpt_35_turbo = "gpt-3.5-turbo"
+# model_gpt_4o = "gpt-4o"
+#
+# api_config = {
+#     "api_key": "your openai key",
+#     "api_base": "https://api.openai.com/v1",
+#     "model": model_gpt_4o,
+#     "provider": "openai",
+# }
+
+# ollama 配置示例
+# api_config = {
+#     "api_base": "http://localhost:11434",
+#     "model": "llama3.2",
+#     "provider": "ollama",
+# }
 
 # Prompt
 gpt_message = """
@@ -39,7 +50,7 @@ gpt_message = """
 #### 💻修改后的代码：
 ```python
 {变量4}
-
+```
          """
 
 # ------------------Gitlab info--------------------------

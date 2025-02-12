@@ -4,8 +4,9 @@
   - 默认`llm_api_default`使用`UnionLLM`进行多模型支持，`UnionLLM`兼容`LiteLLM`，
   支持模型和参数配置方式参见：[UnionLLM仓库](https://github.com/EvalsOne/UnionLLM/)和[LiteLLM文档](https://docs.litellm.ai/docs)。
   - 主流模型只需要修改`api_config`即可接入，无需修改该参数
-  - 实现默认不支持的大模型接入，可实现`llm_api_interface`接口，并将类名传入该参数。
+  - 实现默认不支持的大模型接入，可实现`AbstractApi`接口，并将类名传入该参数。
 - `api_config`: 大模型API配置
+  
   > 除必选参数外，其他参数根据模型需求填写，具体模型对应的参数参见[LiteLLM文档](https://docs.litellm.ai/docs)以及[UnionLLM仓库-DOC目录](https://github.com/EvalsOne/UnionLLM/tree/main/docs)中相应模型部分。具体而言：
   > 
   > 国外模型请查找[LiteLLM文档](https://docs.litellm.ai/docs)，并将`LiteLLM`示例中`litellm.completion`内的参数填写到`api_config`中，若示例需要通过环境变量鉴权，也请填写到`api_config`中。
@@ -35,6 +36,17 @@
     - 其他参数请参考上述文档
   - 该配置会自动传给`llm_api_impl`的`set_config`方法，用于初始化大模型API。 
 ### 示例
+
+#### DeepSeek
+
+```python
+api_config = {
+    "api_key": "your deepseek key",
+    "model": 'deepseek-chat',
+    "provider": "deepseek",
+}
+```
+
 #### ChatGPT
 ```python
 # 直接传入
