@@ -34,7 +34,7 @@
 🦁 我们将一直关注效能研发 <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">最新的Coder Review动态</span> 融入这个项目
 
 
-# [项目架构 🚗](https://vze9i86ezn.feishu.cn/docx/BuFidAogAoH1ecxQstscBUdhnfb?openbrd=1&doc_app_id=501&blockId=YneudO6sRoXPFIxkohtcgbwenye&blockType=whiteboard&blockToken=Yd3CwIPdphgGmFbWcRfcx9aNnrf#YneudO6sRoXPFIxkohtcgbwenye)
+# 项目架构 🚗
 
 ### 🚀 **全新架构升级：更强大、更灵活、更高效！** 🌈
 
@@ -50,7 +50,7 @@
 
 🛠️  **高可维护性**     代码结构清晰，注释详细，便于维护和二次开发，减少开发者的负担！
 
-**快来体验我们的新架构吧，享受前所未有的强大功能和极致体验！**✨
+**快来体验我们的新架构吧，享受前所未有的强大功能和极致体验！✨**
 
 
 
