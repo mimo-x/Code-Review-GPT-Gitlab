@@ -23,23 +23,38 @@
 
 > 一个利用大模型帮助我们在 Gitlab 上进行 Code Review 提升研发效能的项目 💪🏻 (( 包括但不限于 GPT 🎁))
 
-
 **这个项目有什么特点? ✨** 
 
 🐶 针对于 <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">Gitlab 定制</span>
 
 🐱 结合了<span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">GPT</span>的能力  🚀
 
-🦊 正在尝试接入私有化 LLM  <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">代码安全问题</span> 
+🦊 能够接入私有化 LLM  <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">代码安全问题</span> 
 
 🦁 我们将一直关注效能研发 <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">最新的Coder Review动态</span> 融入这个项目
 
 
 # [项目架构 🚗](https://vze9i86ezn.feishu.cn/docx/BuFidAogAoH1ecxQstscBUdhnfb?openbrd=1&doc_app_id=501&blockId=YneudO6sRoXPFIxkohtcgbwenye&blockType=whiteboard&blockToken=Yd3CwIPdphgGmFbWcRfcx9aNnrf#YneudO6sRoXPFIxkohtcgbwenye)
 
+### 🚀 **全新架构升级：更强大、更灵活、更高效！** 🌈
+
 <p align="center">
   <img src="doc/img/project_framework.png" style="width:500px;"/>
 </p>
+
+🌟  **丰富的模型接入**  支持轻松接入<span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">更多的模型</span> ，无论是经典模型还是最新的AI模型，都能轻松集成！
+
+🔧  **高度定制化**     开发者可以<span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">便捷地自定义处理逻辑和回复机制</span>，打造专属于你的解决方案！
+
+🔗  **扩展性强**       模块化设计使得功能扩展更加方便，未来可以<span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">轻松添加新功能</span>，满足不断变化的需求！
+
+🛠️  **高可维护性**     代码结构清晰，注释详细，便于维护和二次开发，减少开发者的负担！
+
+**快来体验我们的新架构吧，享受前所未有的强大功能和极致体验！**✨
+
+
+
+
 
 
 # 功能预览 🌈
@@ -133,7 +148,10 @@
     <td></td>
   </tr>
 </table>
+### 4. 自定义更多的通知方式和处理手段
 
+1. 可通过实现自定义``Reply``类添加如邮箱，私有机器人等多种通知方式，具体教程参见[reply.md](doc/reply.md)
+2. 可通过自定义更多的``Review Handle``引入自定义的代码审查逻辑，具体教程参见[review.md](doc/review.md)
 
 
 
@@ -168,7 +186,7 @@ python3 app.py
 
 
 
-   
+
 #### Docker
 
 ```bash
@@ -180,7 +198,6 @@ todo dockerfile
 
 - ✅ 使用 GPT 进行Code Review
 - ✅ 实现多模型支持
-- [ ] 尝试接入私有化大模型解决代码安全问题
 - [ ] 可以配置更多的触发方式
   - ✅ Merge Request
   - [ ] commit
@@ -188,6 +205,7 @@ todo dockerfile
 - [ ] 兼容飞书的消息通知
 - [ ] 兼容钉钉的消息通知
 - [ ] 结合静态代码分析来提供修改代码的风险等级
+- [ ] 通过pydantic实现大模型输出内容的格式化
 
 # 交流 👨‍👨‍👦‍👦
 👏🏻 很高兴你能向我们提出一些问题和修改建议（issue，pr）, 欢迎 star 项目 ⭐️ 
@@ -198,9 +216,10 @@ todo dockerfile
 
 👨‍👨‍👦‍👦 如果有任何使用问题，欢迎来这里交流 👋🏻
 <p float="left">
-  <img src="doc/img/wechat.png" width="400" />
+  <img src="doc/img/wechat.jpg" width="400" />
   <img src="doc/img/xuxin.png" width="400" /> 
 </p>
+
 
 
 # 参考文献 📚
