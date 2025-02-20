@@ -52,15 +52,7 @@ def generate_review_note(change, model):
         total_tokens = model.get_respond_tokens()
         review_note = f'# 📚`{new_path}`' + '\n\n'
         review_note += f'({total_tokens} tokens) {"AI review 意见如下:"}' + '\n\n'
-        review_note += response_content + """
-    ----
-    ----
-    ----
-    ----
-    ----
-    ----
-    ----
-        """
+        review_note += response_content + "\n\n---\n\n---\n\n"
         log.info(f'对 {new_path} review结束')
         return review_note
     except Exception as e:
