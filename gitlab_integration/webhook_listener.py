@@ -3,8 +3,8 @@ import threading
 
 from flask import request, jsonify
 
-from gitlab_integration.gitlab_fetcher import GitlabMergeRequestFetcher
-from reply_module.reply import Reply
+from gitlab_integration.gitlab_fetcher import GitlabMergeRequestFetcher, GitlabRepoManager
+from response_module.response_controller import ReviewResponse
 from review_engine.review_engine import ReviewEngine
 from utils.logger import log
 
@@ -31,14 +31,14 @@ class WebhookListener:
                 'project_id': gitlab_payload.get('project')['id'],
                 'merge_request_iid': gitlab_payload.get('object_attributes')['iid']
             }
-            reply = Reply(config)
+            reply = ReviewResponse(config)
             return self.handle_merge_request(gitlab_payload, reply)
         elif event_type == 'push':
             config = {
                 'type': 'push',
                 'project_id': gitlab_payload.get('project')['id']
             }
-            reply = Reply(config)
+            reply = ReviewResponse(config)
 
             return self.handle_push(gitlab_payload, reply)
         else:
@@ -46,7 +46,7 @@ class WebhookListener:
                 'type': 'other',
                 'project_id': gitlab_payload.get('project')['id']
             }
-            reply = Reply(config)
+            reply = ReviewResponse(config)
             return self.handle_other(gitlab_payload, reply)
 
     def handle_merge_request(self, gitlab_payload, reply):
@@ -58,11 +58,9 @@ class WebhookListener:
             project_id = gitlab_payload.get('project')['id']
             merge_request_iid = gitlab_payload.get("object_attributes")["iid"]
             review_engine = ReviewEngine(reply)
-            fetcher = GitlabMergeRequestFetcher(project_id, merge_request_iid)
-
-            changes = fetcher.get_changes()
-            info = fetcher.get_info()
-            thread = threading.Thread(target=review_engine.handle_merge, args=(changes, info, gitlab_payload))
+            gitlabMergeRequestFetcher = GitlabMergeRequestFetcher(project_id, merge_request_iid)
+            gitlabRepoManager = GitlabRepoManager(project_id)
+            thread = threading.Thread(target=review_engine.handle_merge, args=(gitlabMergeRequestFetcher, gitlabRepoManager, gitlab_payload))
             thread.start()
 
             return jsonify({'status': 'success'}), 200

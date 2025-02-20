@@ -14,13 +14,14 @@ class ReviewEngine:
         for handle in ReviewHandle.__subclasses__():
             self.handles.append(handle())
 
-    def handle_merge(self, changes, merge_info, webhook_info):
+    def handle_merge(self, gitlabMergeRequestFetcher, gitlabRepoManager, webhook_info):
         # 多线程处理
-        threads = [threading.Thread(target=handle.merge_handle, args=(changes, merge_info, webhook_info,
-                                                                      self.reply, LLMGenerator.new_model()))
-                   for handle in self.handles]
+        threads = [threading.Thread(target=handle.merge_handle,
+                                    args=(gitlabMergeRequestFetcher, gitlabRepoManager, webhook_info, self.reply,
+                                          LLMGenerator.new_model())) for handle in self.handles]
         for thread in threads:
             thread.start()
         for thread in threads:
             thread.join()
+        gitlabRepoManager.delete_repo()
         self.reply.send()

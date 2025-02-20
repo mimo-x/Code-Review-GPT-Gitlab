@@ -1,9 +1,9 @@
 import threading
 
-from reply_module.reply_factory import ReplyFactory
+from response_module.response_factory import ResponseFactory
 
 
-class Reply:
+class ReviewResponse:
     def __init__(self, config):
         """
         初始化 Reply 实例
@@ -17,6 +17,7 @@ class Reply:
         self.config = config
         self.replies = []
         self.lock = threading.Lock()
+        self.oter_res_state = {}
 
     def add_reply(self, reply_msg):
         """
@@ -68,7 +69,7 @@ class Reply:
             self.__parse_msg(main_msg, msg_groups)
         ret = True
         for target, msg_group in msg_groups.items():
-            reply_target = ReplyFactory.get_reply_instance(target, self.config)
+            reply_target = ResponseFactory.get_message_instance(target, self.config)
             for msg in msg_group:
                 ret &= reply_target.send(msg)
         return ret
@@ -84,10 +85,10 @@ class Reply:
         """
         targets = [t.strip() for t in reply['target'].split(',')]
         if 'all' in targets:
-            targets = ReplyFactory.get_all_targets()
+            targets = ResponseFactory.get_all_message_targets()
         ret = True
         for target in targets:
-            reply_target = ReplyFactory.get_reply_instance(target, self.config)
+            reply_target = ResponseFactory.get_message_instance(target, self.config)
             if ('TITLE_IGNORE' in reply['msg_type'] or 'MAIN' in reply['msg_type']
                     or 'title' not in reply or not reply['title']):
                 ret &= reply_target.send(reply['content'])
@@ -99,7 +100,7 @@ class Reply:
     def __parse_msg(self, msg, msg_groups):
         targets = [t.strip() for t in msg['target'].split(',')]
         if 'target' not in msg or 'all' in targets:
-            targets = ReplyFactory.get_all_targets()
+            targets = ResponseFactory.get_all_message_targets()
         for target in targets:
             if target not in msg_groups:
                 msg_groups[target] = {}
@@ -112,8 +113,19 @@ class Reply:
                 title = f"## {msg['title']}\n\n" if 'title' in msg else ''
                 msg_groups[target][msg['group_id']].append(f"{title}{msg['content']}\n\n")
 
+    def set_state(self, res_type, *args, **kwargs):
+        self.oter_res_state[res_type] = (args, kwargs)
+
+    def send_by_other(self, response_type, *args, **kwargs):
+        sender = ResponseFactory.get_other_instance(response_type, self.config)
+        if sender is None:
+            raise Exception(f'No such type {response_type} in other response.')
+        if self.oter_res_state.get(response_type):
+            sender.set_state(*self.oter_res_state[response_type])
+        return sender.send(*args, **kwargs)
+
 if __name__ == '__main__':
-    reply = Reply({'type': 'merge_request',
+    reply = ReviewResponse({'type': 'merge_request',
                    'project_id': 9885,
                    'merge_request_iid': 18})
     threads = []
