@@ -9,14 +9,14 @@ from utils.gitlab_parser import filter_diff_content
 from utils.logger import log
 
 
-def chat_review(changes, model):
+def chat_review(changes, generate_review, *args, **kwargs):
     log.info('开始code review')
     with concurrent.futures.ThreadPoolExecutor() as executor:
         review_results = []
         result_lock = threading.Lock()
 
         def process_change(change):
-            result = generate_review_note(change, model)
+            result = generate_review(change,  *args, **kwargs)
             with result_lock:
                 review_results.append(result)
 
@@ -68,14 +68,16 @@ def generate_review_note(change, model):
 
 
 class MainReviewHandle(ReviewHandle):
-    def merge_handle(self, changes, merge_info, hook_info, reply, model):
+    def merge_handle(self, gitlabMergeRequestFetcher, gitlabRepoManager, hook_info, reply, model):
+        changes = gitlabMergeRequestFetcher.get_changes()
+        merge_info = gitlabMergeRequestFetcher.get_info()
         self.default_handle(changes, merge_info, hook_info, reply, model)
 
     def default_handle(self, changes, merge_info, hook_info, reply, model):
         maximum_files = 50
         if changes and len(changes) <= maximum_files:
             # Code Review 信息
-            review_info = chat_review(changes, model)
+            review_info = chat_review(changes, generate_review_note, model)
             if review_info:
                 reply.add_reply({
                     'content': review_info,
@@ -136,64 +138,4 @@ class MainReviewHandle(ReviewHandle):
             log.error(f"获取merge_request信息失败，project_id: {hook_info['project']['id']} |"
                       f" merge_iid: {hook_info['object_attributes']['iid']}")
 
-if __name__ == '__main__':
-    main_handle = MainReviewHandle()
-    from gitlab_integration.gitlab_fetcher import GitlabMergeRequestFetcher
-    from reply_module.reply import Reply
-    fetcher = GitlabMergeRequestFetcher(9885, 18)
-    changes = fetcher.get_changes()
-    info = fetcher.get_info()
-    reply = Reply({'type': 'merge_request',
-                     'project_id': 9885,
-                     'merge_request_iid': 18})
-    from large_model.llm_generator import LLMGenerator
-    model = LLMGenerator.new_model()
-    hook_info = {
-        "object_kind": "merge_request",
-        "event_type": "merge_request",
-        "user": {
-            "id": 1,
-            "name": "John Doe",
-            "username": "johndoe",
-            "avatar_url": "https://example.com/uploads/user/avatar/1/index.jpg"
-        },
-        "project": {
-            "id": 15,
-            "name": "Example Project",
-            "description": "An example project",
-            "web_url": "https://example.com/example/project",
-            "avatar_url": None,
-            "git_ssh_url": "git@example.com:example/project.git",
-            "git_http_url": "https://example.com/example/project.git",
-            "namespace": "Example",
-            "visibility_level": 20,
-            "path_with_namespace": "example/project",
-            "default_branch": "main",
-            "homepage": "https://example.com/example/project",
-            "url": "https://example.com/example/project.git",
-            "ssh_url": "git@example.com:example/project.git",
-            "http_url": "https://example.com/example/project.git"
-        },
-        "object_attributes": {
-            "id": 99,
-            "iid": 1,
-            "target_branch": "main",
-            "source_branch": "feature-branch",
-            "source_project_id": 15,
-            "target_project_id": 15,
-            "title": "Merge feature-branch into main",
-            "state": "opened",
-            "merge_status": "can_be_merged",
-            "url": "https://example.com/example/project/-/merge_requests/1",
-            "created_at": "2025-02-10T12:34:56Z",
-            "updated_at": "2025-02-10T12:34:56Z"
-        },
-        "changes": {
-            "total_changes": 51,
-            "files": [
-                {"old_path": "file1.txt", "new_path": "file1.txt", "a_mode": "100644", "b_mode": "100644", "diff": "diff content"},
-                # ... 50 more file changes ...
-            ]
-        }
-    }
-    main_handle.merge_handle(changes, info, hook_info, reply, model)
+
