@@ -149,9 +149,10 @@
     <td></td>
   </tr>
 </table>
-### 4. 自定义更多的通知方式和处理手段
 
-1. 可通过实现自定义``Reply``类添加如邮箱，私有机器人等多种通知方式，具体教程参见[reply.md](doc/reply.md)
+### 4.自定义更多的通知方式和处理手段
+
+1. 可通过实现自定义``Response``类添加如邮箱，私有机器人等多种通知方式，具体教程参见[response.md](doc/response.md)
 2. 可通过自定义更多的``Review Handle``引入自定义的代码审查逻辑，具体教程参见[review.md](doc/review.md)
 
 
