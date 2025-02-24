@@ -7,10 +7,10 @@ import requests
 import json
 from config.config import *
 from utils.logger import *
-from response_module.abstract_response import AbstractResponse
+from response_module.abstract_response import AbstractResponseMessage
 
 
-class DingtalkResponse(AbstractResponse):
+class DingtalkResponse(AbstractResponseMessage):
     def __init__(self, config):
         super().__init__(config)
         self.type = config['type']

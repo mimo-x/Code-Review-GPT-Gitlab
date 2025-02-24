@@ -44,8 +44,11 @@ review_engine/
 
    在新类中实现 `merge_handle` 方法，编写具体的代码审查逻辑，相关参数的详细说明见**参数说明**部分：
    
-   - [changes](#41-changes) ：merge变更文件的内容
-   - [merge_info](#42-merge_info) ：merge的相关信息
+   - [gitlabMergeRequestFetcher](#41-GitlabMergeRequestFetcher)：gitlab merge信息管理类，可以通过调用相关方法获取以下信息：
+     - [changes](#411-changes) ：merge变更文件的内容
+     - [merge_info](#412-merge_info) ：merge的相关信息
+   
+   - [gitlabRepoManager](#42-GitlabRepoManager)：gitlab项目仓库等管理类，可以通过该类查找仓库中指定内容
    - [hook_info](#43-hook_info) ：hook请求接收到的信息
    - [reply](#44-reply) ：发送生成review的模块
    - [model](#45-model) ：统一的大模型接口模块
@@ -58,8 +61,12 @@ review_engine/
 from review_engine.abstract_handler import ReviewHandle
 
 class CustomReviewHandle(ReviewHandle):
-    def merge_handle(self, changes, merge_info, hook_info, reply, model):
+    def merge_handle(self, gitlabMergeRequestFetcher, gitlabRepoManager, hook_info, reply, model):
         # 自定义的代码审查逻辑
+        changes = gitlabMergeRequestFetcher.get_changes()
+        merge_info = gitlabMergeRequestFetcher.get_info()
+        source_branch_name = merge_info['source_branch']
+        # 其他逻辑
         pass
 ```
 
@@ -67,8 +74,26 @@ class CustomReviewHandle(ReviewHandle):
 
 ## 4. 参数说明 📊
 
-### 4.1 Changes
+### 4.1 GitlabMergeRequestFetcher
 
+* **位置**：`gitlab_integration.gitlab_fetcher.GitlabMergeRequestFetcher`
+* **主要功能**：获取gitlab中关于MergeRequest的相关信息
+* **主要方法**：
+  * `def get_changes(force=False)`：获取merge request的change信息。
+    * `force` (bool, 可选): 是否强制刷新缓存，默认为 `False`。如果设置为 `True`，即使缓存中已有文件内容，也会重新从 GitLab 获取changes内容。
+    * 返回的changes信息具体内容参加[changes](#411-changes)。
+  * `get_info(force=False)`：获取merge request的merge_info信息。
+    * `force` (bool, 可选): 是否强制刷新缓存，默认为 `False`。如果设置为 `True`，即使缓存中已有文件内容，也会重新从 GitLab 获取merge_info内容。
+    * 返回的merge_info信息具体内容参加[merge_info](#412-merge_info)。
+  * `get_file_content(file_path, branch_name='main', force=False)`：用于从 GitLab 仓库中获取指定文件的内容。该方法会尝试从缓存中读取文件内容，如果缓存中没有该文件或强制刷新缓存，则会通过 GitLab API 获取文件内容。
+    * `file_path` (str): 文件的路径，请直接提供用`/`分割的文件路径。该路径会在内部转换，将路径中的斜杠 `/` 替换为 `%2F`，以符合 URL 编码的要求。
+    * `branch_name` (str, 可选): 分支的名称，默认为 `'main'`。该参数用于指定从哪个分支获取文件内容。
+    * `force` (bool, 可选): 是否强制刷新缓存，默认为 `False`。如果设置为 `True`，即使缓存中已有文件内容，也会重新从 GitLab 获取文件内容。
+    * 返回值：如果请求成功，返回文件的内容（字符串）。如果请求失败，返回 `None`。
+
+#### 4.1.1 Changes
+
+- **获取方式**：`gitlabMergeRequestFetcher.get_changes()`
 - **来源**：gitlab api中`projects/{project_id}/merge_requests/{iid}/changes` 中的 `changes` 字段。
 - **类型**：字典列表。
 - **示例**：
@@ -90,7 +115,9 @@ class CustomReviewHandle(ReviewHandle):
   - `old_path` 和 `new_path`：文件路径。
   - `diff`：文件变更的详细内容。
 
-### 4.2 Merge_info
+#### 4.1.2 Merge_info
+
+* **获取方式**：gitlabMergeRequestFetcher.get_info()
 
 - **来源**：gitlab api中`projects/{project_id}/merge_requests/{iid}`的所有信息。
 
@@ -151,6 +178,42 @@ class CustomReviewHandle(ReviewHandle):
   - **merge_status**: 合并状态。
   - **web_url**: 合并请求的网页 URL。
   - **head_pipeline**: 合并请求的最新流水线信息。
+
+### 4.2 GitlabRepoManager
+
+* **位置**：`gitlab_integration.gitlab_fetcher.GitlabRepoManager`
+
+* **主要功能**：可以通过浅clone的方式获取项目中指定分支的内容，并提供支持正则语法的全文查找功能
+
+* **主要方法**：
+
+  * `get_info()`：用于获取项目的信息。该方法通过 GitLab API 获取项目的详细信息。
+    - 返回值：如果请求成功，返回项目的信息（JSON 格式）。如果请求失败，返回 `None`。
+
+  * `shallow_clone(branch_name='main')`：执行仓库的浅克隆操作。浅克隆只会克隆指定分支的最新提交记录。
+
+    - `branch_name` (str, 可选): 要克隆的分支名称，默认为 `'main'`。该参数用于指定要克隆的分支。
+
+    - 该方法会删除目标目录中已有的仓库，并使用构建的认证 URL 执行 `git clone` 命令。如果克隆失败，会记录错误日志。
+
+  * `checkout_branch(branch_name, force=False)`：切换到指定的分支。如果仓库尚未克隆，则会执行浅克隆操作。
+
+    - `branch_name` (str): 要切换到的分支名称。
+
+    - `force` (bool, 可选): 是否强制切换分支，默认为 `False`。如果设置为 `True`，即使当前分支已经是目标分支，也会重新克隆。
+
+    - 该方法会检查是否已经在目标分支上，如果不是或 `force` 为 `True`，则会执行浅克隆。
+
+  * `delete_repo()`：删除现有的仓库目录。
+    - 该方法会检查目标目录是否存在，如果存在则删除整个目录及其内容。
+
+  * `find_files_by_keyword(keyword, branch_name='main')`：查找仓库中包含指定关键词的文件列表。
+
+    - `keyword` (str): 要查找的关键词。该关键词会被编译成正则表达式，用于在文件内容中搜索。
+
+    - `branch_name` (str, 可选): 要搜索的分支名称，默认为 `'main'`。该参数用于指定要搜索的分支。
+
+    - 返回值：返回一个包含匹配文件路径的列表。如果文件无法读取（例如编码错误、文件不存在或权限问题），则会跳过该文件。
 
 ### 4.3 Hook_info
 

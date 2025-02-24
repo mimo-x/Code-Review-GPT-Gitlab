@@ -1,11 +1,11 @@
 import requests
 from retrying import retry
 from config.config import *
-from response_module.abstract_response import AbstractResponse
+from response_module.abstract_response import AbstractResponseMessage
 from utils.logger import log
 
 # 继承AbstractReply类，实现send方法
-class GitlabResponse(AbstractResponse):
+class GitlabResponse(AbstractResponseMessage):
     def __init__(self, config):
         super().__init__(config)
         self.type = config['type']

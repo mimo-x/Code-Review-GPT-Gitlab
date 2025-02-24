@@ -6,4 +6,5 @@ class TemplateResponse(AbstractResponseOther):
         super().__init__(config)
 
     def send(self, *args, **kwargs):
-        #
+        print(f'{self.__class__.__name__} send: {args} {kwargs}')
+        return True
