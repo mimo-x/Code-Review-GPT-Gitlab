@@ -54,8 +54,8 @@ def check_dingding_config(config):
     """
     result = {'passed': True, 'errors': []}
     try:
-        from reply_module.reply_target.dingtalk_reply import DingtalkReply
-        dingtalk_reply = DingtalkReply({'type': 'merge_request', 'project_id': 1, 'merge_request_iid': 1})
+        from response_module.response_target.msg_response.dingtalk_response import DingtalkResponse
+        dingtalk_reply = DingtalkResponse({'type': 'merge_request', 'project_id': 1, 'merge_request_iid': 1})
         response = dingtalk_reply.send("连通性测试：测试消息，请勿回复。")
         if not response:
             error_msg = "Dingding configuration is invalid"
