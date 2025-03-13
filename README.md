@@ -21,20 +21,28 @@
 
 # 项目描述 📚
 
-> 一个利用大模型帮助我们在 Gitlab 上进行 Code Review 提升研发效能的项目 💪🏻 (( 包括但不限于 GPT 🎁))
+> 一个利用大模型帮助我们在 Gitlab 上进行 Code Review 提升研发效能的项目 💪🏻 (( 包括但不限于 GPT 、DeepSeek 等🎁))
 
 **这个项目有什么特点? ✨** 
 
-🐶 针对于 <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">Gitlab 定制</span>
+🐶 针对于 **<span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;"> Gitlab </span>** 定制 (计划支持 Github 、Gitlab 、Gitee 、Bitbucket 等)
 
-🐱 结合了<span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">GPT</span>的能力  🚀
+🤖 我们正在开发 **<span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;"> Multi-Agent </span>** 的插件，多个 **<span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;"> Agent </span>** 协同工作，共同完成评审
 
-🦊 能够接入私有化 LLM  <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">代码安全问题</span> 
+🐱 结合了 **<span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;"> 多种大模型对接 </span>** 的能力  🚀
 
-🦁 我们将一直关注效能研发 <span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">最新的Coder Review动态</span> 融入这个项目
+🦊 能够接入私有化 LLM  **<span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;"> 代码安全问题 </span>** 
+
+🦁 我们将一直关注效能研发 **<span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;"> 最新的Coder Review动态 </span>** 融入这个项目
+
+
 
 
 # 项目架构 🚗
+### 前期架构
+<p align="center">
+  <img src="doc/img/old-architecture.png" style="width:500px;"/>
+</p>
 
 ### 🚀 **全新架构升级：更强大、更灵活、更高效！** 🌈
 
@@ -77,7 +85,7 @@
 
 <table style="width:100%; text-align:center; border-collapse:collapse;">
   <tr>
-    <td>OpenAI</td>
+    <td style="color:rgb(0, 64, 255); font-weight: bold;">OpenAI 🔥</td>
     <td>Azure</td>
     <td>AWS - SageMaker</td>
     <td>AWS - Bedrock</td>
@@ -130,7 +138,7 @@
     <td>月之暗面 Moonshot</td>
     <td>百度文心一言</td>
   </tr>
-  <tr>
+  <trd
     <td>阿里巴巴通义千问</td>
     <td>MiniMax</td>
     <td>讯飞星火</td>
@@ -143,7 +151,7 @@
     <td>字节豆包</td>
   </tr>
   <tr>
-    <td>深度求索 DeepSeek</td>
+    <td style="color:rgb(0, 64, 255); font-weight: bold;">深度求索 DeepSeek 🔥</td>
     <td>More</td>
     <td></td>
     <td></td>
@@ -159,6 +167,12 @@
 
 
 # 部署 📖
+
+#### Docker 运行
+
+```bash
+docker run -d -v ./config:/workspace/config -p 8080:80 --name codereview xuxin1/llmcodereview:latest
+```
 
 #### 源代码运行 💻
 1.**克隆仓库**
@@ -178,22 +192,18 @@ vim config/config.py
 ```bash
 python3 app.py
 ```
-5.**配置Gitlab webhook**
+#### **配置Gitlab webhook**
 > 填写```Webhook URL```时，请在域名后添加路径```/git/webhook```，例如：```http://example.com/git/webhook```
 <p align="center">
   <img src="doc/img/webhookconfig.png" style="width:300px;"/>
 </p>
 
-6.**尝试发起一个 Merge Request 吧🎉**
+#### **尝试发起一个 Merge Request 吧🎉**
 
 
 
 
-#### Docker
 
-```bash
-todo dockerfile
-```
 
 
 # 待办清单 📌
@@ -208,15 +218,16 @@ todo dockerfile
 - [ ] 兼容钉钉的消息通知
 - [ ] 结合静态代码分析来提供修改代码的风险等级
 - [ ] 通过pydantic实现大模型输出内容的格式化
+- ✅ 支持插件式自定义 Review 的问题
 
 # 交流 👨‍👨‍👦‍👦
-👏🏻 很高兴你能向我们提出一些问题和修改建议（issue，pr）, 欢迎 star 项目 ⭐️ 
+👏🏻 很高兴你能向我们提出一些问题和修改建议（Issue，PR）, 欢迎 **star 项目 ⭐️** 
 
-📮 Email：mixuxin@163.com 
+📮 *Email*：**mixuxin@163.com** 
 
-📱 wx: isxuxin
+📱 *wx*：**isxuxin**
 
-👨‍👨‍👦‍👦 如果有任何使用问题，欢迎来这里交流 👋🏻
+👨‍👨‍👦‍👦 如果有任何使用问题，欢迎来这里交流（<span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">AI 研发效能领域</span>） 👋 
 <p float="left">
   <img src="doc/img/wechat.jpg" width="400" />
   <img src="doc/img/xuxin.png" width="400" /> 
@@ -229,11 +240,31 @@ todo dockerfile
 - [(美团)代码变更风险可视化系统建设与实践](https://tech.meituan.com/2023/09/22/construction-and-practice-of-code-change-risk-visualization-system.html)
 
 
-# License 📑
-![github license](https://img.shields.io/github/license/mimo-x/Code-Review-GPT-Gitlab)
-**This project is licensed under the [MIT License](https://chat.openai.com/c/9be6b422-f10c-4379-b152-e756230d54f8#:~:text=%E7%9A%84%E5%AE%8C%E6%95%B4%E6%96%87%E6%9C%AC%EF%BC%9A-,MIT%20License,-%E4%BD%A0%E5%8F%AF%E4%BB%A5%E8%AE%BF%E9%97%AE).**
-
 
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=mimo-x/Code-Review-GPT-Gitlab&type=Date)](https://star-history.com/#mimo-x/Code-Review-GPT-Gitlab&Date)
+
+## Powered by [Mobvista - 汇量科技](https://www.mobvista.com)
+
+<p align="center">
+  <img src="doc/img/Logo-MV.png" style="width:500px;"/>
+</p>
+
+> **本项目由 [Mobvista 汇量科技](https://www.mobvista.com) 的技术团队研发及发布。**
+
+[**Mobvista 汇量科技**](https://www.mobvista.com) 是全球领先的开发者增长平台。我们为全球开发者和营销人员**提供完整的广告和分析工具套件**，包括用户**获取、变现、分析、创意自动化和智能媒体采买**等，能大幅提升广告营销ROI，有效帮助移动应用突破增长平台期。 
+
+
+
+> **This tool is developed by the engineering team at [**Mobvista**](https://www.mobvista.com).** 
+
+Mobvista is a leading mobile technology company that provides **a complete suite of advertising and analytics tools** for app developers and marketers seeking global growth. Offering a range of tailored solutions, such as **user acquisition, monetization, analytics, creative automation, and cross-channel media buying**, Mobvista enables mobile businesses to maximize their potential.
+
+For more information, please visit our website: www.mobvista.com
+
+
+
+# License 📑
+![github license](https://img.shields.io/github/license/mimo-x/Code-Review-GPT-Gitlab)
+**This project is licensed under the [MIT License](https://chat.openai.com/c/9be6b422-f10c-4379-b152-e756230d54f8#:~:text=%E7%9A%84%E5%AE%8C%E6%95%B4%E6%96%87%E6%9C%AC%EF%BC%9A-,MIT%20License,-%E4%BD%A0%E5%8F%AF%E4%BB%A5%E8%AE%BF%E9%97%AE).**
