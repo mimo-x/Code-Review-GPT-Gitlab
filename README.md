@@ -177,7 +177,7 @@
 ```bash
 git clone git@github.com:mimo-x/Code-Review-GPT-Gitlab.git
 cd Code-Review-GPT-Gitlab
-
+vim ./config/config.py
 docker run -d -v ./config:/workspace/config -p 8080:80 --name codereview xuxin1/llmcodereview:latest
 ```
 
