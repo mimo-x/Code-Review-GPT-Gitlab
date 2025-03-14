@@ -254,8 +254,8 @@ python3 app.py
 
 ## Powered by [Mobvista - 汇量科技](https://www.mobvista.com)
 
-<p align="center">
-  <img src="doc/img/Logo-MV.png" style="width:500px;"/>
+<p align="left">
+  <img src="doc/img/Logo-MV.png" style="width:200px;"/>
 </p>
 
 > **本项目由 [Mobvista 汇量科技](https://www.mobvista.com) 的技术团队研发及发布。**
