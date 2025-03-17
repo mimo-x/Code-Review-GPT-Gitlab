@@ -349,7 +349,7 @@ class CustomReviewHandle(ReviewHandle):
       content = filter_diff_content(change['diff'])
       messages = [
           {"role": "system",
-           "content": gpt_message
+           "content": GPT_MESSAGE
            },
           {"role": "user",
            "content": f"请review这部分代码变更{content}",

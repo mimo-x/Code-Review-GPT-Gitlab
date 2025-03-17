@@ -22,12 +22,12 @@ class GitlabResponse(AbstractResponseMessage):
     @retry(stop_max_attempt_number=3, wait_fixed=2000)
     def send_merge(self, message):
         headers = {
-            "Private-Token": gitlab_private_token,
+            "Private-Token": GITLAB_PRIVATE_TOKEN,
             "Content-Type": "application/json"
         }
         project_id = self.project_id
         merge_request_id = self.merge_request_id
-        url = f"{gitlab_server_url}/api/v4/projects/{project_id}/merge_requests/{merge_request_id}/notes"
+        url = f"{GITLAB_SERVER_URL}/api/v4/projects/{project_id}/merge_requests/{merge_request_id}/notes"
         data = {
             "body": message
         }

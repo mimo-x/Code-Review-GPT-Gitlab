@@ -175,7 +175,10 @@
 #### Docker 运行
 
 ```bash
-docker run -d -v ./config:/workspace/config -p 8080:80 --name codereview xuxin1/llmcodereview:latest
+git clone git@github.com:mimo-x/Code-Review-GPT-Gitlab.git
+cd Code-Review-GPT-Gitlab
+
+docker run -d --network bridge --add-host=host.docker.internal:host-gateway -v ./config:/workspace/config -p 8080:80 --name codereview xuxin1/llmcodereview:latest
 ```
 
 #### 源代码运行 💻

@@ -9,8 +9,8 @@ def check_config():
     results = []
     try:
         import config.config as config
-        if check_exist(config, ["llm_api_impl", "api_config", "gpt_message",
-                                "gitlab_server_url", "gitlab_private_token", "dingding_bot_webhook", "dingding_secret"]):
+        if check_exist(config, ["llm_api_impl", "api_config", "GPT_MESSAGE",
+                                "GITLAB_SERVER_URL", "GITLAB_PRIVATE_TOKEN", "DINGDING_BOT_WEBHOOK", "DINGDING_SECRET"]):
             results.append(["Configuration parameter existence", "Passed", "", "✅ Required parameters are available."])
         else:
             results.append(["Configuration parameter existence", "Failed", "Required parameters are missing", "❌ Required parameters are missing"])
@@ -75,14 +75,14 @@ def check_gitlab_config(config):
     """
     result = {'passed': True, 'errors': []}
     try:
-        response = requests.get(config.gitlab_server_url)
+        response = requests.get(config.GITLAB_SERVER_URL)
         if response.status_code != 200:
-            error_msg = f"Gitlab server URL {config.gitlab_server_url} is not available"
+            error_msg = f"Gitlab server URL {config.GITLAB_SERVER_URL} is not available"
             result['errors'].append(error_msg)
             result['passed'] = False
 
-        response = requests.get(f"{config.gitlab_server_url}/api/v4/projects",
-                                headers={"PRIVATE-TOKEN": config.gitlab_private_token})
+        response = requests.get(f"{config.GITLAB_SERVER_URL}/api/v4/projects",
+                                headers={"PRIVATE-TOKEN": config.GITLAB_PRIVATE_TOKEN})
         if response.status_code != 200:
             error_msg = "Gitlab private token is invalid"
             result['errors'].append(error_msg)

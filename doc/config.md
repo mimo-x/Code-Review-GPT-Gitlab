@@ -75,8 +75,8 @@ api_config = {
 
 
 ## Gitlab配置
-- `gitlab_server_url`: Gitlab服务器地址
-- `gitlab_private_token`: Gitlab私有令牌
+- `GITLAB_SERVER_URL`: Gitlab服务器地址
+- `GITLAB_PRIVATE_TOKEN`: Gitlab私有令牌
 - `maximum_files`: Gitlab Merge Request最大文件数
 
 ## 消息通知配置

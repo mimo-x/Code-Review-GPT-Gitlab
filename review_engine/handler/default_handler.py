@@ -2,8 +2,7 @@ import concurrent.futures
 import threading
 
 from retrying import retry
-
-from config.config import gpt_message
+from config.config import GPT_MESSAGE, EXCLUDE_FILE_TYPES, IGNORE_FILE_TYPES, MAX_FILES
 from review_engine.abstract_handler import ReviewHandle
 from utils.gitlab_parser import filter_diff_content
 from utils.logger import log
@@ -22,8 +21,8 @@ def chat_review(changes, generate_review, *args, **kwargs):
 
         futures = []
         for change in changes:
-            if any(change["new_path"].endswith(ext) for ext in ['.py', '.java', '.class', '.vue', ".go"]) and not any(
-                change["new_path"].endswith(ext) for ext in ["mod.go"]):
+            if any(change["new_path"].endswith(ext) for ext in EXCLUDE_FILE_TYPES) and not any(
+                change["new_path"].endswith(ext) for ext in IGNORE_FILE_TYPES):
                 futures.append(executor.submit(process_change, change))
             else:
                 log.info(f"{change['new_path']} 非目标检测文件！")
@@ -38,7 +37,7 @@ def generate_review_note(change, model):
         content = filter_diff_content(change['diff'])
         messages = [
             {"role": "system",
-             "content": gpt_message
+             "content": GPT_MESSAGE
              },
             {"role": "user",
              "content": f"请review这部分代码变更{content}",
@@ -66,8 +65,7 @@ class MainReviewHandle(ReviewHandle):
         self.default_handle(changes, merge_info, hook_info, reply, model)
 
     def default_handle(self, changes, merge_info, hook_info, reply, model):
-        maximum_files = 50
-        if changes and len(changes) <= maximum_files:
+        if changes and len(changes) <= MAX_FILES:
             # Code Review 信息
             review_info = chat_review(changes, generate_review_note, model)
             if review_info:
@@ -110,7 +108,7 @@ class MainReviewHandle(ReviewHandle):
                 })
 
 
-        elif changes and len(changes) > maximum_files:
+        elif changes and len(changes) > MAX_FILES:
             reply.add_reply({
                 'title': '__MAIN_REVIEW__',
                 'content': (
