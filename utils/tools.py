@@ -8,7 +8,6 @@ from utils.logger import log
 
 
 def import_submodules(package_name):
-    # 确保正确的工作目录
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
@@ -50,7 +49,7 @@ if __name__ == "__main__":
     from config.config import *
     def _build_authenticated_url(repo_url):
         # 如果 URL 使用 https
-        token = gitlab_private_token
+        token = GITLAB_PRIVATE_TOKEN
         if repo_url.startswith("https://"):
             return f"https://oauth2:{token}@{repo_url[8:]}"
         # 如果 URL 使用 http
@@ -58,7 +57,7 @@ if __name__ == "__main__":
             return f"http://oauth2:{token}@{repo_url[7:]}"
         else:
             raise ValueError("Unsupported URL scheme")
-    authenticated_url = _build_authenticated_url(gitlab_server_url)
+    authenticated_url = _build_authenticated_url(GITLAB_SERVER_URL)
 
     # Build the Git command
     branch_name = "test3"

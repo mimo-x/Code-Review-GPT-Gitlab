@@ -4,6 +4,9 @@ app/mrmax.py
 db/*
 !db/.gitkeep
 /venv/
+.config.py
+__pycache__/
+.DS_Store
 
 /config/config_local.py
 

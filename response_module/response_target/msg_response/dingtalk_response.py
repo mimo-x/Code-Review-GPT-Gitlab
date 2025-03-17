@@ -36,7 +36,7 @@ class DingtalkResponse(AbstractResponseMessage):
         """
         timestamp = str(round(time.time() * 1000))
         sign = self.__get_sign(timestamp)
-        webhookurl = f"{dingding_bot_webhook}&timestamp={timestamp}&sign={sign}"
+        webhookurl = f"{DINGDING_BOT_WEBHOOK}&timestamp={timestamp}&sign={sign}"
         # 构建请求头
         headers = {
             "Content-Type": "application/json",
@@ -75,7 +75,7 @@ class DingtalkResponse(AbstractResponseMessage):
 
         """
         # 设置钉钉机器人的 Webhook URL
-        webhook_url = dingding_bot_webhook
+        webhook_url = DINGDING_BOT_WEBHOOK
 
         # 要发送的消息内容
         message = f"新工程接入\nurl：{project_url}"
@@ -97,7 +97,7 @@ class DingtalkResponse(AbstractResponseMessage):
         :return: 签名
         '''
 
-        secret = dingding_secret
+        secret = DINGDING_SECRET
         secret_enc = secret.encode('utf-8')
         string_to_sign = '{}\n{}'.format(timestamp, secret)
         string_to_sign_enc = string_to_sign.encode('utf-8')

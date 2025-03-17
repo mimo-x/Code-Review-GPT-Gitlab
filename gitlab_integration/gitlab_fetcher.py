@@ -28,11 +28,11 @@ class GitlabMergeRequestFetcher:
         if self._changes_cache and not force:
             return self._changes_cache
         # URL for the GitLab API endpoint
-        url = f"{gitlab_server_url}/api/v4/projects/{self.project_id}/merge_requests/{self.iid}/changes"
+        url = f"{GITLAB_SERVER_URL}/api/v4/projects/{self.project_id}/merge_requests/{self.iid}/changes"
 
         # Headers for the request
         headers = {
-            "PRIVATE-TOKEN": gitlab_private_token
+            "PRIVATE-TOKEN": GITLAB_PRIVATE_TOKEN
         }
 
         # Make the GET request
@@ -58,11 +58,11 @@ class GitlabMergeRequestFetcher:
         if file_path in self._file_content_cache and not force:
             return self._file_content_cache[file_path]
         # URL for the GitLab API endpoint
-        url = f"{gitlab_server_url}/api/v4/projects/{self.project_id}/repository/files/{file_path}/raw?ref={branch_name}"
+        url = f"{GITLAB_SERVER_URL}/api/v4/projects/{self.project_id}/repository/files/{file_path}/raw?ref={branch_name}"
 
         # Headers for the request
         headers = {
-            "PRIVATE-TOKEN": gitlab_private_token
+            "PRIVATE-TOKEN": GITLAB_PRIVATE_TOKEN
         }
 
         # Make the GET request
@@ -84,11 +84,11 @@ class GitlabMergeRequestFetcher:
         if self._info_cache and not force:
             return self._info_cache
         # URL for the GitLab API endpoint
-        url = f"{gitlab_server_url}/api/v4/projects/{self.project_id}/merge_requests/{self.iid}"
+        url = f"{GITLAB_SERVER_URL}/api/v4/projects/{self.project_id}/merge_requests/{self.iid}"
 
         # Headers for the request
         headers = {
-            "PRIVATE-TOKEN": gitlab_private_token
+            "PRIVATE-TOKEN": GITLAB_PRIVATE_TOKEN
         }
 
         # Make the GET request
@@ -115,11 +115,11 @@ class GitlabRepoManager:
         :return: Project information
         """
         # URL for the GitLab API endpoint
-        url = f"{gitlab_server_url}/api/v4/projects/{self.project_id}"
+        url = f"{GITLAB_SERVER_URL}/api/v4/projects/{self.project_id}"
 
         # Headers for the request
         headers = {
-            "PRIVATE-TOKEN": gitlab_private_token
+            "PRIVATE-TOKEN": GITLAB_PRIVATE_TOKEN
         }
 
         # Make the GET request
@@ -195,7 +195,7 @@ class GitlabRepoManager:
     # 构建带有身份验证信息的 URL
     def _build_authenticated_url(self, repo_url):
         # 如果 URL 使用 https
-        token = gitlab_private_token
+        token = GITLAB_PRIVATE_TOKEN
         if repo_url.startswith("https://"):
             return f"https://oauth2:{token}@{repo_url[8:]}"
         # 如果 URL 使用 http
