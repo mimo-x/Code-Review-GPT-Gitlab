@@ -16,10 +16,12 @@ class DefaultApi(AbstractApi):
         if api_config is None:
             raise ValueError("api_config is None")
         for key in api_config:
-            self.params[key] = api_config[key]
             # 如果为大写，则写入环境变量
             if key.isupper():
                 os.environ[key] = api_config[key]
+                continue
+            self.params[key] = api_config[key]
+            
         return True
 
     def generate_text(self, messages: list) -> bool:
