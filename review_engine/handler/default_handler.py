@@ -3,7 +3,7 @@ import threading
 
 from retrying import retry
 
-from config.config import gpt_message
+from config.config import gpt_message, reviewed_file_types
 from review_engine.abstract_handler import ReviewHandle
 from utils.gitlab_parser import filter_diff_content
 from utils.logger import log
@@ -22,7 +22,7 @@ def chat_review(changes, generate_review, *args, **kwargs):
 
         futures = []
         for change in changes:
-            if any(change["new_path"].endswith(ext) for ext in ['.py', '.java', '.class', '.vue', ".go"]) and not any(
+            if any(change["new_path"].endswith(ext) for ext in reviewed_file_types) and not any(
                 change["new_path"].endswith(ext) for ext in ["mod.go"]):
                 futures.append(executor.submit(process_change, change))
             else:
