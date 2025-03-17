@@ -176,7 +176,10 @@
 
 ```bash
 git clone git@github.com:mimo-x/Code-Review-GPT-Gitlab.git
+
 cd Code-Review-GPT-Gitlab
+
+vim ./config/config.py
 
 docker run -d --network bridge --add-host=host.docker.internal:host-gateway -v ./config:/workspace/config -p 8080:80 --name codereview xuxin1/llmcodereview:latest
 ```
@@ -254,8 +257,8 @@ python3 app.py
 
 ## Powered by [Mobvista - 汇量科技](https://www.mobvista.com)
 
-<p align="center">
-  <img src="doc/img/Logo-MV.png" style="width:500px;"/>
+<p align="left">
+  <img src="doc/img/Logo-MV.png" style="width:200px;"/>
 </p>
 
 > **本项目由 [Mobvista 汇量科技](https://www.mobvista.com) 的技术团队研发及发布。**
