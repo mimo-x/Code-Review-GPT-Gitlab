@@ -1,10 +1,12 @@
 # api 接口封装类
+
 llm_api_impl = "large_model.api.default_api.DefaultApi"
 
 # DeepSeek配置示例
 # api 配置方式参考 docs/config.md
 # 默认使用认UnionLLM，参考：https://github.com/EvalsOne/UnionLLM/tree/main/docs
 # UnionLLM兼容LiteLLM，参考LiteLLM文档：https://docs.litellm.ai/docs
+
 api_config = {
     "api_key": "your deepseek key",
     "model": 'deepseek-chat',
@@ -24,6 +26,14 @@ api_config = {
 #     "api_base": "http://localhost:11434",
 #     "model": "llama3.2",
 #     "provider": "ollama",
+# }
+
+# demo-azure
+# api_config = {
+#     "AZURE_API_KEY": "*",
+#     "AZURE_API_BASE": "https://*.openai.azure.com",
+#     "AZURE_API_VERSION": "2024-10-21",
+#     "model": "azure/o1-mini",
 # }
 
 # Prompt
