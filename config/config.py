@@ -70,3 +70,7 @@ maximum_files = 50
 # dingding notification （un necessary）
 dingding_bot_webhook = "https://oapi.dingtalk.com/robot/send?access_token=*****************************************"
 dingding_secret = "S********************************950f"
+
+# ------------- Customized reviewed file type  --------------------
+# reviewed file types
+reviewed_file_types = ['.py', '.java', '.class', '.vue', ".go"]
