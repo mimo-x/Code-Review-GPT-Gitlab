@@ -188,13 +188,23 @@ def save_config(llm_api, api_key, api_base, model, provider,
 
     prompt_msg = textwrap.dedent(prompt_msg)
 
-    max_files = ""
+    custom_file_config = '''\
+    # ------------- code review settings --------------------
+    # expect file types
+    EXCLUDE_FILE_TYPES = ['.py', '.java', '.class', '.vue', ".go",".c",".cpp"]
+    
+    # ignore file types
+    IGNORE_FILE_TYPES = ["mod.go"]
+    '''
+    custom_file_config = textwrap.dedent(custom_file_config)
 
     try:
         with open("../../config/config.py", "w", encoding='utf-8') as f:
             f.write(config)
             f.write("\n")
             f.write(prompt_msg)
+            f.write("\n")
+            f.write(custom_file_config)
         return "✅ 配置保存成功!"
     except Exception as e:
         return f"❌ 配置保存失败: {str(e)}"
