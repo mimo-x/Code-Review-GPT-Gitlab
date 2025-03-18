@@ -1,4 +1,7 @@
 import gradio as gr
+from utils.args_check import check_api_config, check_gitlab_config
+from types import SimpleNamespace
+from utils.logger import *
 import json
 import requests
 import hmac
@@ -7,40 +10,156 @@ import urllib.parse
 import time
 import hashlib
 import os
+import textwrap
+
 
 def test_llm_connection(api_key, api_base, model, provider):
-    return "✅ LLM 连接成功!"
+    api_config = dict(api_key=api_key, api_base=api_base, model=model, provider=provider)
+    api_check = check_api_config(api_config)
+    if api_check["passed"]:
+        return "✅ LLM 连接成功!"
+    else:
+        return "❌ LLM 连接失败"
 
-def test_gitlab_connection(url, token):
-    return "✅ Gitlab 连接成功!"
+def test_gitlab_connection(gitlab_server_url, gitlab_private_token):
+    gitlab_config = dict(gitlab_server_url=gitlab_server_url, gitlab_private_token=gitlab_private_token)
+    gitlab_config = SimpleNamespace(**gitlab_config)
+    gitlab_check = check_gitlab_config(gitlab_config)
+    if gitlab_check["passed"]:
+        return "✅ Gitlab 连接成功!"
+    else:
+        return "❌ Gitlab 连接失败"
 
-def test_dingding(webhook, secret):
-    return "✅ 钉钉机器人连接成功!"
+def test_dingding(dingding_bot_webhook, dingding_secret):
+    dingding_config = dict(dingding_bot_webhook=dingding_bot_webhook, dingding_secret=dingding_secret)
+    dingding_config = SimpleNamespace(**dingding_config)
+    dingding_checked = check_dingding_config(dingding_config)
+    if dingding_checked:
+        return "✅ 钉钉机器人连接成功!"
+    else:
+        return "❌ 钉钉机器人连接失败"
+
+def check_dingding_config(dingding_config):
+    result = {'passed': True, 'errors': []}
+
+    # get sign
+    timestamp = str(round(time.time() * 1000))
+    secret = dingding_config.dingding_secret
+    secret_enc = secret.encode('utf-8')
+    string_to_sign = '{}\n{}'.format(timestamp, secret)
+    string_to_sign_enc = string_to_sign.encode('utf-8')
+    hmac_code = hmac.new(secret_enc, string_to_sign_enc, digestmod=hashlib.sha256).digest()
+    sign = urllib.parse.quote_plus(base64.b64encode(hmac_code))
+
+
+    webhookurl = f"{dingding_config.dingding_bot_webhook}&timestamp={timestamp}&sign={sign}"
+    # 构建请求头
+    headers = {
+        "Content-Type": "application/json",
+    }
+
+    # 构建请求体
+    message_text = "连通性测试：测试消息，请勿回复。"
+    message = {
+        "msgtype": "markdown",
+        "markdown": {
+            "title": "Gitlab 通知",
+            "text": message_text
+        },
+        "timestamp": timestamp,
+        "sign": sign
+    }
+
+    # 发送HTTP POST请求
+    response = requests.post(
+        webhookurl,
+        headers=headers,
+        data=json.dumps(message)
+    )
+
+    # 检查响应
+    if response.status_code == 200 and response.json()["errcode"] == 0:
+        return True
+    else:
+        return False
+
+def show_config():
+    if os.path.exists("../../config/config.py"):
+        from config import config
+        config_value = f'''\
+                # api 接口封装类
+                llm_api_impl = "{config.llm_api_impl}"
+                
+                api_config = {{
+                    "api_key": "{config.api_config["api_key"]}",
+                    "api_base": "{config.api_config["api_base"]}",
+                    "model": "{config.api_config["model"]}",
+                    "provider": "{config.api_config["provider"]}",
+                }}
+                
+                # ------------------Gitlab info--------------------------
+                gitlab_server_url = "{config.gitlab_server_url}"
+                gitlab_private_token = "{config.gitlab_private_token}"
+                maximum_files = 50
+                
+                # ------------- Message notification --------------------
+                dingding_bot_webhook = "{config.dingding_bot_webhook}"
+                dingding_secret = "{config.dingding_secret}"
+        '''
+        return textwrap.dedent(config_value)
+
+def show_current_config(llm_api, api_key, api_base, model, provider,
+                gitlab_url, gitlab_token, max_files,
+                dingding_webhook, dingding_secret):
+    config = f'''\
+            # api 接口封装类
+            llm_api_impl = "{llm_api}"
+            
+            api_config = {{
+                "api_key": "{api_key}",
+                "api_base": "{api_base}",
+                "model": '{model}',
+                "provider": "{provider}",
+            }}
+            
+            # ------------------Gitlab info--------------------------
+            gitlab_server_url = "{gitlab_url}"
+            gitlab_private_token = "{gitlab_token}"
+            maximum_files = {max_files}
+            
+            # ------------- Message notification --------------------
+            dingding_bot_webhook = "{dingding_webhook}"
+            dingding_secret = "{dingding_secret}"
+    '''
+    return textwrap.dedent(config)
 
 def save_config(llm_api, api_key, api_base, model, provider,
                 gitlab_url, gitlab_token, max_files,
                 dingding_webhook, dingding_secret):
-    config = f'''# api 接口封装类
-llm_api_impl = "{llm_api}"
+    config = f'''\
+            # api 接口封装类
+            llm_api_impl = "{llm_api}"
+            
+            api_config = {{
+                "api_key": "{api_key}",
+                "api_base": "{api_base}",
+                "model": '{model}',
+                "provider": "{provider}",
+            }}
+            
+            # ------------------Gitlab info--------------------------
+            gitlab_server_url = "{gitlab_url}"
+            gitlab_private_token = "{gitlab_token}"
+            maximum_files = {max_files}
+            
+            # ------------- Message notification --------------------
+            dingding_bot_webhook = "{dingding_webhook}"
+            dingding_secret = "{dingding_secret}"
+            '''
+    config = textwrap.dedent(config)
 
-api_config = {{
-    "api_key": "{api_key}",
-    "api_base": "{api_base}",
-    "model": '{model}',
-    "provider": "{provider}",
-}}
-
-# ------------------Gitlab info--------------------------
-gitlab_server_url = "{gitlab_url}"
-gitlab_private_token = "{gitlab_token}"
-maximum_files = {max_files}
-
-# ------------- Message notification --------------------
-dingding_bot_webhook = "{dingding_webhook}"
-dingding_secret = "{dingding_secret}"
-'''
     try:
-        with open("config/config.py", "w") as f:
+        with open("../../config/config.py", "w", encoding='utf-8') as f:
             f.write(config)
         return "✅ 配置保存成功!"
     except Exception as e:
@@ -104,28 +223,29 @@ with gr.Blocks(title="配置管理", theme=theme) as demo:
                 label="当前配置",
                 language="python",
                 lines=25,
-                value="""# api 接口封装类
+                value=textwrap.dedent("""\
+                    # api 接口封装类
                     llm_api_impl = "large_model.api.default_api.DefaultApi"
-
+                    
                     api_config = {
                         "api_key": "your-api-key",
                         "api_base": "your-api-base",
                         "model": "your-model",
                         "provider": "openai",
                     }
-
+                    
                     # ------------------Gitlab info--------------------------
                     gitlab_server_url = "your-gitlab-url"
                     gitlab_private_token = "your-token"
                     maximum_files = 50
-
+                    
                     # ------------- Message notification --------------------
                     dingding_bot_webhook = "your-webhook"
                     dingding_secret = "your-secret"
-                """)
+                """))
             # 添加一个按钮，用于显示当前配置
-            show_config_btn = gr.Button("显示当前1配置", variant="primary", size="sm")
-            show_config_output = gr.Textbox(label="当前配置", lines=25)
+            show_config_btn = gr.Button("显示当前配置", variant="primary", size="sm")
+            # show_config_output = gr.Textbox(label="当前配置", lines=25)
 
     # 事件绑定
     test_llm_btn.click(
@@ -145,6 +265,22 @@ with gr.Blocks(title="配置管理", theme=theme) as demo:
         inputs=[dingding_webhook, dingding_secret],
         outputs=dingding_output
     )
+
+    # show_config_btn.click(
+    #     show_config,
+    #     inputs=[],
+    #     outputs=preview
+    # )
+    show_config_btn.click(
+        show_current_config,
+        inputs=[
+            llm_api, api_key, api_base, model, provider,
+            gitlab_url, gitlab_token, max_files,
+            dingding_webhook, dingding_secret
+        ],
+        outputs=preview
+    )
+
     
     save_btn.click(
         save_config,
