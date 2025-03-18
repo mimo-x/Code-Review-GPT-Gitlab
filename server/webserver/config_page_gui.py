@@ -1,5 +1,4 @@
 import gradio as gr
-from utils.args_check import check_api_config, check_gitlab_config
 from types import SimpleNamespace
 from utils.logger import *
 import json
@@ -82,6 +81,64 @@ def check_dingding_config(dingding_config):
         return True
     else:
         return False
+
+def check_api_config(config) -> dict:
+    result = {'passed': True, 'errors': []}
+
+    try:
+        from large_model.llm_generator import LLMGenerator
+
+        api = LLMGenerator.new_model(config=config)
+        api.generate_text([
+            {
+                "role": "system",
+                "content": "你是一个有用的助手"
+            },
+            {
+                "role": "user",
+                "content": "请输出ok两个小写字母，不要输出其他任何内容",
+            }
+        ])
+        res_str = api.get_respond_content()
+
+        if not res_str or res_str == "":
+            error_msg = "Model interface check failed: Please check if the model call related configuration is correct , response is empty"
+            result['errors'].append(error_msg)
+            result['passed'] = False
+
+        elif "ok" not in res_str:
+            warning_msg = f"Model interface check failed: The model did not return the expected result, but may still be available, response: {res_str}"
+            result['errors'].append(warning_msg)
+            result['passed'] = False
+
+    except Exception as e:
+        result['errors'].append(str(e))
+        result['passed'] = False
+
+    return result
+
+def check_gitlab_config(config) -> dict:
+    result = {'passed': True, 'errors': []}
+
+    try:
+        response = requests.get(config.gitlab_server_url)
+        if response.status_code != 200:
+            error_msg = f"Gitlab server URL {config.gitlab_server_url} is not available"
+            result['errors'].append(error_msg)
+            result['passed'] = False
+
+        response = requests.get(f"{config.gitlab_server_url}/api/v4/projects",
+                                headers={"PRIVATE-TOKEN": config.gitlab_private_token})
+        if response.status_code != 200:
+            error_msg = "Gitlab private token is invalid"
+            result['errors'].append(error_msg)
+            result['passed'] = False
+
+    except Exception as e:
+        result['errors'].append(str(e))
+        result['passed'] = False
+
+    return result
 
 def show_config():
     if os.path.exists("../../config/config.py"):
