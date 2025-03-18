@@ -98,13 +98,13 @@ def show_config():
                 }}
                 
                 # ------------------Gitlab info--------------------------
-                gitlab_server_url = "{config.gitlab_server_url}"
-                gitlab_private_token = "{config.gitlab_private_token}"
-                maximum_files = 50
+                GITLAB_SERVER_URL = "{config.gitlab_server_url}"
+                GITLAB_PRIVATE_TOKEN = "{config.gitlab_private_token}"
+                MAX_FILES = 50
                 
                 # ------------- Message notification --------------------
-                dingding_bot_webhook = "{config.dingding_bot_webhook}"
-                dingding_secret = "{config.dingding_secret}"
+                DINGDING_BOT_WEBHOOK = "{config.dingding_bot_webhook}"
+                DINGDING_SECRET = "{config.dingding_secret}"
         '''
         return textwrap.dedent(config_value)
 
@@ -123,13 +123,13 @@ def show_current_config(llm_api, api_key, api_base, model, provider,
             }}
             
             # ------------------Gitlab info--------------------------
-            gitlab_server_url = "{gitlab_url}"
-            gitlab_private_token = "{gitlab_token}"
-            maximum_files = {max_files}
+            GITLAB_SERVER_URL = "{gitlab_url}"
+            GITLAB_PRIVATE_TOKEN = "{gitlab_token}"
+            MAX_FILES = {max_files}
             
             # ------------- Message notification --------------------
-            dingding_bot_webhook = "{dingding_webhook}"
-            dingding_secret = "{dingding_secret}"
+            DINGDING_BOT_WEBHOOK = "{dingding_webhook}"
+            DINGDING_SECRET = "{dingding_secret}"
     '''
     return textwrap.dedent(config)
 
@@ -148,13 +148,13 @@ def save_config(llm_api, api_key, api_base, model, provider,
             }}
             
             # ------------------Gitlab info--------------------------
-            gitlab_server_url = "{gitlab_url}"
-            gitlab_private_token = "{gitlab_token}"
-            maximum_files = {max_files}
+            GITLAB_SERVER_URL = "{gitlab_url}"
+            GITLAB_PRIVATE_TOKEN = "{gitlab_token}"
+            MAX_FILES = {max_files}
             
             # ------------- Message notification --------------------
-            dingding_bot_webhook = "{dingding_webhook}"
-            dingding_secret = "{dingding_secret}"
+            DINGDING_BOT_WEBHOOK = "{dingding_webhook}"
+            DINGDING_SECRET = "{dingding_secret}"
             '''
     config = textwrap.dedent(config)
 
@@ -279,13 +279,13 @@ with gr.Blocks(title="配置管理", theme=theme) as demo:
                     }
                     
                     # ------------------Gitlab info--------------------------
-                    gitlab_server_url = "your-gitlab-url"
-                    gitlab_private_token = "your-token"
-                    maximum_files = 50
+                    GITLAB_SERVER_URL = "your-gitlab-url"
+                    GITLAB_PRIVATE_TOKEN = "your-token"
+                    MAX_FILES = 50
                     
                     # ------------- Message notification --------------------
-                    dingding_bot_webhook = "your-webhook"
-                    dingding_secret = "your-secret"
+                    DINGDING_BOT_WEBHOOK = "your-webhook"
+                    DINGDING_SECRET = "your-secret"
                 """))
             # 添加一个按钮，用于显示当前配置
             show_config_btn = gr.Button("显示当前配置", variant="primary", size="sm")
