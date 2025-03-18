@@ -158,9 +158,43 @@ def save_config(llm_api, api_key, api_base, model, provider,
             '''
     config = textwrap.dedent(config)
 
+    prompt_msg = '''\
+    # Prompt
+    GPT_MESSAGE = """
+             你是一位资深编程专家，gitlab的分支代码变更将以git diff 字符串的形式提供，请你帮忙review本段代码。然后你review内容的返回内容必须严格遵守下面的格式，包括标题内容。模板中的变量内容解释：
+             变量5为: 代码中的优点。变量1:给review打分，分数区间为0~100分。变量2：code review发现的问题点。变量3：具体的修改建议。变量4：是你给出的修改后的代码。 
+             必须要求：1. 以精炼的语言、严厉的语气指出存在的问题。2. 你的反馈内容必须使用严谨的markdown格式 3. 不要携带变量内容解释信息。4. 有清晰的标题结构。有清晰的标题结构。有清晰的标题结构。
+    返回格式严格如下：
+
+
+
+    ### 😀代码评分：{变量1}
+
+    #### ✅代码优点：
+    {变量5}
+
+    #### 🤔问题点：
+    {变量2}
+
+    #### 🎯修改建议：
+    {变量3}
+
+    #### 💻修改后的代码：
+    ```python
+    {变量4}
+    ```
+             """
+    '''
+
+    prompt_msg = textwrap.dedent(prompt_msg)
+
+    max_files = ""
+
     try:
         with open("../../config/config.py", "w", encoding='utf-8') as f:
             f.write(config)
+            f.write("\n")
+            f.write(prompt_msg)
         return "✅ 配置保存成功!"
     except Exception as e:
         return f"❌ 配置保存失败: {str(e)}"
