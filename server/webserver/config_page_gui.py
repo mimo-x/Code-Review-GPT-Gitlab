@@ -18,7 +18,7 @@ def test_llm_connection(api_key, api_base, model, provider):
     if api_check["passed"]:
         return "✅ LLM 连接成功!"
     else:
-        return "❌ LLM 连接失败"
+        return f"❌ LLM 连接失败: \n{api_check['errors']}"
 
 def test_gitlab_connection(gitlab_server_url, gitlab_private_token):
     gitlab_config = dict(gitlab_server_url=gitlab_server_url, gitlab_private_token=gitlab_private_token)
@@ -27,60 +27,67 @@ def test_gitlab_connection(gitlab_server_url, gitlab_private_token):
     if gitlab_check["passed"]:
         return "✅ Gitlab 连接成功!"
     else:
-        return "❌ Gitlab 连接失败"
+        return f"❌ Gitlab 连接失败: \n{gitlab_check['errors']}"
 
 def test_dingding(dingding_bot_webhook, dingding_secret):
     dingding_config = dict(dingding_bot_webhook=dingding_bot_webhook, dingding_secret=dingding_secret)
     dingding_config = SimpleNamespace(**dingding_config)
-    dingding_checked = check_dingding_config(dingding_config)
-    if dingding_checked:
+    dingding_check = check_dingding_config(dingding_config)
+    if dingding_check["passed"]:
         return "✅ 钉钉机器人连接成功!"
     else:
-        return "❌ 钉钉机器人连接失败"
+        return f"❌ 钉钉机器人连接失败: \n{dingding_check['errors']}"
 
 def check_dingding_config(dingding_config):
     result = {'passed': True, 'errors': []}
 
     # get sign
-    timestamp = str(round(time.time() * 1000))
-    secret = dingding_config.dingding_secret
-    secret_enc = secret.encode('utf-8')
-    string_to_sign = '{}\n{}'.format(timestamp, secret)
-    string_to_sign_enc = string_to_sign.encode('utf-8')
-    hmac_code = hmac.new(secret_enc, string_to_sign_enc, digestmod=hashlib.sha256).digest()
-    sign = urllib.parse.quote_plus(base64.b64encode(hmac_code))
+    try:
+        timestamp = str(round(time.time() * 1000))
+        secret = dingding_config.dingding_secret
+        secret_enc = secret.encode('utf-8')
+        string_to_sign = '{}\n{}'.format(timestamp, secret)
+        string_to_sign_enc = string_to_sign.encode('utf-8')
+        hmac_code = hmac.new(secret_enc, string_to_sign_enc, digestmod=hashlib.sha256).digest()
+        sign = urllib.parse.quote_plus(base64.b64encode(hmac_code))
 
 
-    webhookurl = f"{dingding_config.dingding_bot_webhook}&timestamp={timestamp}&sign={sign}"
-    # 构建请求头
-    headers = {
-        "Content-Type": "application/json",
-    }
+        webhookurl = f"{dingding_config.dingding_bot_webhook}&timestamp={timestamp}&sign={sign}"
+        # 构建请求头
+        headers = {
+            "Content-Type": "application/json",
+        }
 
-    # 构建请求体
-    message_text = "连通性测试：测试消息，请勿回复。"
-    message = {
-        "msgtype": "markdown",
-        "markdown": {
-            "title": "Gitlab 通知",
-            "text": message_text
-        },
-        "timestamp": timestamp,
-        "sign": sign
-    }
+        # 构建请求体
+        message_text = "连通性测试：测试消息，请勿回复。"
+        message = {
+            "msgtype": "markdown",
+            "markdown": {
+                "title": "Gitlab 通知",
+                "text": message_text
+            },
+            "timestamp": timestamp,
+            "sign": sign
+        }
 
-    # 发送HTTP POST请求
-    response = requests.post(
-        webhookurl,
-        headers=headers,
-        data=json.dumps(message)
-    )
+        # 发送HTTP POST请求
+        response = requests.post(
+            webhookurl,
+            headers=headers,
+            data=json.dumps(message)
+        )
+        # 检查响应
+        if response.status_code == 200 and response.json()["errcode"] == 0:
+            pass
+        else:
+            error_msg = "Dingding configuration is invalid"
+            result['passed'] = False
+            result['errors'].append(error_msg)
+    except Exception as e:
+        result['errors'].append(str(e))
+        result['passed'] = False
 
-    # 检查响应
-    if response.status_code == 200 and response.json()["errcode"] == 0:
-        return True
-    else:
-        return False
+    return result
 
 def check_api_config(config) -> dict:
     result = {'passed': True, 'errors': []}
