@@ -7,7 +7,7 @@ from gitlab_integration.gitlab_fetcher import GitlabMergeRequestFetcher, GitlabR
 from response_module.response_controller import ReviewResponse
 from review_engine.review_engine import ReviewEngine
 from utils.logger import log
-
+from gitlab_integration.gitlab_fetcher import is_merge_request_opened
 
 class WebhookListener:
     def __init__(self):
@@ -53,7 +53,7 @@ class WebhookListener:
         """
         处理合并请求事件
         """
-        if gitlab_payload.get("object_attributes").get("state") == "opened" and gitlab_payload.get("object_attributes").get("merge_status") == "preparing":
+        if is_merge_request_opened(gitlab_payload):
             log.info("首次merge_request ", gitlab_payload)
             project_id = gitlab_payload.get('project')['id']
             merge_request_iid = gitlab_payload.get("object_attributes")["iid"]
