@@ -2,10 +2,11 @@ import concurrent.futures
 import threading
 
 from retrying import retry
-from config.config import GPT_MESSAGE, EXCLUDE_FILE_TYPES, IGNORE_FILE_TYPES, MAX_FILES
+from config.config import GPT_MESSAGE, MAX_FILES
 from review_engine.abstract_handler import ReviewHandle
-from utils.gitlab_parser import filter_diff_content, filter_diff_add_context
+from utils.gitlab_parser import filter_diff_content, add_context_to_diff
 from utils.logger import log
+from utils.args_check import file_need_check
 
 
 def chat_review(changes, generate_review, *args, **kwargs):
@@ -15,74 +16,61 @@ def chat_review(changes, generate_review, *args, **kwargs):
         result_lock = threading.Lock()
 
         def process_change(change):
-            result = generate_review(change,  *args, **kwargs)
+            result = generate_review(change, *args, **kwargs)
             with result_lock:
                 review_results.append(result)
 
         futures = []
         for change in changes:
-            if any(change["new_path"].endswith(ext) for ext in EXCLUDE_FILE_TYPES) and not any(
-                change["new_path"].endswith(ext) for ext in IGNORE_FILE_TYPES):
-                futures.append(executor.submit(process_change, change))
-            else:
+            if not file_need_check(change["new_path"]):
                 log.info(f"{change['new_path']} 非目标检测文件！")
+                continue
+            
+            futures.append(executor.submit(process_change, change))
 
+        # 等待所有任务完成
         concurrent.futures.wait(futures)
 
+    # 合并结果
     return "\n\n".join(review_results) if review_results else ""
 
-@retry(stop_max_attempt_number=3, wait_fixed=60000)
-def generate_review_note(change, model):
-    try:
-        content = filter_diff_content(change['diff'])
-        messages = [
-            {"role": "system",
-             "content": GPT_MESSAGE
-             },
-            {"role": "user",
-             "content": f"请review这部分代码变更{content}",
-             },
-        ]
-        log.info(f"发送给gpt 内容如下：{messages}")
-        model.generate_text(messages)
-        new_path = change['new_path']
-        log.info(f'对 {new_path} review中...')
-        response_content = model.get_respond_content().replace('\n\n', '\n')
-        total_tokens = model.get_respond_tokens()
-        review_note = f'# 📚`{new_path}`' + '\n\n'
-        review_note += f'({total_tokens} tokens) {"AI review 意见如下:"}' + '\n\n'
-        review_note += response_content + "\n\n---\n\n---\n\n"
-        log.info(f'对 {new_path} review结束')
-        return review_note
-    except Exception as e:
-        log.error(f"GPT error:{e}")
 
 @retry(stop_max_attempt_number=3, wait_fixed=60000)
 def generate_review_note_with_context(change, model, gitlab_fetcher, merge_info):
     try:
+        # prepare
         source_code = gitlab_fetcher.get_file_content(change['new_path'], merge_info['source_branch'])
-        content = filter_diff_add_context(change['diff'], source_code)
-        messages = [
-            {"role": "system",
-             "content": GPT_MESSAGE
-             },
-            {"role": "user",
-             "content": f"请review这部分代码变更{content}",
-             },
-        ]
-        log.info(f"发送给gpt 内容如下：{messages}")
-        model.generate_text(messages)
         new_path = change['new_path']
+        content = add_context_to_diff(change['diff'], source_code)
+        messages = [
+            {
+                "role": "system",
+                "content": GPT_MESSAGE
+             },
+            {
+                "role": "user",
+                "content": f"请review这部分代码变更 {content}",
+            },
+        ]
+        
+        # review
+        log.info(f"发送给 LLM 内容如下：{messages}")
+        model.generate_text(messages)
         log.info(f'对 {new_path} review中...')
         response_content = model.get_respond_content().replace('\n\n', '\n')
         total_tokens = model.get_respond_tokens()
+        
+        # response 
         review_note = f'# 📚`{new_path}`' + '\n\n'
         review_note += f'({total_tokens} tokens) {"AI review 意见如下:"}' + '\n\n'
         review_note += response_content + "\n\n---\n\n---\n\n"
+        
         log.info(f'对 {new_path} review结束')
         return review_note
+    
     except Exception as e:
-        log.error(f"GPT error:{e}")
+        log.error(f"LLM Review error:{e}")
+        return ""
 
 
 class MainReviewHandle(ReviewHandle):
@@ -94,9 +82,9 @@ class MainReviewHandle(ReviewHandle):
 
     def default_handle(self, changes, merge_info, hook_info, reply, model, gitlab_fetcher):
         if changes and len(changes) <= MAX_FILES:
-            # Code Review 信息
-            # review_info = chat_review(changes, generate_review_note, model)
+            
             review_info = chat_review(changes, generate_review_note_with_context, model, gitlab_fetcher, merge_info)
+            
             if review_info:
                 reply.add_reply({
                     'content': review_info,

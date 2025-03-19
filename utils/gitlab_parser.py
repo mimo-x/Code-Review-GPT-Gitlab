@@ -9,55 +9,78 @@ def filter_diff_content(diff_content):
     processed_code = '\n'.join([line[1:] if line.startswith('+') else line for line in filtered_content.split('\n')])
     return processed_code
 
-def filter_diff_new_line(diff_content):
-    # 获取diff中的行号
-    line_numbers = []
-    current_line_num = None
-
+def extract_diff_line_range(diff_content):
+    """提取diff中的开始和结束行号"""
+    line_range = []
+    
     for line in diff_content.split('\n'):
         if line.startswith('@@'):
             # 提取新的行号
             match = re.match(r'@@ -\d+(,\d+)? \+(\d+)(,\d+)? @@', line)
             if match:
-                current_line_num = int(match.group(2))
-                line_numbers.append(current_line_num)
+                start_line = int(match.group(2))
+                line_range.append(start_line)
+                
+                # 计算结束行号
                 if match.group(3):
-                    # 去除match.group(3)的,然后转成int
-                    current_line_num += int(match.group(3)[1:]) - 1
-                line_numbers.append(current_line_num)
+                    # 去除逗号并转成int获取行数
+                    line_count = int(match.group(3)[1:])
+                    end_line = start_line + line_count - 1
+                else:
+                    end_line = start_line
+                    
+                line_range.append(end_line)
 
-    return line_numbers
+    return line_range
 
-def filter_diff_add_context(diff_content, source_code = None, context_lines_num = CONTEXT_LINES_NUM):
+def get_context_boundaries(diff_range, source_code_length, context_lines_num=CONTEXT_LINES_NUM):
+    """计算上下文的行号边界"""
+    if not diff_range or len(diff_range) < 2:
+        return None, None, None, None
+        
+    # 计算上文边界
+    front_lines_end = max(diff_range[0] - 1, 1)
+    front_lines_start = max(diff_range[0] - context_lines_num, 1)
+    
+    # 计算下文边界
+    back_lines_start = min(diff_range[1] + 1, source_code_length)
+    back_lines_end = min(diff_range[1] + context_lines_num, source_code_length)
+    
+    return front_lines_start, front_lines_end, back_lines_start, back_lines_end
 
-    line_numbers = filter_diff_new_line(diff_content)
-    diff_content = filter_diff_content(diff_content)
+def add_context_to_diff(diff_content, source_code=None, context_lines_num=CONTEXT_LINES_NUM):
+    """在diff内容前后添加上下文代码"""
+    # 获取diff的行号范围
+    diff_range = extract_diff_line_range(diff_content)
+    # 过滤diff内容
+    filtered_diff = filter_diff_content(diff_content)
     front_lines = ""
     back_lines = ""
+    diff_with_context = ""
 
-    if source_code:
+    if source_code and diff_range:
         code_lines = source_code.splitlines()
-        # 获取 diff 部分 截取上下文边界
-        front_lines_end = max(line_numbers[0] - 1, 1)
-        front_lines_start = max(line_numbers[0] - context_lines_num, 1)
-
-        back_lines_start = min(line_numbers[1] + 1, len(code_lines))
-        back_lines_end = min(line_numbers[1] + context_lines_num, len(code_lines))
-
-        # 获取上下文内容
-        if front_lines_end > front_lines_start:
-            for line in range(front_lines_start, front_lines_end + 1):
+        source_code_length = len(code_lines)
+        
+        front_start, front_end, back_start, back_end = get_context_boundaries(
+            diff_range, source_code_length, context_lines_num)
+        
+        
+        if front_start is not None and front_end is not None and front_end >= front_start:
+            for line in range(front_start, front_end + 1):
                 front_lines += code_lines[line - 1] + '\n'
-
-        if back_lines_end > back_lines_start:
-            for line in range(back_lines_start, back_lines_end + 1):
+            diff_with_context += f"修改代码块前代码：\n{front_lines}\n"
+        
+        diff_with_context += f"修改代码块：\n{filtered_diff}\n"
+        
+        if back_start is not None and back_end is not None and back_end >= back_start:
+            for line in range(back_start, back_end + 1):
                 back_lines += code_lines[line - 1] + '\n'
+            diff_with_context += f"修改代码块后代码：\n{back_lines}\n"
 
-    diff_with_context = front_lines + diff_content + back_lines
-
-    return diff_with_context
+    return diff_with_context if diff_with_context else filtered_diff
 
 
 if __name__ == "__main__":
     diff_content = "@@ -3 +1,5 @@\n-hello\n+hello world\n"
-    print(filter_diff_new_line(diff_content))
+    print(extract_diff_line_range(diff_content))
