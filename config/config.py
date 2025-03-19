@@ -85,3 +85,6 @@ EXCLUDE_FILE_TYPES = ['.py', '.java', '.class', '.vue', ".go",".c",".cpp"]
 
 # ignore file types
 IGNORE_FILE_TYPES = ["mod.go"]
+
+# context code lines 上下文关联代码行数
+CONTEXT_LINES_NUM = 5

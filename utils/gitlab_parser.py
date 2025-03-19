@@ -1,4 +1,5 @@
 import re
+from config.config import CONTEXT_LINES_NUM
 
 
 def filter_diff_content(diff_content):
@@ -27,7 +28,7 @@ def filter_diff_new_line(diff_content):
 
     return line_numbers
 
-def filter_diff_add_context(diff_content, source_code = None, context_lines_num = 5):
+def filter_diff_add_context(diff_content, source_code = None, context_lines_num = CONTEXT_LINES_NUM):
 
     line_numbers = filter_diff_new_line(diff_content)
     diff_content = filter_diff_content(diff_content)
