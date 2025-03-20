@@ -129,6 +129,7 @@ class GitlabRepoManager:
         if response.status_code == 200:
             return response.json()
         else:
+            log.error(f"获取项目信息失败: {response.status_code} {response.text}")
             return None
 
     @retry(stop_max_attempt_number=3, wait_fixed=2000)
@@ -203,3 +204,15 @@ class GitlabRepoManager:
             return f"http://oauth2:{token}@{repo_url[7:]}"
         else:
             raise ValueError("Unsupported URL scheme")
+
+def is_merge_request_opened(gitlab_payload) -> bool:
+    """
+    判断是否是merge request打开事件
+    """
+    try:
+        gitlab_merge_request_old  = gitlab_payload.get("object_attributes").get("state") == "opened" and gitlab_payload.get("object_attributes").get("merge_status") == "preparing"
+        gitlab_merge_request_new = gitlab_payload.get("object_attributes").get("state") == "merged" and gitlab_payload.get("object_attributes").get("merge_status") == "can_be_merged"
+        return gitlab_merge_request_old or gitlab_merge_request_new
+    except Exception as e:
+        log.error(f"判断是否是merge request打开事件失败: {e}")
+        return False

@@ -126,6 +126,6 @@ class MainReviewHandle(ReviewHandle):
 
         else:
             log.error(f"获取merge_request信息失败，project_id: {hook_info['project']['id']} |"
-                      f" merge_iid: {hook_info['object_attributes']['iid']}")
+                      f" merge_iid: {hook_info['object_attributes']['iid']} | merge_info: {merge_info}")
 
 
