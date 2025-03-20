@@ -129,6 +129,7 @@ class GitlabRepoManager:
         if response.status_code == 200:
             return response.json()
         else:
+            log.error(f"获取项目信息失败: {response.status_code} {response.text}")
             return None
 
     @retry(stop_max_attempt_number=3, wait_fixed=2000)
