@@ -111,8 +111,11 @@ class GitlabRepoManager:
 
     def get_info(self):
         """
-        Get the project information
-        :return: Project information
+        Fetches project information from GitLab.
+        
+        Sends an HTTP GET request using the instance's project_id to retrieve project details.
+        Returns a dictionary of project information on success, or logs an error and returns None
+        if the request fails.
         """
         # URL for the GitLab API endpoint
         url = f"{GITLAB_SERVER_URL}/api/v4/projects/{self.project_id}"
@@ -196,6 +199,23 @@ class GitlabRepoManager:
     # 构建带有身份验证信息的 URL
     def _build_authenticated_url(self, repo_url):
         # 如果 URL 使用 https
+        """
+        Build an authenticated GitLab repository URL using a private token.
+        
+        This method embeds OAuth2 credentials into the provided repository URL by
+        injecting the GitLab private token. If the URL begins with "http://" or "https://",
+        the method constructs a new URL with the token included. Otherwise, it raises a
+        ValueError for unsupported URL schemes.
+        
+        Args:
+            repo_url: The original repository URL (must begin with "http://" or "https://").
+        
+        Returns:
+            An authenticated URL string with embedded OAuth2 credentials.
+        
+        Raises:
+            ValueError: If the URL does not start with a supported scheme.
+        """
         token = GITLAB_PRIVATE_TOKEN
         if repo_url.startswith("https://"):
             return f"https://oauth2:{token}@{repo_url[8:]}"
@@ -207,7 +227,19 @@ class GitlabRepoManager:
 
 def is_merge_request_opened(gitlab_payload) -> bool:
     """
-    判断是否是merge request打开事件
+    Determines if a merge request is open.
+    
+    Checks whether the provided GitLab payload indicates an open merge request by verifying that its
+    "object_attributes" have either a state of "opened" with a merge status of "preparing" or a state
+    of "merged" with a merge status of "can_be_merged". If any error occurs during the evaluation, the
+    error is logged and False is returned.
+    
+    Args:
+        gitlab_payload: Dictionary containing merge request attributes, including an "object_attributes"
+                        key with state and merge_status information.
+    
+    Returns:
+        bool: True if the merge request meets one of the open criteria; otherwise, False.
     """
     try:
         gitlab_merge_request_old  = gitlab_payload.get("object_attributes").get("state") == "opened" and gitlab_payload.get("object_attributes").get("merge_status") == "preparing"
