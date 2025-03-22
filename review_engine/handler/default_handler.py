@@ -65,6 +65,11 @@ class MainReviewHandle(ReviewHandle):
         self.default_handle(changes, merge_info, hook_info, reply, model)
 
     def default_handle(self, changes, merge_info, hook_info, reply, model):
+        """
+        Processes merge request changes to generate and add code review replies.
+        
+        Evaluates the list of changes and, if the file count is within the allowed threshold, creates a code review note using concurrent processing. When review information is generated, it adds detailed reply messages—including project and merge request details—to the reply object. If the review note is not produced (indicating that changes have already been merged) or if too many files are changed, the method adds a corresponding fallback or warning reply. If no valid changes are provided, it logs an error with contextual merge request information.
+        """
         if changes and len(changes) <= MAX_FILES:
             # Code Review 信息
             review_info = chat_review(changes, generate_review_note, model)

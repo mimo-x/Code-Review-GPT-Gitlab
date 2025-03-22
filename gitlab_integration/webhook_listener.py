@@ -11,6 +11,9 @@ from gitlab_integration.gitlab_fetcher import is_merge_request_opened
 
 class WebhookListener:
     def __init__(self):
+        """
+        Initializes a WebhookListener instance.
+        """
         pass
 
     def handle_webhook(self):
@@ -51,7 +54,19 @@ class WebhookListener:
 
     def handle_merge_request(self, gitlab_payload, reply):
         """
-        处理合并请求事件
+        Process a merge request event triggered by a GitLab webhook.
+        
+        If the merge request is open (as determined by is_merge_request_opened), logs the event,
+        extracts project and merge request identifiers from the payload, and starts an asynchronous
+        thread to process the merge using a ReviewEngine instance. Otherwise, returns a response
+        indicating that no review is necessary.
+        
+        Args:
+            gitlab_payload: A dictionary containing the webhook payload with 'project' and 'object_attributes' keys.
+            reply: Data used to initialize the ReviewEngine for merge request processing.
+        
+        Returns:
+            A tuple comprising a JSON response and an HTTP status code (200).
         """
         if is_merge_request_opened(gitlab_payload):
             log.info("首次merge_request ", gitlab_payload)
