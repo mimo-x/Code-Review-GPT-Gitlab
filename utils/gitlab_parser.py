@@ -9,6 +9,15 @@ def filter_diff_content(diff_content):
     processed_code = '\n'.join([line[1:] if line.startswith('+') else line for line in filtered_content.split('\n')])
     return processed_code
 
+
+def extract_diffs(diff_content):
+    """提取多个diff转成diff数组"""
+
+    # 使用正则表达式来匹配diff数据块
+    diff_pattern = re.compile(r'@@ -\d+,\d+ \+\d+,\d+ @@.*?(?=\n@@|\Z)', re.DOTALL)
+    diffs = diff_pattern.findall(diff_content)
+    return diffs
+
 def extract_diff_line_range(diff_content):
     """提取diff中的开始和结束行号"""
     line_range = []
@@ -50,35 +59,49 @@ def get_context_boundaries(diff_range, source_code_length, context_lines_num=CON
 
 def add_context_to_diff(diff_content, source_code=None, context_lines_num=CONTEXT_LINES_NUM):
     """在diff内容前后添加上下文代码"""
-    # 获取diff的行号范围
-    diff_range = extract_diff_line_range(diff_content)
+
     # 过滤diff内容
     filtered_diff = filter_diff_content(diff_content)
-    front_lines = ""
-    back_lines = ""
-    diff_with_context = ""
 
-    if source_code and diff_range:
+    # 获取同一 diff_content 多处 diff 行号范围和 diff过滤内容
+    diff_ranges = []
+    filtered_contents = []
+    diffs = extract_diffs(diff_content)
+    for diff in diffs:
+        # 获取单个diff的行号范围
+        diff_ranges.append(extract_diff_line_range(diff))
+        # 获取单个diff的内容
+        filtered_contents.append(filter_diff_content(diff))
+
+    diff_with_contexts = ""
+
+    if source_code and diff_ranges:
         code_lines = source_code.splitlines()
         source_code_length = len(code_lines)
-        
-        front_start, front_end, back_start, back_end = get_context_boundaries(
-            diff_range, source_code_length, context_lines_num)
-        
-        
-        if front_start is not None and front_end is not None and front_end >= front_start:
-            for line in range(front_start, front_end + 1):
-                front_lines += code_lines[line - 1] + '\n'
-            diff_with_context += f"修改代码块前代码：\n{front_lines}\n"
-        
-        diff_with_context += f"修改代码块：\n{filtered_diff}\n"
-        
-        if back_start is not None and back_end is not None and back_end >= back_start:
-            for line in range(back_start, back_end + 1):
-                back_lines += code_lines[line - 1] + '\n'
-            diff_with_context += f"修改代码块后代码：\n{back_lines}\n"
 
-    return diff_with_context if diff_with_context else filtered_diff
+        for filtered_content, diff_range in zip(filtered_contents, diff_ranges):
+            front_lines = ""
+            back_lines = ""
+            diff_with_context = ""
+            front_start, front_end, back_start, back_end = get_context_boundaries(
+                diff_range, source_code_length, context_lines_num)
+
+            if front_start is not None and front_end is not None and front_end >= front_start:
+                for line in range(front_start, front_end + 1):
+                    front_lines +=  code_lines[line - 1] + '\n'
+                diff_with_context += f"修改代码块前代码：\n{front_lines}\n"
+
+            diff_with_context += f"修改代码块：\n{filtered_content}\n"
+
+            if back_start is not None and back_end is not None and back_end >= back_start:
+                for line in range(back_start, back_end + 1):
+                    back_lines +=  code_lines[line - 1] + '\n'
+                diff_with_context += f"修改代码块后代码：\n{back_lines}\n"
+
+
+            diff_with_contexts += diff_with_context + '\n'
+
+    return diff_with_contexts if diff_with_contexts else filtered_diff
 
 
 if __name__ == "__main__":
