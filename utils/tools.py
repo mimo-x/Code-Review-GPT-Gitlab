@@ -45,6 +45,28 @@ def run_command(command):
             log.error(stderr_output.strip())
     return process.returncode
 
+def create_markdown_table(headers, rows):
+    """
+    创建一个 Markdown 表格并以字符串形式返回。
+
+    参数:
+    headers (list): 表格的列标题
+    rows (list of lists): 表格的行数据，每行是一个列表
+
+    返回:
+    str: Markdown 表格的字符串表示形式
+    """
+
+    # 创建表头
+    table = "| " + " | ".join(headers) + " |\n"
+    table += "| " + " | ".join(["---"] * len(headers)) + " |\n"
+
+    # 添加行数据
+    for row in rows:
+        table += "| " + " | ".join(row) + " |\n"
+
+    return table
+
 if __name__ == "__main__":
     from config.config import *
     def _build_authenticated_url(repo_url):

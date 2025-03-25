@@ -7,6 +7,7 @@ from review_engine.abstract_handler import ReviewHandle
 from utils.gitlab_parser import filter_diff_content, add_context_to_diff
 from utils.logger import log
 from utils.args_check import file_need_check
+from utils.tools import create_markdown_table
 
 
 def chat_review(changes, generate_review, *args, **kwargs):
@@ -34,6 +35,43 @@ def chat_review(changes, generate_review, *args, **kwargs):
     # 合并结果
     return "\n\n".join(review_results) if review_results else ""
 
+@retry(stop_max_attempt_number=3, wait_fixed=60000)
+def chat_review_summary(changes, model):
+
+    summary_note = ""
+    diff_list = []
+    file_list = []
+    # 获取所有diff和变更文件
+    for change in changes:
+        diff_list.append(change['diff'])
+        file_list.append(change['new_path'])
+    for i in range(len(file_list)):
+        file_list[i] = f"`{file_list[i]}`<br>"
+
+    messages = [
+        {
+            "role": "system",
+            "content": "你是一位资深编程专家，gitlab的分支代码变更将以git diff 字符串数组的形式提供，diff包括多个地方的代码修改，请从中提取出\
+         主要的代码变更，并将这些变更总结为一段简洁的描述，突出关键的修改内容和其影响，要求只输出一段话，不需要分点回答。"
+        },
+        {
+            "role": "user",
+            "content": f"请review这部分代码变更 {diff_list}",
+        },
+    ]
+    log.info("LLM 对代码变更总结中...")
+    model.generate_text(messages)
+    response_content = model.get_respond_content().replace('\n\n', '\n')
+    log.info("LLM 代码变更总结完成")
+
+    # markdown 总结表格
+    headers = ["File(s)", "Change Summary"]
+    rows = [
+        ["".join(file_list), response_content]
+    ]
+    markdown_table = create_markdown_table(headers, rows)
+    summary_note = f" # ⭐ 总结\n\n {markdown_table} \n\n"
+    return summary_note
 
 @retry(stop_max_attempt_number=3, wait_fixed=60000)
 def generate_review_note_with_context(change, model, gitlab_fetcher, merge_info):
@@ -82,9 +120,10 @@ class MainReviewHandle(ReviewHandle):
 
     def default_handle(self, changes, merge_info, hook_info, reply, model, gitlab_fetcher):
         if changes and len(changes) <= MAX_FILES:
-            
+            review_summary = chat_review_summary(changes, model)
             review_info = chat_review(changes, generate_review_note_with_context, model, gitlab_fetcher, merge_info)
-            
+            review_info = review_summary + review_info
+
             if review_info:
                 reply.add_reply({
                     'content': review_info,
