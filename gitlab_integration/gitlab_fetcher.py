@@ -13,6 +13,16 @@ from utils.tools import run_command
 
 class GitlabMergeRequestFetcher:
     def __init__(self, project_id, merge_request_iid):
+        """
+        Initialize a GitLab merge request fetcher.
+        
+        Assigns the project identifier and merge request IID, and sets up caches for
+        tracking changes, file content, and merge request information.
+        
+        Parameters:
+            project_id: The unique identifier for the GitLab project.
+            merge_request_iid: The internal identifier for the merge request.
+        """
         self.project_id = project_id
         self.iid = merge_request_iid
         self._changes_cache = None
@@ -22,17 +32,23 @@ class GitlabMergeRequestFetcher:
     @retry(stop_max_attempt_number=3, wait_fixed=2000)
     def get_changes(self, force=False):
         """
-        Get the changes of the merge request
-        :return: changes
+        Retrieve merge request changes via GitLab API.
+        
+        If cached changes are available and force is False, returns the cached data.
+        Otherwise, performs a GET request to fetch the latest changes, caches them on success,
+        and returns the list of changes. Returns None if the API request fails.
+        
+        Args:
+            force (bool): If True, bypasses the cache to fetch fresh changes.
         """
         if self._changes_cache and not force:
             return self._changes_cache
         # URL for the GitLab API endpoint
-        url = f"{GITLAB_SERVER_URL}/api/v4/projects/{self.project_id}/merge_requests/{self.iid}/changes"
+        url = f"{gitlab_server_url}/api/v4/projects/{self.project_id}/merge_requests/{self.iid}/changes"
 
         # Headers for the request
         headers = {
-            "PRIVATE-TOKEN": GITLAB_PRIVATE_TOKEN
+            "PRIVATE-TOKEN": gitlab_private_token
         }
 
         # Make the GET request
@@ -49,20 +65,31 @@ class GitlabMergeRequestFetcher:
     # 获取文件内容
     def get_file_content(self, file_path, branch_name='main', force=False):
         """
-        Get the content of the file
-        :param file_path: The path of the file
-        :return: The content of the file
+        Fetch the raw content of a repository file via the GitLab API.
+        
+        This method retrieves the file content from the specified branch by making a GET
+        request to the GitLab API. The provided file path is URL-encoded for proper API
+        endpoint formatting. Cached content is returned if available, unless the force
+        flag is set to True.
+        
+        Args:
+            file_path: The repository path of the file; forward slashes are URL-encoded.
+            branch_name: The branch to fetch the file from (default is 'main').
+            force: If True, bypasses the cache to retrieve fresh content.
+        
+        Returns:
+            The raw file content as a string if the request is successful; otherwise, None.
         """
         # 对file_path中的'/'转换为'%2F'
         file_path = file_path.replace('/', '%2F')
         if file_path in self._file_content_cache and not force:
             return self._file_content_cache[file_path]
         # URL for the GitLab API endpoint
-        url = f"{GITLAB_SERVER_URL}/api/v4/projects/{self.project_id}/repository/files/{file_path}/raw?ref={branch_name}"
+        url = f"{gitlab_server_url}/api/v4/projects/{self.project_id}/repository/files/{file_path}/raw?ref={branch_name}"
 
         # Headers for the request
         headers = {
-            "PRIVATE-TOKEN": GITLAB_PRIVATE_TOKEN
+            "PRIVATE-TOKEN": gitlab_private_token
         }
 
         # Make the GET request
@@ -78,17 +105,26 @@ class GitlabMergeRequestFetcher:
     @retry(stop_max_attempt_number=3, wait_fixed=2000)
     def get_info(self, force=False):
         """
-        Get the merge request information
-        :return: Merge request information
+        Retrieve merge request information.
+        
+        If cached data is available and force is False, the cached merge request details
+        are returned. Otherwise, the method calls the GitLab API to fetch fresh information,
+        caches the result, and returns it. If the API request fails, None is returned.
+        
+        Args:
+            force (bool): If True, bypass the cache and retrieve fresh data.
+        
+        Returns:
+            dict or None: The merge request information if successful; otherwise, None.
         """
         if self._info_cache and not force:
             return self._info_cache
         # URL for the GitLab API endpoint
-        url = f"{GITLAB_SERVER_URL}/api/v4/projects/{self.project_id}/merge_requests/{self.iid}"
+        url = f"{gitlab_server_url}/api/v4/projects/{self.project_id}/merge_requests/{self.iid}"
 
         # Headers for the request
         headers = {
-            "PRIVATE-TOKEN": GITLAB_PRIVATE_TOKEN
+            "PRIVATE-TOKEN": gitlab_private_token
         }
 
         # Make the GET request
@@ -104,6 +140,18 @@ class GitlabMergeRequestFetcher:
 # gitlab仓库clone和管理
 class GitlabRepoManager:
     def __init__(self, project_id, branch_name = ""):
+        """
+        Initialize a GitlabRepoManager instance.
+        
+        Creates a unique repository path by combining the provided project ID with the current
+        timestamp. The repository is initially marked as not cloned. The optional branch name
+        parameter is accepted for potential branch-related operations, although it is not used
+        during initialization.
+        
+        Args:
+            project_id: Identifier for the GitLab project.
+            branch_name: Optional branch name for repository operations.
+        """
         self.project_id = project_id
         self.timestamp = int(time.time() * 1000)
         self.repo_path = f"./repo/{self.project_id}_{self.timestamp}"
@@ -111,15 +159,18 @@ class GitlabRepoManager:
 
     def get_info(self):
         """
-        Get the project information
-        :return: Project information
+        Retrieve project information from GitLab.
+        
+        Makes a GET request to the GitLab API to fetch details for the project identified by the
+        instance's project_id. Returns the JSON-decoded response if the request is successful (HTTP 200);
+        otherwise, returns None.
         """
         # URL for the GitLab API endpoint
-        url = f"{GITLAB_SERVER_URL}/api/v4/projects/{self.project_id}"
+        url = f"{gitlab_server_url}/api/v4/projects/{self.project_id}"
 
         # Headers for the request
         headers = {
-            "PRIVATE-TOKEN": GITLAB_PRIVATE_TOKEN
+            "PRIVATE-TOKEN": gitlab_private_token
         }
 
         # Make the GET request
@@ -129,14 +180,20 @@ class GitlabRepoManager:
         if response.status_code == 200:
             return response.json()
         else:
-            log.error(f"获取项目信息失败: {response.status_code} {response.text}")
             return None
 
     @retry(stop_max_attempt_number=3, wait_fixed=2000)
     def shallow_clone(self, branch_name = "main"):
         """
-        Perform a shallow clone of the repository
-        param branch_name: The name of the branch to clone
+        Shallow clones the repository to a local directory.
+        
+        Deletes any existing local clone, constructs an authenticated Git URL using
+        repository information, and executes a shallow clone (depth of 1) for the specified
+        branch. If cloning fails, an error is logged; otherwise, the repository is marked
+        as cloned.
+        
+        Args:
+            branch_name (str): The branch to clone (default "main").
         """
         # If the target directory exists, remove it
         self.delete_repo()
@@ -159,6 +216,17 @@ class GitlabRepoManager:
     # 切换分支
     def checkout_branch(self, branch_name, force=False):
         # Build the Git command
+        """
+        Checks out the specified branch by performing a shallow clone if necessary.
+        
+        If the repository has not been cloned already, the method executes a shallow clone for the target branch.
+        If the repository is already cloned, it verifies whether the branch is already checked out (unless forced)
+        and performs a shallow clone if the branch differs or if force is True.
+        
+        Args:
+            branch_name: The name of the branch to check out.
+            force: If True, forces re-cloning of the branch even if it appears to be already checked out.
+        """
         if not self.has_cloned:
             self.shallow_clone(branch_name)
         else:
@@ -170,11 +238,30 @@ class GitlabRepoManager:
 
     # 删除库
     def delete_repo(self):
+        """
+        Deletes the cloned repository directory if it exists.
+        
+        This method checks whether the repository path exists on the filesystem and removes it along with its contents. If the directory is not present, no action is taken.
+        """
         if os.path.exists(self.repo_path):
             shutil.rmtree(self.repo_path)
 
     # 查找相关文件列表
     def find_files_by_keyword(self, keyword, branch_name="main"):
+        """
+        Search for files whose content matches a regex pattern.
+        
+        Checks out the specified branch and recursively searches for files whose content
+        matches the provided regular expression. Files that cannot be read due to encoding,
+        permission, or existence issues are skipped.
+        
+        Args:
+            keyword: Regular expression pattern to search for in file contents.
+            branch_name: Branch to search in; defaults to "main".
+        
+        Returns:
+            A list of file paths for files containing a match to the keyword.
+        """
         matching_files = []
         regex = re.compile(keyword)
         self.checkout_branch(branch_name)
@@ -196,7 +283,15 @@ class GitlabRepoManager:
     # 构建带有身份验证信息的 URL
     def _build_authenticated_url(self, repo_url):
         # 如果 URL 使用 https
-        token = GITLAB_PRIVATE_TOKEN
+        """
+        Builds an authenticated URL for repository access.
+        
+        This method embeds an OAuth2 token into the provided repository URL, supporting only
+        URLs beginning with "http://" or "https://". For HTTPS URLs, it returns a URL in the
+        format "https://oauth2:{token}@<rest_of_url>" and similarly for HTTP URLs. If the URL
+        scheme is unsupported, a ValueError is raised.
+        """
+        token = gitlab_private_token
         if repo_url.startswith("https://"):
             return f"https://oauth2:{token}@{repo_url[8:]}"
         # 如果 URL 使用 http
@@ -204,15 +299,3 @@ class GitlabRepoManager:
             return f"http://oauth2:{token}@{repo_url[7:]}"
         else:
             raise ValueError("Unsupported URL scheme")
-
-def is_merge_request_opened(gitlab_payload) -> bool:
-    """
-    判断是否是merge request打开事件
-    """
-    try:
-        gitlab_merge_request_old  = gitlab_payload.get("object_attributes").get("state") == "opened" and gitlab_payload.get("object_attributes").get("merge_status") == "preparing"
-        gitlab_merge_request_new = gitlab_payload.get("object_attributes").get("state") == "merged" and gitlab_payload.get("object_attributes").get("merge_status") == "can_be_merged"
-        return gitlab_merge_request_old or gitlab_merge_request_new
-    except Exception as e:
-        log.error(f"判断是否是merge request打开事件失败: {e}")
-        return False

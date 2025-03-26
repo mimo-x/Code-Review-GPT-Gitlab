@@ -8,6 +8,16 @@ from utils.logger import log
 
 
 def import_submodules(package_name):
+    # 确保正确的工作目录
+    """
+    Imports all submodules of the specified package.
+    
+    Ensures the project root is added to sys.path for proper module resolution, then imports the package
+    and dynamically loads every submodule found in its __path__.
+    
+    Args:
+        package_name (str): The fully-qualified name of the package.
+    """
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
@@ -17,6 +27,20 @@ def import_submodules(package_name):
         importlib.import_module(f"{package_name}.{module_name}")
 
 def run_command(command):
+    """
+    Execute a shell command and log its output.
+    
+    This function runs the specified command using subprocess.Popen and logs each line of
+    standard output in real time. After the process completes, it logs any remaining output
+    from the standard output and standard error streams, with errors logged as error messages.
+    It returns the exit code of the executed command.
+    
+    Args:
+        command: The command to execute, provided as a list of arguments or a string.
+    
+    Returns:
+        int: The exit code of the command.
+    """
     process = subprocess.Popen(
         command,
         stdout=subprocess.PIPE,
@@ -49,7 +73,20 @@ if __name__ == "__main__":
     from config.config import *
     def _build_authenticated_url(repo_url):
         # 如果 URL 使用 https
-        token = GITLAB_PRIVATE_TOKEN
+        """
+        Construct an authenticated GitLab repository URL.
+        
+        Inserts an OAuth2 token from the global gitlab_private_token into the provided URL
+        for Git authentication. Supports URLs starting with "https://" or "http://", returning
+        a modified URL with the token embedded. Raises a ValueError for unsupported schemes.
+        
+        Args:
+            repo_url: The repository URL to be authenticated; must start with "http://" or "https://".
+        
+        Returns:
+            A string representing the authenticated URL.
+        """
+        token = gitlab_private_token
         if repo_url.startswith("https://"):
             return f"https://oauth2:{token}@{repo_url[8:]}"
         # 如果 URL 使用 http
@@ -57,7 +94,7 @@ if __name__ == "__main__":
             return f"http://oauth2:{token}@{repo_url[7:]}"
         else:
             raise ValueError("Unsupported URL scheme")
-    authenticated_url = _build_authenticated_url(GITLAB_SERVER_URL)
+    authenticated_url = _build_authenticated_url(gitlab_server_url)
 
     # Build the Git command
     branch_name = "test3"
