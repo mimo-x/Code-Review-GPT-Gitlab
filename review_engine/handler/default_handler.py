@@ -35,43 +35,130 @@ def chat_review(changes, generate_review, *args, **kwargs):
     # 合并结果
     return "\n\n".join(review_results) if review_results else ""
 
-@retry(stop_max_attempt_number=3, wait_fixed=60000)
+
 def chat_review_summary(changes, model):
+    log.info("开始 code review summary")
+    file_diff_map = {}
+    file_summary_map = {}
+    summary_lock = threading.Lock()
 
-    summary_note = ""
-    diff_list = []
-    file_list = []
-    # 获取所有diff和变更文件
     for change in changes:
-        diff_list.append(change['diff'])
-        file_list.append(change['new_path'])
-    for i in range(len(file_list)):
-        file_list[i] = f"`{file_list[i]}`<br>"
+        if change['new_path'] not in file_diff_map:
+            file_diff_map[change['new_path']] = filter_diff_content(change['diff'])
 
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        def process_summary(file, diff, model):
+            summary = generate_diff_summary(file, diff, model)
+            with summary_lock:
+                file_summary_map[file] = summary
+
+        futures = []
+        for file, diff in file_diff_map.items():
+            futures.append(executor.submit(process_summary, file, diff, model))
+        # 等待所有任务完成
+        concurrent.futures.wait(futures)
+
+    log.info("文件diff review完成，开始summary")
+    summaries_content = ""
+    for file, summ in file_summary_map.items():
+        line = f'---\n{file}: {summ}\n'
+        summaries_content += line
+
+    message = [
+        {"role": "system",
+         "content": """Your purpose is to act as a highly experienced
+      software engineer and provide a thorough review of the code hunks
+      and suggest code snippets to improve key areas such as:
+        - Logic
+        - Security
+        - Performance
+        - Data races
+        - Consistency
+        - Error handling
+        - Maintainability
+        - Modularity
+        - Complexity
+        - Optimization
+        - Best practices: DRY, SOLID, KISS
+
+      Do not comment on minor code style issues, missing
+      comments/documentation. Identify and resolve significant
+      concerns to improve overall code quality while deliberately
+      disregarding minor issues.
+         """
+         },
+        {"role": "user",
+         "content": """ Provide your final response in markdown with the following content:
+      - **⭐总结**: A high-level summary of the overall change instead of
+        specific files within 80 words.
+      - **🔔文件变更**: A markdown table of files and their summaries. Group files
+        with similar changes together into a single row to save space. Note that the files in the table do not repeat
+         Avoid additional commentary as this summary will be added as a comment on the 
+  Gitlab merge request. Use the titles "⭐总结" and "🔔文件变更" and they must be H1.
+         """,
+         },
+        {"role": "user",
+         "content": f"要求用中文回答，请review以下文件变更总结: {summaries_content}"
+
+        }
+    ]
+    summary_result = generate_diff_summary(model=model, message=message)
+    return summary_result.join('\n') if summary_result else ""
+
+
+@retry(stop_max_attempt_number=3, wait_fixed=60000)
+def generate_diff_summary(file=None, diff=None, model=None, messages=None):
+    replace_file_diff_prompt = """## Diff
+    \`\`\`diff
+    $file_diff
+    \`\`\`
+
+    ## Instructions
+
+    I would like you to succinctly summarize the diff within 100 words.
+    If applicable, your summary should include a note about alterations
+    to the signatures of exported functions, global data structures and
+    variables, and any changes that might affect the external interface or
+    behavior of the code.
+
+        """
+
+    file_diff_prompt =  replace_file_diff_prompt.replace('$file_diff', diff)
     messages = [
-        {
-            "role": "system",
-            "content": "你是一位资深编程专家，gitlab的分支代码变更将以git diff 字符串数组的形式提供，diff包括多个地方的代码修改，请从中提取出\
-         主要的代码变更，并将这些变更总结为一段简洁的描述，突出关键的修改内容和其影响，要求只输出一段话，不需要分点回答。"
-        },
+        {"role": "system",
+         "content": """Your purpose is to act as a highly experienced
+        software engineer and provide a thorough review of the code hunks
+        and suggest code snippets to improve key areas such as:
+          - Logic
+          - Security
+          - Performance
+          - Data races
+          - Consistency
+          - Error handling
+          - Maintainability
+          - Modularity
+          - Complexity
+          - Optimization
+          - Best practices: DRY, SOLID, KISS
+
+        Do not comment on minor code style issues, missing
+        comments/documentation. Identify and resolve significant
+        concerns to improve overall code quality while deliberately
+        disregarding minor issues.
+           """
+         },
         {
             "role": "user",
-            "content": f"请review这部分代码变更 {diff_list}",
+            "content": f"{file_diff_prompt}",
         },
-    ]
-    log.info("LLM 对代码变更总结中...")
+    ] if messages is None else messages
     model.generate_text(messages)
     response_content = model.get_respond_content().replace('\n\n', '\n')
-    log.info("LLM 代码变更总结完成")
+    if response_content:
+        return response_content
+    else:
+        return "summarize: nothing obtained from LLM"
 
-    # markdown 总结表格
-    headers = ["File(s)", "Change Summary"]
-    rows = [
-        ["".join(file_list), response_content]
-    ]
-    markdown_table = create_markdown_table(headers, rows)
-    summary_note = f" # ⭐ 总结\n\n {markdown_table} \n\n"
-    return summary_note
 
 @retry(stop_max_attempt_number=3, wait_fixed=60000)
 def generate_review_note_with_context(change, model, gitlab_fetcher, merge_info):
