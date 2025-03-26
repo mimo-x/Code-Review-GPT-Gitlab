@@ -9,8 +9,8 @@ def check_config():
     results = []
     try:
         import config.config as config
-        if check_exist(config, ["llm_api_impl", "api_config", "GPT_MESSAGE",
-                                "GITLAB_SERVER_URL", "GITLAB_PRIVATE_TOKEN", "DINGDING_BOT_WEBHOOK", "DINGDING_SECRET"]):
+        if check_exist(config, ["llm_api_impl", "api_config", "gpt_message",
+                                "gitlab_server_url", "gitlab_private_token", "dingding_bot_webhook", "dingding_secret"]):
             results.append(["Configuration parameter existence", "Passed", "", "✅ Required parameters are available."])
         else:
             results.append(["Configuration parameter existence", "Failed", "Required parameters are missing", "❌ Required parameters are missing"])
@@ -49,8 +49,11 @@ def check_config():
 
 def check_dingding_config(config):
     """
-    Check the dingding configuration
-    :return: dict
+    Check DingTalk configuration by sending a test notification.
+    
+    Attempts to send a test message using DingtalkResponse to verify the DingTalk
+    integration settings. Returns a dictionary with a boolean flag indicating
+    if the check passed and a list of error messages for any failures.
     """
     result = {'passed': True, 'errors': []}
     try:
@@ -75,14 +78,14 @@ def check_gitlab_config(config):
     """
     result = {'passed': True, 'errors': []}
     try:
-        response = requests.get(config.GITLAB_SERVER_URL)
+        response = requests.get(config.gitlab_server_url)
         if response.status_code != 200:
-            error_msg = f"Gitlab server URL {config.GITLAB_SERVER_URL} is not available"
+            error_msg = f"Gitlab server URL {config.gitlab_server_url} is not available"
             result['errors'].append(error_msg)
             result['passed'] = False
 
-        response = requests.get(f"{config.GITLAB_SERVER_URL}/api/v4/projects",
-                                headers={"PRIVATE-TOKEN": config.GITLAB_PRIVATE_TOKEN})
+        response = requests.get(f"{config.gitlab_server_url}/api/v4/projects",
+                                headers={"PRIVATE-TOKEN": config.gitlab_private_token})
         if response.status_code != 200:
             error_msg = "Gitlab private token is invalid"
             result['errors'].append(error_msg)
