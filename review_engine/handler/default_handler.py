@@ -64,7 +64,7 @@ def chat_review_summary(changes, model):
         line = f'---\n{file}: {summ}\n'
         summaries_content += line
 
-    message = [
+    messages = [
         {"role": "system",
          "content": """Your purpose is to act as a highly experienced
       software engineer and provide a thorough review of the code hunks
@@ -102,7 +102,8 @@ def chat_review_summary(changes, model):
 
         }
     ]
-    summary_result = generate_diff_summary(model=model, message=message)
+    summary_result = generate_diff_summary(model=model, messages=messages)
+    log.info("文件diff summary完成")
     return summary_result.join('\n') if summary_result else ""
 
 
