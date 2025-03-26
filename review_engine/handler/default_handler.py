@@ -104,7 +104,7 @@ def chat_review_summary(changes, model):
     ]
     summary_result = generate_diff_summary(model=model, messages=messages)
     log.info("文件diff summary完成")
-    return summary_result+'\n\n' if summary_result else ""
+    return summary_result+"\n\n---\n\n" if summary_result else ""
 
 
 @retry(stop_max_attempt_number=3, wait_fixed=60000)
