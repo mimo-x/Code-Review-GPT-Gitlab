@@ -124,7 +124,7 @@ def generate_diff_summary(file=None, diff=None, model=None, messages=None):
 
         """
 
-    file_diff_prompt =  replace_file_diff_prompt.replace('$file_diff', diff)
+    file_diff_prompt =  replace_file_diff_prompt.replace('$file_diff', diff) if diff else ""
     messages = [
         {"role": "system",
          "content": """Your purpose is to act as a highly experienced
