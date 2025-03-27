@@ -114,39 +114,53 @@ def chat_review_summary(changes, model):
     final_summary_msg = [
         {"role": "system",
          "content": """Your purpose is to act as a highly experienced
-      software engineer and provide a thorough review of the code hunks
-      and suggest code snippets to improve key areas such as:
-        - Logic
-        - Security
-        - Performance
-        - Data races
-        - Consistency
-        - Error handling
-        - Maintainability
-        - Modularity
-        - Complexity
-        - Optimization
-        - Best practices: DRY, SOLID, KISS
+                software engineer and provide a thorough review of the code hunks
+                and suggest code snippets to improve key areas such as:
+                  - Logic
+                  - Security
+                  - Performance
+                  - Data races
+                  - Consistency
+                  - Error handling
+                  - Maintainability
+                  - Modularity
+                  - Complexity
+                  - Optimization
+                  - Best practices: DRY, SOLID, KISS
 
-      Do not comment on minor code style issues, missing
-      comments/documentation. Identify and resolve significant
-      concerns to improve overall code quality while deliberately
-      disregarding minor issues.
-         """
+                Do not comment on minor code style issues, missing
+                comments/documentation. Identify and resolve significant
+                concerns to improve overall code quality while deliberately
+                disregarding minor issues.
+                   """
          },
         {"role": "user",
          "content": """ Provide your final response in markdown with the following content:
-      - **总结**: A high-level summary of the overall change instead of
-        specific files within 80 words.
-      - **文件变更**: A markdown table of files and their summaries. Group files
-        with similar changes together into a single row to save space. Note that the files in the table do not repeat
-         Avoid additional commentary as this summary will be added as a comment on the 
-  Gitlab merge request. Use the titles "总结" and "文件变更" and they must be H1.
-         """,
+                - **总结**: A high-level summary of the overall change instead of
+                  specific files within 80 words.
+                - **文件变更**: A markdown table of files and their summaries. Group files
+                  with similar changes together into a single row to save space. Note that the files in the table do not repeat. The file name is required to be `filename`,
+                   Avoid additional commentary as this summary will be added as a comment on the
+            Gitlab merge request. Use the titles "总结" and "文件变更" and they must be H1.
+                   """,
          },
         {"role": "user",
-         "content": f"要求用中文回答，请review以下文件变更总结: {summaries_content}"
-        }
+         "content": f"""Here is the summary of changes you have generated for files:
+                 \`\`\`
+                {summaries_content}
+                 \`\`\`
+
+                 要求总结用中文回答，尽可能全面且精炼，表格中每一组总结字数不超过50字，请按照上面的规则和下面的格式输出结果，返回格式如下,其中 "{{xxx}}"表示占位符：
+        # 总结
+        {{总结内容}}
+        # 文件变更
+        | 文件 | 修改摘要 |
+        |---------|-------------|
+        | {{`filename1`<br>}} {{`filename2`<br>}} | {{摘要1}} |
+        | {{`filename3`<br>}} {{`filename4`<br>}}  | {{摘要2}} |
+
+        """
+         }
     ]
     summary_result = generate_diff_summary(model=model, messages=final_summary_msg)
     log.info("文件diff summary完成")
