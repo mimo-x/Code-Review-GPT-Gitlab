@@ -44,6 +44,8 @@ def chat_review_summary(changes, model):
 
     for change in changes:
         if change['new_path'] not in file_diff_map:
+            if not file_need_check(change["new_path"]):
+                continue
             file_diff_map[change['new_path']] = filter_diff_content(change['diff'])
 
     # 对单个文件diff进行总结
@@ -61,9 +63,6 @@ def chat_review_summary(changes, model):
 
     log.info("文件diff review完成，开始summary")
     summaries_content = ""
-    # for file, summ in file_summary_map.items():
-    #     line = f'---\n{file}: {summ}\n'
-    #     summaries_content += line
     batchsize = 4
     # 分批对单文件summary 进行汇总
     for batch_data in batch(file_summary_map, batchsize):
@@ -111,6 +110,7 @@ def chat_review_summary(changes, model):
         model.generate_text(batch_summary_msg)
         summaries_content = model.get_respond_content().replace('\n\n', '\n')
 
+    # 总结生成 summary 和 file summary 表格
     final_summary_msg = [
         {"role": "system",
          "content": """Your purpose is to act as a highly experienced
