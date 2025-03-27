@@ -7,7 +7,7 @@ from review_engine.abstract_handler import ReviewHandle
 from utils.gitlab_parser import filter_diff_content, add_context_to_diff
 from utils.logger import log
 from utils.args_check import file_need_check
-from utils.tools import create_markdown_table
+from utils.tools import batch
 
 
 def chat_review(changes, generate_review, *args, **kwargs):
@@ -46,6 +46,7 @@ def chat_review_summary(changes, model):
         if change['new_path'] not in file_diff_map:
             file_diff_map[change['new_path']] = filter_diff_content(change['diff'])
 
+    # 对单个文件diff进行总结
     with concurrent.futures.ThreadPoolExecutor() as executor:
         def process_summary(file, diff, model):
             summary = generate_diff_summary(file, diff, model)
@@ -60,11 +61,57 @@ def chat_review_summary(changes, model):
 
     log.info("文件diff review完成，开始summary")
     summaries_content = ""
-    for file, summ in file_summary_map.items():
-        line = f'---\n{file}: {summ}\n'
-        summaries_content += line
+    # for file, summ in file_summary_map.items():
+    #     line = f'---\n{file}: {summ}\n'
+    #     summaries_content += line
+    batchsize = 4
+    # 分批对单文件summary 进行汇总
+    for batch_data in batch(file_summary_map, batchsize):
+        for file in batch_data:
+            summaries_content += f"---\n{file}: {file_summary_map[file]}\n"
+        prompt_changesets = """Provided below are changesets in this merge request. Changesets 
+        are in chronlogical order and new changesets are appended to the
+        end of the list. The format consists of filename(s) and the summary 
+        of changes for those files. There is a separator between each changeset.
+        Your task is to deduplicate and group together files with
+        related/similar changes into a single changeset. Respond with the updated 
+        changesets using the same format as the input. 
 
-    messages = [
+
+        $raw_summary
+            """
+        prompt_changesets = prompt_changesets.replace("$raw_summary", summaries_content)
+        batch_summary_msg = [
+            {"role": "system",
+             "content": """Your purpose is to act as a highly experienced
+               software engineer and provide a thorough review of the code hunks
+               and suggest code snippets to improve key areas such as:
+                 - Logic
+                 - Security
+                 - Performance
+                 - Data races
+                 - Consistency
+                 - Error handling
+                 - Maintainability
+                 - Modularity
+                 - Complexity
+                 - Optimization
+                 - Best practices: DRY, SOLID, KISS
+
+               Do not comment on minor code style issues, missing
+               comments/documentation. Identify and resolve significant
+               concerns to improve overall code quality while deliberately
+               disregarding minor issues.
+                  """
+             },
+            {"role": "user",
+             "content": f"{prompt_changesets}"
+             }
+        ]
+        model.generate_text(batch_summary_msg)
+        summaries_content = model.get_respond_content().replace('\n\n', '\n')
+
+    final_summary_msg = [
         {"role": "system",
          "content": """Your purpose is to act as a highly experienced
       software engineer and provide a thorough review of the code hunks
@@ -89,20 +136,19 @@ def chat_review_summary(changes, model):
          },
         {"role": "user",
          "content": """ Provide your final response in markdown with the following content:
-      - **⭐总结**: A high-level summary of the overall change instead of
+      - **总结**: A high-level summary of the overall change instead of
         specific files within 80 words.
-      - **🔔文件变更**: A markdown table of files and their summaries. Group files
+      - **文件变更**: A markdown table of files and their summaries. Group files
         with similar changes together into a single row to save space. Note that the files in the table do not repeat
          Avoid additional commentary as this summary will be added as a comment on the 
-  Gitlab merge request. Use the titles "⭐总结" and "🔔文件变更" and they must be H1.
+  Gitlab merge request. Use the titles "总结" and "文件变更" and they must be H1.
          """,
          },
         {"role": "user",
          "content": f"要求用中文回答，请review以下文件变更总结: {summaries_content}"
-
         }
     ]
-    summary_result = generate_diff_summary(model=model, messages=messages)
+    summary_result = generate_diff_summary(model=model, messages=final_summary_msg)
     log.info("文件diff summary完成")
     return summary_result+"\n\n---\n\n" if summary_result else ""
 
