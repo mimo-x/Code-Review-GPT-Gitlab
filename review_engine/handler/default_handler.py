@@ -64,7 +64,7 @@ def chat_review_summary(changes, model):
         # 等待所有任务完成
         concurrent.futures.wait(futures)
 
-    log.info("文件diff review完成，batch summary中")
+    log.info("code diff review完成，batch summary中")
     summaries_content = ""
     batchsize = 8
     # 分批对单文件summary 进行汇总
@@ -97,7 +97,7 @@ def chat_review_summary(changes, model):
          }
     ]
     summary_result = generate_diff_summary(model=model, messages=final_summary_msg)
-    log.info("文件diff summary完成")
+    log.info("code diff review summary完成")
     return summary_result+"\n\n---\n\n" if summary_result else ""
 
 
