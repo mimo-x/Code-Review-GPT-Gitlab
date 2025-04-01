@@ -48,12 +48,12 @@ def get_context_boundaries(diff_range, source_code_length, context_lines_num=CON
         return None, None, None, None
         
     # 计算上文边界
-    front_lines_end = max(diff_range[0] - 1, 1)
-    front_lines_start = max(diff_range[0] - context_lines_num, 1)
+    front_lines_end = (diff_range[0] - 1, 1) if diff_range[0] > 1 else None
+    front_lines_start = max(diff_range[0] - context_lines_num, 1) if diff_range[0] > 1 else None
     
     # 计算下文边界
-    back_lines_start = min(diff_range[1] + 1, source_code_length)
-    back_lines_end = min(diff_range[1] + context_lines_num, source_code_length)
+    back_lines_start = min(diff_range[1] + 1, source_code_length) if diff_range[1] < source_code_length else None
+    back_lines_end = min(diff_range[1] + context_lines_num, source_code_length) if diff_range[1] < source_code_length else None
     
     return front_lines_start, front_lines_end, back_lines_start, back_lines_end
 
