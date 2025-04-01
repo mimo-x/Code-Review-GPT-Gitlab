@@ -8,6 +8,8 @@ from utils.gitlab_parser import filter_diff_content, add_context_to_diff
 from utils.logger import log
 from utils.args_check import file_need_check
 from utils.tools import batch
+from review_engine.review_prompt import (REVIEW_SUMMARY_SETTING, FILE_DIFF_REVIEW_PROMPT, BATCH_SUMMARY_PROMPT,
+                                         FINAL_SUMMARY_PROMPT,SUMMARY_OUTPUT_PROMPT)
 
 
 def chat_review(changes, generate_review, *args, **kwargs):
@@ -69,98 +71,29 @@ def chat_review_summary(changes, model):
     for batch_data in batch(file_summary_map, batchsize):
         for file in batch_data:
             summaries_content += f"---\n{file}: {file_summary_map[file]}\n"
-        prompt_changesets = """Provided below are changesets in this merge request. Changesets 
-        are in chronlogical order and new changesets are appended to the
-        end of the list. The format consists of filename(s) and the summary 
-        of changes for those files. There is a separator between each changeset.
-        Your task is to deduplicate and group together files with
-        related/similar changes into a single changeset. Respond with the updated 
-        changesets using the same format as the input. 
-
-
-        $raw_summary
-            """
-        prompt_changesets = prompt_changesets.replace("$raw_summary", summaries_content)
+        batch_changesets_prompt = BATCH_SUMMARY_PROMPT.replace("$raw_summary", summaries_content)
         batch_summary_msg = [
             {"role": "system",
-             "content": """Your purpose is to act as a highly experienced
-               software engineer and provide a thorough review of the code hunks
-               and suggest code snippets to improve key areas such as:
-                 - Logic
-                 - Security
-                 - Performance
-                 - Data races
-                 - Consistency
-                 - Error handling
-                 - Maintainability
-                 - Modularity
-                 - Complexity
-                 - Optimization
-                 - Best practices: DRY, SOLID, KISS
-
-               Do not comment on minor code style issues, missing
-               comments/documentation. Identify and resolve significant
-               concerns to improve overall code quality while deliberately
-               disregarding minor issues.
-                  """
+             "content": REVIEW_SUMMARY_SETTING
              },
             {"role": "user",
-             "content": f"{prompt_changesets}"
+             "content": f"{batch_changesets_prompt}"
              }
         ]
         model.generate_text(batch_summary_msg)
         summaries_content = model.get_respond_content().replace('\n\n', '\n')
 
     # 总结生成 summary 和 file summary 表格
+    final_summaries_content = SUMMARY_OUTPUT_PROMPT.replace("$summaries_content", summaries_content)
     final_summary_msg = [
         {"role": "system",
-         "content": """Your purpose is to act as a highly experienced
-                software engineer and provide a thorough review of the code hunks
-                and suggest code snippets to improve key areas such as:
-                  - Logic
-                  - Security
-                  - Performance
-                  - Data races
-                  - Consistency
-                  - Error handling
-                  - Maintainability
-                  - Modularity
-                  - Complexity
-                  - Optimization
-                  - Best practices: DRY, SOLID, KISS
-
-                Do not comment on minor code style issues, missing
-                comments/documentation. Identify and resolve significant
-                concerns to improve overall code quality while deliberately
-                disregarding minor issues.
-                   """
+         "content": REVIEW_SUMMARY_SETTING
          },
         {"role": "user",
-         "content": """ Provide your final response in markdown with the following content:
-                - **总结**: A high-level summary of the overall change instead of
-                  specific files within 80 words.
-                - **文件变更**: A markdown table of files and their summaries. Group files
-                  with similar changes together into a single row to save space. Note that the files in the table do not repeat. The file name is required to be `filename`,
-                   Avoid additional commentary as this summary will be added as a comment on the
-            Gitlab merge request. Use the titles "总结" and "文件变更" and they must be H1.
-                   """,
+         "content": FINAL_SUMMARY_PROMPT
          },
         {"role": "user",
-         "content": f"""Here is the summary of changes you have generated for files:
-                 \`\`\`
-                {summaries_content}
-                 \`\`\`
-
-                 要求总结用中文回答，尽可能全面且精炼，表格中每一组总结字数不超过50字，请按照上面的规则和下面的格式输出结果，返回格式如下,其中 "{{xxx}}"表示占位符：
-        # 总结
-        {{总结内容}}
-        # 文件变更
-        | 文件 | 修改摘要 |
-        |---------|-------------|
-        | {{`filename1`<br>}} {{`filename2`<br>}} | {{摘要1}} |
-        | {{`filename3`<br>}} {{`filename4`<br>}}  | {{摘要2}} |
-
-        """
+         "content": f"{final_summaries_content}"
          }
     ]
     summary_result = generate_diff_summary(model=model, messages=final_summary_msg)
@@ -170,44 +103,10 @@ def chat_review_summary(changes, model):
 
 @retry(stop_max_attempt_number=3, wait_fixed=60000)
 def generate_diff_summary(file=None, diff=None, model=None, messages=None):
-    replace_file_diff_prompt = """## Diff
-    \`\`\`diff
-    $file_diff
-    \`\`\`
-
-    ## Instructions
-
-    I would like you to succinctly summarize the diff within 100 words.
-    If applicable, your summary should include a note about alterations
-    to the signatures of exported functions, global data structures and
-    variables, and any changes that might affect the external interface or
-    behavior of the code.
-
-        """
-
-    file_diff_prompt =  replace_file_diff_prompt.replace('$file_diff', diff) if diff else ""
+    file_diff_prompt =  FILE_DIFF_REVIEW_PROMPT.replace('$file_diff', diff) if diff else ""
     messages = [
         {"role": "system",
-         "content": """Your purpose is to act as a highly experienced
-        software engineer and provide a thorough review of the code hunks
-        and suggest code snippets to improve key areas such as:
-          - Logic
-          - Security
-          - Performance
-          - Data races
-          - Consistency
-          - Error handling
-          - Maintainability
-          - Modularity
-          - Complexity
-          - Optimization
-          - Best practices: DRY, SOLID, KISS
-
-        Do not comment on minor code style issues, missing
-        comments/documentation. Identify and resolve significant
-        concerns to improve overall code quality while deliberately
-        disregarding minor issues.
-           """
+         "content": REVIEW_SUMMARY_SETTING
          },
         {
             "role": "user",
