@@ -64,7 +64,7 @@ def chat_review_summary(changes, model):
 
     log.info("文件diff review完成，batch summary中")
     summaries_content = ""
-    batchsize = 4
+    batchsize = 8
     # 分批对单文件summary 进行汇总
     for batch_data in batch(file_summary_map, batchsize):
         for file in batch_data:
@@ -249,7 +249,7 @@ def generate_review_note_with_context(change, model, gitlab_fetcher, merge_info)
 
         # response
         review_note = f"<details><summary>📚<strong><code>{new_path}</code></strong></summary>\
-        <div>({total_tokens} tokens) AI review 意见如下:<br><div>{response_content}</div></div></details><hr><hr>"
+        <div>({total_tokens} tokens) AI review 意见如下:</div>{response_content}<hr><hr></details>"
 
         # review_note += f'# 📚`{new_path}`' + '\n\n'
         # review_note += f'({total_tokens} tokens) {"AI review 意见如下:"}' + '\n\n'
