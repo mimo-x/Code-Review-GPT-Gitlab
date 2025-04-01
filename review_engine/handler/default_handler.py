@@ -249,7 +249,7 @@ def generate_review_note_with_context(change, model, gitlab_fetcher, merge_info)
 
         # response
         review_note = f"<details><summary>📚<strong><code>{new_path}</code></strong></summary>\
-        <div>({total_tokens} tokens) AI review 意见如下:</div>{response_content}<hr><hr></details>"
+        <div>({total_tokens} tokens) AI review 意见如下:</div> \n\n\n\n {response_content} \n\n <hr><hr></details>"
 
         # review_note += f'# 📚`{new_path}`' + '\n\n'
         # review_note += f'({total_tokens} tokens) {"AI review 意见如下:"}' + '\n\n'
