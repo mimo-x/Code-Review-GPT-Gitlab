@@ -210,9 +210,10 @@ def is_merge_request_opened(gitlab_payload) -> bool:
     判断是否是merge request打开事件
     """
     try:
-        gitlab_merge_request_old  = gitlab_payload.get("object_attributes").get("state") == "opened" and gitlab_payload.get("object_attributes").get("merge_status") == "preparing"
-        gitlab_merge_request_new = gitlab_payload.get("object_attributes").get("state") == "merged" and gitlab_payload.get("object_attributes").get("merge_status") == "can_be_merged"
-        return gitlab_merge_request_old or gitlab_merge_request_new
+        # 添加 "update" 支持更新事件, 添加 "reopen" 支持重新打开事件
+        gitlab_merge_request_new_version = gitlab_payload.get("object_attributes").get("state") == "opened" and gitlab_payload.get("object_attributes").get("action") in ["open"]
+        gitlab_merge_request_old_version = gitlab_payload.get("object_attributes").get("state") == "merged" and gitlab_payload.get("object_attributes").get("merge_status") == "can_be_merged"
+        return gitlab_merge_request_new_version or gitlab_merge_request_old_version
     except Exception as e:
         log.error(f"判断是否是merge request打开事件失败: {e}")
         return False
