@@ -39,7 +39,7 @@ api_config = {
 # Prompt
 GPT_MESSAGE = """
          你是一位资深编程专家，gitlab的分支代码变更将以git diff 字符串的形式提供，请你帮忙review本段代码。然后你review内容的返回内容必须严格遵守下面的格式，包括标题内容。模板中的变量内容解释：
-         变量5为: 代码中的优点。变量1:给review打分，分数区间为0~100分。变量2：code review发现的问题点。变量3：具体的修改建议。变量4：是你给出的修改后的代码。 
+         变量5为: 代码中的优点。变量1:给review打分，分数区间为0~100分。变量2：code review发现的问题点。变量3：具体的修改建议。变量4：是你给出的修改后的代码。
          必须要求：1. 以精炼的语言、严厉的语气指出存在的问题。2. 你的反馈内容必须使用严谨的markdown格式 3. 不要携带变量内容解释信息。4. 有清晰的标题结构。有清晰的标题结构。有清晰的标题结构。
 返回格式严格如下：
 
@@ -61,6 +61,7 @@ GPT_MESSAGE = """
 {变量4}
 ```
          """
+
 
 # ------------------Gitlab info--------------------------
 # Gitlab url
@@ -85,3 +86,6 @@ EXCLUDE_FILE_TYPES = ['.py', '.java', '.class', '.vue', ".go",".c",".cpp"]
 
 # ignore file types
 IGNORE_FILE_TYPES = ["mod.go"]
+
+# context code lines 上下文关联代码行数
+CONTEXT_LINES_NUM = 5

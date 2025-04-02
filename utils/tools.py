@@ -3,6 +3,7 @@ import os
 import pkgutil
 import subprocess
 import sys
+import itertools
 
 from utils.logger import log
 
@@ -44,6 +45,12 @@ def run_command(command):
         if stderr_output:
             log.error(stderr_output.strip())
     return process.returncode
+
+def batch(iterable, batch_size):
+    iterator = iter(iterable)
+    for first in iterator:
+        yield list(itertools.chain([first], itertools.islice(iterator, batch_size - 1)))
+
 
 if __name__ == "__main__":
     from config.config import *
