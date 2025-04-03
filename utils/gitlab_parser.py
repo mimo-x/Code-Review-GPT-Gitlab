@@ -174,6 +174,5 @@ def get_comment_request_json(comment, change, old_line, new_line, diff_refs):
     return note
 
 if __name__ == "__main__":
-    # diff_content = "@@ -3 +1,5 @@\n-hello\n+hello world\n"
-    # print(extract_diff_line_range(diff_content))
-    print(extract_comment_end_line("@@ -1,46 +0,0 @@\n"))
+    diff_content = "@@ -3 +1,5 @@\n-hello\n+hello world\n"
+    print(extract_diff_line_range(diff_content))
