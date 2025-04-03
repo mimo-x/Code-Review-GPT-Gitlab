@@ -17,6 +17,8 @@ class ReviewResponse:
         self.config = config
         self.replies = []
         self.lock = threading.Lock()
+        self.inline_comments = []
+        self.comment_lock = threading.Lock()
         self.oter_res_state = {}
 
     def add_reply(self, reply_msg):
@@ -44,6 +46,27 @@ class ReviewResponse:
             reply_msg['group_id'] = 0
         with self.lock:  # 加锁
             self.replies.append(reply_msg)
+
+    def add_comment(self, comment_msg):
+        """
+        添加 行评论消息 默认只发送 gitlab
+        Args:
+            comment_msg (dict): 回复消息字典，必须包含 'content' 字段
+        """
+
+        if 'content' not in comment_msg:
+            raise Exception('Reply format error, content are required.')
+        if 'msg_type' in comment_msg:
+            if not isinstance(comment_msg['msg_type'], str):
+                raise Exception('Reply format error, msg_type should be a string.')
+            # comment_msg['msg_type'] = [t.strip() for t in comment_msg['msg_type'].split(',')]
+        if 'target' not in comment_msg:
+            comment_msg['target'] = 'gitlab'
+        if 'group_id' not in comment_msg:
+            comment_msg['group_id'] = 0
+        with self.comment_lock: #加锁
+            self.inline_comments.append(comment_msg)
+
 
     def send(self):
         """
@@ -74,6 +97,26 @@ class ReviewResponse:
                 ret &= reply_target.send(msg)
         return ret
 
+
+    def send_comments(self):
+        """发送 inline comment"""
+
+        comment_msg_groups = {}
+        with self.comment_lock:
+            for msg in self.inline_comments:
+                if 'COMMENT' in msg['msg_type']:
+                    self.__parse_comment_msg(msg, comment_msg_groups)
+        self.inline_comments = []
+
+        ret = True
+        for target, msg_group in comment_msg_groups.items():
+            reply_target = ResponseFactory.get_message_instance(target, self.config)
+            for group, messages in msg_group.items():
+                for msg in messages:
+                    ret &= reply_target.send_inline_comments(msg)
+        return ret
+
+
     def send_single_message(self, reply):
         """
         实时发送单条消息
@@ -97,6 +140,8 @@ class ReviewResponse:
                 ret &= reply_target.send(f"{title}{reply['content']}\n\n")
         return ret
 
+
+
     def __parse_msg(self, msg, msg_groups):
         targets = [t.strip() for t in msg['target'].split(',')]
         if 'target' not in msg or 'all' in targets:
@@ -112,6 +157,16 @@ class ReviewResponse:
             else:
                 title = f"## {msg['title']}\n\n" if 'title' in msg else ''
                 msg_groups[target][msg['group_id']].append(f"{title}{msg['content']}\n\n")
+
+
+    def __parse_comment_msg(self, msg, msg_groups):
+        target = msg['target']
+        if target not in msg_groups:
+            msg_groups[target] = {}
+        if msg['group_id'] not in msg_groups[target]:
+            msg_groups[target][msg['group_id']] = []
+        msg_groups[target][msg['group_id']].append(msg['content'])
+
 
     def set_state(self, res_type, *args, **kwargs):
         self.oter_res_state[res_type] = (args, kwargs)

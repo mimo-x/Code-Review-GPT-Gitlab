@@ -25,3 +25,4 @@ class ReviewEngine:
             thread.join()
         gitlabRepoManager.delete_repo()
         self.reply.send()
+        self.reply.send_comments()

@@ -4,7 +4,7 @@ import threading
 from retrying import retry
 from config.config import GPT_MESSAGE, MAX_FILES
 from review_engine.abstract_handler import ReviewHandle
-from utils.gitlab_parser import filter_diff_content, add_context_to_diff
+from utils.gitlab_parser import filter_diff_content, add_context_to_diff, extract_diffs, get_comment_request_json,extract_diff_line_range
 from utils.logger import log
 from utils.args_check import file_need_check
 from utils.tools import batch
@@ -100,6 +100,60 @@ def chat_review_summary(changes, model):
     log.info("code diff review summary完成")
     return summary_result+"\n\n---\n\n" if summary_result else ""
 
+def chat_review_inline_comment(changes, model, merge_info):
+    """行内comment"""
+    log.info("开始code review inline comment")
+    comment_results = []
+    comment_lock = threading.Lock()
+    diff_refs = merge_info['diff_refs']
+
+    # 对单个diff块生成 inline comment
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        def process_comment(diff, model, change, comment_line):
+            comment = generate_inline_comment(diff, model)
+            comment_json = get_comment_request_json(comment, change, comment_line ,diff_refs)
+            with comment_lock:
+                comment_results.append(comment_json)
+
+        futures = []
+        for change in changes:
+            if not file_need_check(change["new_path"]):
+                continue
+            # 获取单文件 多处diff内容
+            diffs = extract_diffs(change['diff'])
+            for diff in diffs:
+                # diff = filter_diff_content(diff)
+                start_line, end_line =  extract_diff_line_range(diff)
+                futures.append(executor.submit(process_comment, diff, model, change, end_line))
+        # 等待所有任务完成
+        concurrent.futures.wait(futures)
+
+    log.info("inline comment 完成")
+    return comment_results if comment_results else None
+
+
+@retry(stop_max_attempt_number=3, wait_fixed=60000)
+def generate_inline_comment(diff, model):
+    file_diff_prompt = FILE_DIFF_REVIEW_PROMPT.replace('$file_diff', diff)
+    messages = [
+        {"role": "system",
+         "content": REVIEW_SUMMARY_SETTING
+         },
+        {
+            "role": "user",
+            "content": f"{file_diff_prompt}",
+        },
+    ]
+    model.generate_text(messages)
+    response_content = model.get_respond_content().replace('\n\n', '\n')
+    if response_content:
+        return response_content
+    else:
+        return "comment: nothing obtained from LLM"
+
+
+
+
 
 @retry(stop_max_attempt_number=3, wait_fixed=60000)
 def generate_diff_summary(file=None, diff=None, model=None, messages=None):
@@ -175,6 +229,8 @@ class MainReviewHandle(ReviewHandle):
             review_info = chat_review(changes, generate_review_note_with_context, model, gitlab_fetcher, merge_info)
             review_info = review_summary + review_info
 
+            review_inline_comments = chat_review_inline_comment(changes, model, merge_info)
+
             if review_info:
                 reply.add_reply({
                     'content': review_info,
@@ -213,6 +269,16 @@ class MainReviewHandle(ReviewHandle):
                     'target': 'dingtalk',
                     'msg_type': 'MAIN, SINGLE',
                 })
+
+            if review_inline_comments:
+                for comment in review_inline_comments:
+                    reply.add_comment({
+                        'content': comment,
+                        'target': 'gitlab',
+                        'msg_type': 'COMMENT',
+                    })
+
+
 
 
         elif changes and len(changes) > MAX_FILES:

@@ -41,3 +41,28 @@ class GitlabResponse(AbstractResponseMessage):
             log.error(
                 f"评论信息发送成功：project_id:{project_id}  merge_request_id:{merge_request_id} response:{response}")
             return False
+
+
+    def send_inline_comments(self, message):
+        if self.type == 'merge_request':
+            return self.comment_on_changes(message)
+        else:
+            return False
+
+    @retry(stop_max_attempt_number=3, wait_fixed=2000)
+    def comment_on_changes(self, message):
+        headers = {
+            "Private-Token": GITLAB_PRIVATE_TOKEN,
+            "Content-Type": "application/json"
+        }
+        project_id = self.project_id
+        merge_request_id = self.merge_request_id
+        url = f"{GITLAB_SERVER_URL}/api/v4/projects/{project_id}/merge_requests/{merge_request_id}/discussions"
+        response = requests.post(url, headers=headers,json={'body': message['body'], 'position': message['position']})
+        if response.status_code == 201:
+            log.info(f"Inline Comment发送成功：project_id:{project_id}  merge_request_id:{merge_request_id}, comment_file: {message['position']['new_path']}")
+            return True
+        else:
+            log.error(
+                f"Inline Comment发送失败：project_id:{project_id}  merge_request_id:{merge_request_id}, comment_file: {message['position']['new_path']}")
+            return False

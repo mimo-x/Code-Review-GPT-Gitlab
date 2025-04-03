@@ -46,7 +46,7 @@ def get_context_boundaries(diff_range, source_code_length, context_lines_num=CON
     """计算上下文的行号边界"""
     if not diff_range or len(diff_range) < 2:
         return None, None, None, None
-        
+
     # 计算上文边界
     front_lines_end = max(diff_range[0] - 1, 1) if diff_range[0] > 1 else None
     front_lines_start = max(diff_range[0] - context_lines_num, 1) if diff_range[0] > 1 else None
@@ -79,6 +79,8 @@ def add_context_to_diff(diff_content, source_code=None, context_lines_num=CONTEX
         code_lines = source_code.splitlines()
         source_code_length = len(code_lines)
 
+
+
         for filtered_content, diff_range in zip(filtered_contents, diff_ranges):
             front_lines = ""
             back_lines = ""
@@ -103,6 +105,35 @@ def add_context_to_diff(diff_content, source_code=None, context_lines_num=CONTEX
 
     return diff_with_contexts if diff_with_contexts else filtered_diff
 
+
+def get_comment_request_json(comment, change, comment_line, diff_refs):
+    """生成 inline comment 请求Json格式"""
+    note = {
+        "body": f"{comment}",
+        "position": {
+            "base_sha": diff_refs['base_sha'],
+            "start_sha": diff_refs['start_sha'],
+            "head_sha": diff_refs['head_sha'],
+            "position_type": "text",
+            "new_path": change['new_path'],
+            "new_line": comment_line,
+            # "line_range": {
+            #     "start": {
+            #         # "line_code": "ca08fab203917f02c97701e43c3cf87140bb6643_31_30",
+            #         "type": "new",
+            #         "new_line": 30,
+            #     },
+            #     "end": {
+            #         # "line_code": "ca08fab203917f02c97701e43c3cf87140bb6643_33_35",
+            #         "type": "new",
+            #         "new_line": 35,
+            #     },
+            #
+            # }
+        }
+    }
+
+    return note
 
 if __name__ == "__main__":
     diff_content = "@@ -3 +1,5 @@\n-hello\n+hello world\n"
