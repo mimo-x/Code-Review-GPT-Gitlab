@@ -42,6 +42,38 @@ def extract_diff_line_range(diff_content):
 
     return line_range
 
+def extract_comment_end_line(diff_content):
+    line_range = []
+
+    for line in diff_content.split('\n'):
+        if line.startswith('@@'):
+            # 提取新的行号
+            match = re.match(r'@@ -(\d+)(,\d+)? \+(\d+)(,\d+)? @@', line)
+            if match:
+                old_line_start = int(match.group(1))
+                new_line_start = int(match.group(3))
+
+                # 计算结束行号
+                if match.group(2):
+                    # 去除逗号并转成int获取行数
+                    old_line_count = int(match.group(2)[1:])
+                    old_line_end = old_line_start + old_line_count - 1
+                else:
+                    old_line_end = old_line_start
+
+                if match.group(4):
+                    # 去除逗号并转成int获取行数
+                    new_line_count = int(match.group(4)[1:])
+                    new_line_end = new_line_start + new_line_count - 1
+                else:
+                    new_line_end = new_line_start
+
+                line_range.append(old_line_end)
+                line_range.append(new_line_end)
+
+    return line_range
+
+
 def get_context_boundaries(diff_range, source_code_length, context_lines_num=CONTEXT_LINES_NUM):
     """计算上下文的行号边界"""
     if not diff_range or len(diff_range) < 2:
@@ -106,8 +138,12 @@ def add_context_to_diff(diff_content, source_code=None, context_lines_num=CONTEX
     return diff_with_contexts if diff_with_contexts else filtered_diff
 
 
-def get_comment_request_json(comment, change, comment_line, diff_refs):
+def get_comment_request_json(comment, change, old_line, new_line, diff_refs):
     """生成 inline comment 请求Json格式"""
+
+    # old 或者 new 无修改将 对应行号置为 None
+    old_line = old_line if old_line != 0 else None
+    new_line = new_line if new_line != 0 else None
     note = {
         "body": f"{comment}",
         "position": {
@@ -115,8 +151,10 @@ def get_comment_request_json(comment, change, comment_line, diff_refs):
             "start_sha": diff_refs['start_sha'],
             "head_sha": diff_refs['head_sha'],
             "position_type": "text",
+            "old_path": change['old_path'],
+            "old_line": old_line,
             "new_path": change['new_path'],
-            "new_line": comment_line,
+            "new_line": new_line,
             # "line_range": {
             #     "start": {
             #         # "line_code": "ca08fab203917f02c97701e43c3cf87140bb6643_31_30",

@@ -4,7 +4,8 @@ import threading
 from retrying import retry
 from config.config import GPT_MESSAGE, MAX_FILES
 from review_engine.abstract_handler import ReviewHandle
-from utils.gitlab_parser import filter_diff_content, add_context_to_diff, extract_diffs, get_comment_request_json,extract_diff_line_range
+from utils.gitlab_parser import (filter_diff_content, add_context_to_diff, extract_diffs,
+                                 get_comment_request_json, extract_comment_end_line)
 from utils.logger import log
 from utils.args_check import file_need_check
 from utils.tools import batch
@@ -109,9 +110,9 @@ def chat_review_inline_comment(changes, model, merge_info):
 
     # 对单个diff块生成 inline comment
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        def process_comment(diff, model, change, comment_line):
+        def process_comment(diff, model, change, old_line_end, new_line_end):
             comment = generate_inline_comment(diff, model)
-            comment_json = get_comment_request_json(comment, change, comment_line ,diff_refs)
+            comment_json = get_comment_request_json(comment, change, old_line_end, new_line_end ,diff_refs)
             with comment_lock:
                 comment_results.append(comment_json)
 
@@ -123,8 +124,8 @@ def chat_review_inline_comment(changes, model, merge_info):
             diffs = extract_diffs(change['diff'])
             for diff in diffs:
                 # diff = filter_diff_content(diff)
-                start_line, end_line =  extract_diff_line_range(diff)
-                futures.append(executor.submit(process_comment, diff, model, change, end_line))
+                old_line_end, new_line_end =  extract_comment_end_line(diff)
+                futures.append(executor.submit(process_comment, diff, model, change, old_line_end, new_line_end))
         # 等待所有任务完成
         concurrent.futures.wait(futures)
 
@@ -135,6 +136,7 @@ def chat_review_inline_comment(changes, model, merge_info):
 @retry(stop_max_attempt_number=3, wait_fixed=60000)
 def generate_inline_comment(diff, model):
     file_diff_prompt = FILE_DIFF_REVIEW_PROMPT.replace('$file_diff', diff)
+    file_diff_prompt += "\n\n要求总结用中文回答，评价尽可能全面且精炼，字数不超过50字。"
     messages = [
         {"role": "system",
          "content": REVIEW_SUMMARY_SETTING
