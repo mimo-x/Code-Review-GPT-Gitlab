@@ -142,8 +142,8 @@ def get_comment_request_json(comment, change, old_line, new_line, diff_refs):
     """生成 inline comment 请求Json格式"""
 
     # old 或者 new 无修改将 对应行号置为 None
-    old_line = old_line if old_line != 0 else None
-    new_line = new_line if new_line != 0 else None
+    old_line = old_line if old_line > 0 else None
+    new_line = new_line if new_line > 0 else None
     note = {
         "body": f"{comment}",
         "position": {
@@ -174,5 +174,6 @@ def get_comment_request_json(comment, change, old_line, new_line, diff_refs):
     return note
 
 if __name__ == "__main__":
-    diff_content = "@@ -3 +1,5 @@\n-hello\n+hello world\n"
-    print(extract_diff_line_range(diff_content))
+    # diff_content = "@@ -3 +1,5 @@\n-hello\n+hello world\n"
+    # print(extract_diff_line_range(diff_content))
+    print(extract_comment_end_line("@@ -1,46 +0,0 @@\n"))
