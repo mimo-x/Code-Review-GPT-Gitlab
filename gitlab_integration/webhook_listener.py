@@ -54,7 +54,7 @@ class WebhookListener:
         """
         处理合并请求事件
         """
-        if branch_need_check(gitlab_payload.get("object_attributes")["target_branch"]) and is_merge_request_opened(gitlab_payload):
+        if branch_need_check(gitlab_payload.get("object_attributes", {}).get("target_branch", "")) and is_merge_request_opened(gitlab_payload):
             log.info("首次merge_request ", gitlab_payload)
             project_id = gitlab_payload.get('project')['id']
             merge_request_iid = gitlab_payload.get("object_attributes")["iid"]
