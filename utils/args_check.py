@@ -1,7 +1,7 @@
-import requests
+import requests,fnmatch
 from tabulate import tabulate
 
-from config.config import EXCLUDE_FILE_TYPES, IGNORE_FILE_TYPES
+from config.config import EXCLUDE_FILE_TYPES, IGNORE_FILE_TYPES, MERGE_TRIGGER_ON_BRANCHES
 def check_config():
     """
     Check the configuration
@@ -190,6 +190,16 @@ def file_need_check(file_path: str) -> bool:
     is_ignored_file_type = any(file_path.endswith(ext) for ext in IGNORE_FILE_TYPES)
     
     return is_excluded_file_type and not is_ignored_file_type
+
+def branch_need_check(branch_name: str) -> bool:
+    """
+    检查分支是否需要进行审核
+
+    :param branch_name: 分支名称
+    :return: 如果分支命中匹配规则，则返回True，否则返回False
+    """
+    return not MERGE_TRIGGER_ON_BRANCHES or any(fnmatch.fnmatch(branch_name, pattern) for pattern in MERGE_TRIGGER_ON_BRANCHES)
+
 
 # 示例调用
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ from flask import request, jsonify
 from gitlab_integration.gitlab_fetcher import GitlabMergeRequestFetcher, GitlabRepoManager
 from response_module.response_controller import ReviewResponse
 from review_engine.review_engine import ReviewEngine
+from utils.args_check import branch_need_check
 from utils.logger import log
 from gitlab_integration.gitlab_fetcher import is_merge_request_opened
 
@@ -53,7 +54,7 @@ class WebhookListener:
         """
         处理合并请求事件
         """
-        if is_merge_request_opened(gitlab_payload):
+        if branch_need_check(gitlab_payload.get("object_attributes")["target_branch"]) and is_merge_request_opened(gitlab_payload):
             log.info("首次merge_request ", gitlab_payload)
             project_id = gitlab_payload.get('project')['id']
             merge_request_iid = gitlab_payload.get("object_attributes")["iid"]
