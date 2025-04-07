@@ -71,6 +71,21 @@ def extract_comment_end_line(diff_content):
                 line_range.append(old_line_end)
                 line_range.append(new_line_end)
 
+    # 过滤 diff 部分以 + 或者 -结尾的 diff 类型
+    diff_lines = diff_content.split('\n')
+    diff_lines = diff_lines[::-1]
+    for line in diff_lines:
+        if line.startswith('\ No newline at end of file') or line == '':
+            continue
+        if line.startswith('+'):
+            line_range[0] = 0
+            break
+        elif line.startswith('-'):
+            line_range[1] = 0
+            break
+        else:
+            break
+
     return line_range
 
 
@@ -141,7 +156,7 @@ def add_context_to_diff(diff_content, source_code=None, context_lines_num=CONTEX
 def get_comment_request_json(comment, change, old_line, new_line, diff_refs):
     """生成 inline comment 请求Json格式"""
 
-    # old 或者 new 无修改将 对应行号置为 None
+    # 默认评论到 change diff 部分的最后一行
     old_line = old_line if old_line > 0 else None
     new_line = new_line if new_line > 0 else None
     note = {
