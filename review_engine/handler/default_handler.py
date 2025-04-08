@@ -144,13 +144,13 @@ def generate_review_note_with_context(change, model, gitlab_fetcher, merge_info)
         model.generate_text(messages)
         log.info(f'对 {new_path} review中...')
         response_content = model.get_respond_content().replace('\n\n', '\n')
-        response_content = '<details><summary>Review Note</summary>\n' + response_content.replace(
+        response_content = response_content.replace(
             '<think>',
             '<details><summary>已深度思考</summary>\n<think>'
         ).replace(
             '</think>',
             '</think>\n</details>\n'
-        ) + '\n</details>'
+        )
         total_tokens = model.get_respond_tokens()
 
         # response
