@@ -89,3 +89,7 @@ IGNORE_FILE_TYPES = ["mod.go"]
 
 # context code lines 上下文关联代码行数
 CONTEXT_LINES_NUM = 5
+
+# Branch name or wildcard pattern to trigger on (use an empty array for all)
+# example ["main", "master", "release/v*"]
+MERGE_TRIGGER_ON_BRANCHES = []
