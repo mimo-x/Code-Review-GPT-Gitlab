@@ -14,7 +14,7 @@ COPY requirements.txt .
 
 # 使用缓存安装 Python 依赖
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-cache-dir -r requirements.txt
+    pip install -r requirements.txt
 
 COPY . .
 
