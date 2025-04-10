@@ -91,10 +91,7 @@ def chat_review_summary(changes, model):
          "content": REVIEW_SUMMARY_SETTING
          },
         {"role": "user",
-         "content": FINAL_SUMMARY_PROMPT
-         },
-        {"role": "user",
-         "content": f"{final_summaries_content}"
+         "content": f"{FINAL_SUMMARY_PROMPT}\n\n{final_summaries_content}"
          }
     ]
     summary_result = generate_diff_summary(model=model, messages=final_summary_msg)
