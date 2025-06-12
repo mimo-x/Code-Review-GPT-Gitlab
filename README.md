@@ -179,6 +179,8 @@ git clone git@github.com:mimo-x/Code-Review-GPT-Gitlab.git
 
 cd Code-Review-GPT-Gitlab
 
+cp ./config/config.py.example ./config/config.py  
+
 vim ./config/config.py
 
 docker run -d --network bridge --add-host=host.docker.internal:host-gateway -v ./config:/workspace/config -p 8080:80 --name codereview xuxin1/llmcodereview:latest
@@ -195,6 +197,7 @@ pip install -r requirements.txt
 ```
 3.**修改配置文件**
 ```bash
+cp ./config/config.py.example ./config/config.py  
 vim config/config.py
 ```
 
