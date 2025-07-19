@@ -73,6 +73,25 @@ GITLAB_PRIVATE_TOKEN = "gitlab private token"
 # Gitlab modifies the maximum number of files
 MAX_FILES = 50
 
+# Gitlab merger request status
+# Different versions of GitLab have different attributes
+# Refer to this issue，https://github.com/mimo-x/Code-Review-GPT-Gitlab/issues/26
+GITLAB_MERGE_REQUEST_STATUS = [
+  {
+    "state": "opened",
+    "merge_status": "preparing"
+  },
+  {
+    "state": "opened",
+    "merge_status": "unchecked"
+  },
+  # 这个好像是合并后触发的状态，合并后还需要review吗?
+  # {
+  #   "state": "merged",
+  #   "merge_status": "can_be_merged"
+  # }
+]
+
 
 # ------------- Message notification --------------------
 # dingding notification （un necessary）

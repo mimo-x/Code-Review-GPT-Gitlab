@@ -78,6 +78,7 @@ api_config = {
 - `GITLAB_SERVER_URL`: Gitlab服务器地址
 - `GITLAB_PRIVATE_TOKEN`: Gitlab私有令牌
 - `maximum_files`: Gitlab Merge Request最大文件数
+- `GITLAB_MERGE_REQUEST_STATUS`: Gitlab Merge Request状态，见[issue](https://github.com/mimo-x/Code-Review-GPT-Gitlab/issues/26)
 
 ## 消息通知配置
 - `dingtalk_webhook`: 钉钉机器人Webhook
