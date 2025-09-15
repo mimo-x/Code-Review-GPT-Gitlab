@@ -9,7 +9,7 @@ from retrying import retry
 from config.config import *
 from utils.logger import log
 from utils.tools import run_command
-
+from config.config import GITLAB_MERGE_REQUEST_STATUS
 
 class GitlabMergeRequestFetcher:
     def __init__(self, project_id, merge_request_iid):
@@ -210,9 +210,13 @@ def is_merge_request_opened(gitlab_payload) -> bool:
     判断是否是merge request打开事件
     """
     try:
-        gitlab_merge_request_old  = gitlab_payload.get("object_attributes").get("state") == "opened" and gitlab_payload.get("object_attributes").get("merge_status") == "preparing"
-        gitlab_merge_request_new = gitlab_payload.get("object_attributes").get("state") == "merged" and gitlab_payload.get("object_attributes").get("merge_status") == "can_be_merged"
-        return gitlab_merge_request_old or gitlab_merge_request_new
+        state = gitlab_payload.get("object_attributes").get("state")
+        merge_status = gitlab_payload.get("object_attributes").get("merge_status")
+
+        for status_config in GITLAB_MERGE_REQUEST_STATUS:
+            if state == status_config["state"] and merge_status == status_config["merge_status"]:
+                return True
+        return False
     except Exception as e:
         log.error(f"判断是否是merge request打开事件失败: {e}")
         return False
