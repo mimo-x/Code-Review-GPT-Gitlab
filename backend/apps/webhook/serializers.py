@@ -1,7 +1,32 @@
 from rest_framework import serializers
-from datetime import datetime, timedelta
+from datetime import timedelta
+from django.conf import settings
 from django.utils import timezone
-from .models import WebhookLog, MergeRequestReview, Project
+import pytz
+from .models import WebhookLog, MergeRequestReview, Project, ProjectNotificationSetting
+from apps.llm.models import NotificationChannel
+
+
+class LocalDateTimeField(serializers.DateTimeField):
+    """
+    自定义日期时间字段，返回本地时区（Asia/Shanghai）的时间
+    """
+    def to_representation(self, value):
+        if value is None:
+            return None
+        
+        local_tz = pytz.timezone(getattr(settings, 'TIME_ZONE', 'Asia/Shanghai'))
+        
+        # 如果是 naive datetime，将其视为本地时间；否则转换到本地时区
+        if timezone.is_naive(value):
+            value = local_tz.localize(value)
+        else:
+            value = value.astimezone(local_tz)
+
+        local_time = value.replace(microsecond=0)
+
+        # 返回包含时区信息的 ISO 格式，避免前端解析误差
+        return local_time.isoformat()
 
 
 class ProjectSerializer(serializers.ModelSerializer):
@@ -16,6 +41,11 @@ class ProjectSerializer(serializers.ModelSerializer):
     weekly_reviews = serializers.SerializerMethodField()
     recent_events_count = serializers.SerializerMethodField()
     webhook_url = serializers.SerializerMethodField()
+    
+    # 使用本地时区字段
+    created_at = LocalDateTimeField(read_only=True)
+    updated_at = LocalDateTimeField(read_only=True)
+    last_webhook_at = LocalDateTimeField(read_only=True)
 
     class Meta:
         model = Project
@@ -125,10 +155,46 @@ class ProjectUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating project settings"""
     class Meta:
         model = Project
-        fields = ['review_enabled', 'auto_review_on_mr', 'exclude_file_types', 'ignore_file_patterns']
+        fields = [
+            'review_enabled',
+            'auto_review_on_mr',
+            'exclude_file_types',
+            'ignore_file_patterns',
+            'gitlab_comment_notifications_enabled',
+        ]
+
+
+class ProjectNotificationSettingSerializer(serializers.ModelSerializer):
+    channel_id = serializers.IntegerField(source='channel.id', read_only=True)
+    channel_name = serializers.CharField(source='channel.name', read_only=True)
+    notification_type = serializers.CharField(source='channel.notification_type', read_only=True)
+
+    class Meta:
+        model = ProjectNotificationSetting
+        fields = ['channel_id', 'channel_name', 'notification_type', 'enabled']
+
+
+class ProjectNotificationUpdateSerializer(serializers.Serializer):
+    gitlab_comment_enabled = serializers.BooleanField(required=False)
+    channel_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        allow_empty=True,
+        required=False
+    )
+
+    def validate_channel_ids(self, value):
+        valid_ids = set(NotificationChannel.objects.filter(id__in=value).values_list('id', flat=True))
+        missing = set(value) - valid_ids
+        if missing:
+            raise serializers.ValidationError(f"通道不存在: {sorted(missing)}")
+        return list(valid_ids)
 
 
 class WebhookLogSerializer(serializers.ModelSerializer):
+    # 使用本地时区字段
+    created_at = LocalDateTimeField(read_only=True)
+    processed_at = LocalDateTimeField(read_only=True)
+    
     class Meta:
         model = WebhookLog
         fields = '__all__'
@@ -136,6 +202,11 @@ class WebhookLogSerializer(serializers.ModelSerializer):
 
 
 class MergeRequestReviewSerializer(serializers.ModelSerializer):
+    # 使用本地时区字段
+    created_at = LocalDateTimeField(read_only=True)
+    updated_at = LocalDateTimeField(read_only=True)
+    completed_at = LocalDateTimeField(read_only=True)
+    
     class Meta:
         model = MergeRequestReview
         fields = '__all__'

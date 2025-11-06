@@ -17,6 +17,7 @@ class Project(models.Model):
     # Review settings
     review_enabled = models.BooleanField(default=False, db_index=True)
     auto_review_on_mr = models.BooleanField(default=True)
+    gitlab_comment_notifications_enabled = models.BooleanField(default=True)
 
     # Additional settings - SQLite兼容的JSON字段
     exclude_file_types = models.TextField(default='[]', blank=True)
@@ -187,13 +188,26 @@ class MergeRequestReview(models.Model):
     response_sent = models.BooleanField(default=False)
     response_type = models.CharField(max_length=50, null=True, blank=True)
 
+    # LLM相关字段
+    llm_provider = models.CharField(max_length=50, null=True, blank=True)  # LLM提供商
+    llm_model = models.CharField(max_length=100, null=True, blank=True)    # LLM模型
+    is_mock = models.BooleanField(default=False)                           # 是否为Mock模式
+
+    # 通知相关字段
+    notification_sent = models.BooleanField(default=False)                 # 是否发送了通知
+    notification_result = models.TextField(default='{}', blank=True)       # 通知结果（JSON格式）
+
+    # 请求追踪
+    request_id = models.CharField(max_length=100, null=True, blank=True, db_index=True)  # 请求追踪ID
+
     class Meta:
         db_table = 'merge_request_reviews'
         ordering = ['-created_at']
-        unique_together = ['project_id', 'merge_request_iid']
         indexes = [
             models.Index(fields=['status', 'created_at']),
             models.Index(fields=['project_id', 'merge_request_iid']),
+            models.Index(fields=['request_id']),
+            models.Index(fields=['is_mock', 'created_at']),
         ]
 
     def __str__(self):
@@ -210,3 +224,32 @@ class MergeRequestReview(models.Model):
     @files_reviewed_list.setter
     def files_reviewed_list(self, value):
         self.files_reviewed = json.dumps(value)
+
+    @property
+    def notification_result_dict(self):
+        try:
+            return json.loads(self.notification_result)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
+    @notification_result_dict.setter
+    def notification_result_dict(self, value):
+        self.notification_result = json.dumps(value, ensure_ascii=False)
+
+
+class ProjectNotificationSetting(models.Model):
+    """项目选择的通知通道配置"""
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='notification_settings')
+    channel = models.ForeignKey('llm.NotificationChannel', on_delete=models.CASCADE, related_name='project_settings')
+    enabled = models.BooleanField(default=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'project_notification_settings'
+        ordering = ['project']
+        unique_together = ['project', 'channel']
+
+    def __str__(self):
+        return f"Project {self.project.project_id} -> Channel {self.channel_id}"

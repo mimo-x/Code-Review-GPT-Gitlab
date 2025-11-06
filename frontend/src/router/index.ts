@@ -5,13 +5,13 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/',
     component: () => import('@/layouts/MainLayout.vue'),
-    redirect: '/dashboard',
+    redirect: '/projects',
     children: [
       {
         path: 'dashboard',
         name: 'Dashboard',
         component: () => import('@/views/Dashboard.vue'),
-        meta: { title: '仪表盘', icon: 'LayoutDashboard' }
+        meta: { title: '仪表盘', icon: 'LayoutDashboard', hidden: true }
       },
       {
         path: 'reviews',

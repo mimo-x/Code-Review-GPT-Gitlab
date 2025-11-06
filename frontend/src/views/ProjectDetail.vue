@@ -23,13 +23,34 @@
       </span>
     </div>
 
-    <!-- Project Overview -->
+    <!-- Tabs -->
+    <div class="config-tabs">
+      <nav class="-mb-px flex space-x-8">
+        <button
+          v-for="tab in tabs"
+          :key="tab.key"
+          @click="handleTabChange(tab.key)"
+          :class="[
+            'config-tab',
+            activeTab === tab.key ? 'config-tab-active' : 'config-tab-inactive'
+          ]"
+        >
+          {{ tab.label }}
+        </button>
+      </nav>
+    </div>
+
+    <!-- Tab Content -->
     <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-      <div class="lg:col-span-3 space-y-6">
-        <!-- Basic Information -->
-        <div class="card">
-          <div class="p-6">
-            <h3 class="section-header mb-4">项目信息</h3>
+      <div class="lg:col-span-3">
+        <!-- Project Info Tab -->
+        <div v-show="activeTab === 'info'" class="config-section">
+          <div class="p-6 space-y-6">
+            <div class="flex items-center gap-3">
+              <div class="w-2 h-2 bg-apple-blue-500 rounded-full"></div>
+              <h3 class="text-lg font-semibold text-apple-900">项目信息</h3>
+            </div>
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div class="space-y-4">
                 <div>
@@ -79,27 +100,99 @@
           </div>
         </div>
 
-        <!-- Statistics Charts -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div class="card">
-            <div class="p-6">
-              <h3 class="section-header mb-4">审查统计</h3>
-              <div ref="reviewChartRef" class="h-64"></div>
+        <!-- Statistics Tab -->
+        <div v-show="activeTab === 'stats'" class="config-section">
+          <div class="p-6 space-y-6">
+            <div class="flex items-center gap-3">
+              <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+              <h3 class="text-lg font-semibold text-apple-900">统计图表</h3>
             </div>
-          </div>
 
-          <div class="card">
-            <div class="p-6">
-              <h3 class="section-header mb-4">问题分布</h3>
-              <div ref="issueChartRef" class="h-64"></div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="card">
+                <div class="p-6">
+                  <h4 class="section-header mb-4">审查统计</h4>
+                  <div ref="reviewChartRef" class="h-64"></div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="p-6">
+                  <h4 class="section-header mb-4">问题分布</h4>
+                  <div ref="issueChartRef" class="h-64"></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Recent Events -->
-        <div class="card">
-          <div class="p-6">
-            <h3 class="section-header mb-4">最近事件</h3>
+        <!-- Notification Settings Tab -->
+        <div v-show="activeTab === 'notifications'" class="config-section">
+          <div class="p-6 space-y-6">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-2 h-2 bg-orange-500 rounded-full"></div>
+                <h3 class="text-lg font-semibold text-apple-900">通知设置</h3>
+              </div>
+              <button
+                class="btn-primary"
+                :disabled="notificationSaving"
+                @click="saveProjectNotificationSettings"
+              >
+                <Save class="w-4 h-4" />
+                {{ notificationSaving ? '保存中...' : '保存' }}
+              </button>
+            </div>
+
+            <div class="flex items-center justify-between bg-apple-50 border border-apple-200/60 rounded-lg px-3 py-2">
+              <span class="text-xs text-apple-700">GitLab 评论通知</span>
+              <label class="config-toggle">
+                <input type="checkbox" class="config-toggle-input" v-model="gitlabCommentEnabled" />
+                <div class="config-toggle-slider"></div>
+              </label>
+            </div>
+
+            <div class="space-y-4">
+            <div
+              v-for="type in computedChannelTypes"
+                :key="type.value"
+                class="space-y-2"
+              >
+                <div class="text-xs font-semibold text-apple-600 uppercase tracking-wide">{{ type.label }}</div>
+                <div v-if="groupedNotificationChannels[type.value]?.length" class="space-y-2">
+                  <label
+                    v-for="channel in groupedNotificationChannels[type.value]"
+                    :key="channel.id"
+                    class="flex items-start gap-2 text-xs text-apple-600 bg-apple-50 rounded-lg px-3 py-2 border border-apple-200/40"
+                  >
+                    <input
+                      type="checkbox"
+                      class="mt-0.5"
+                      :value="Number(channel.id)"
+                      v-model="selectedChannelIds"
+                    />
+                    <div class="flex-1">
+                      <div class="text-sm text-apple-900 font-medium">{{ channel.name }}</div>
+                      <div class="text-xs text-apple-500">{{ channel.description || '暂无备注' }}</div>
+                    </div>
+                  </label>
+                </div>
+                <div v-else class="text-xs text-apple-400 bg-apple-50 rounded-lg px-3 py-2 border border-dashed border-apple-200">
+                  该类型暂无可用通道
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Events Tab -->
+        <div v-show="activeTab === 'events'" class="config-section">
+          <div class="p-6 space-y-6">
+            <div class="flex items-center gap-3">
+              <div class="w-2 h-2 bg-purple-500 rounded-full"></div>
+              <h3 class="text-lg font-semibold text-apple-900">最近事件</h3>
+            </div>
+
             <div class="space-y-4">
               <div
                 v-for="(event, index) in recentEvents"
@@ -211,6 +304,7 @@
           </div>
         </div>
 
+  
         <!-- Contributors -->
         <div class="card">
           <div class="p-6">
@@ -267,7 +361,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import type { EChartsOption } from 'echarts'
@@ -286,18 +380,31 @@ import {
   GitBranch,
   FileCheck,
   AlertTriangle,
-  XCircle
+  XCircle,
+  Save
 } from 'lucide-vue-next'
 import {
   getProjectDetail,
   getProjectWebhookLogs,
   getProjectReviewHistory,
   enableProjectReview,
-  disableProjectReview
+  disableProjectReview,
+  getNotificationChannels,
+  getProjectNotifications,
+  updateProjectNotifications
 } from '@/api'
 
 const route = useRoute()
 const router = useRouter()
+
+// Tab 相关状态
+const activeTab = ref('info')
+const tabs = [
+  { key: 'info', label: '项目信息' },
+  { key: 'stats', label: '统计图表' },
+  { key: 'notifications', label: '通知设置' },
+  { key: 'events', label: '最近事件' }
+]
 
 const reviewChartRef = ref<HTMLElement>()
 const issueChartRef = ref<HTMLElement>()
@@ -307,6 +414,43 @@ const project = ref<any>(null)
 const projectStats = ref<any>(null)
 const recentEvents = ref<any[]>([])
 const topContributors = ref<any[]>([])
+
+const notificationChannels = ref<any[]>([])
+const channelTypeLabels: Record<string, string> = {
+  dingtalk: '钉钉通知',
+  feishu: '飞书通知',
+  wechat: '企业微信通知',
+  slack: 'Slack 通知',
+  email: '邮件通知',
+  gitlab: 'GitLab 评论'
+}
+const selectedChannelIds = ref<number[]>([])
+const gitlabCommentEnabled = ref(true)
+const notificationSaving = ref(false)
+
+const computedChannelTypes = computed(() => {
+  const set = new Set(notificationChannels.value.map(item => item.notification_type))
+  return Array.from(set).map(value => ({
+    value,
+    label: channelTypeLabels[value] || value
+  }))
+})
+
+const groupedNotificationChannels = computed(() => {
+  const map: Record<string, any[]> = {}
+  computedChannelTypes.value.forEach(item => {
+    map[item.value] = []
+  })
+
+  notificationChannels.value.forEach(channel => {
+    if (!map[channel.notification_type]) {
+      map[channel.notification_type] = []
+    }
+    map[channel.notification_type].push(channel)
+  })
+
+  return map
+})
 
 const loadProjectDetail = async () => {
   try {
@@ -358,6 +502,58 @@ const loadReviewHistory = async () => {
     }
   } catch (error) {
     console.error('Failed to load review history:', error)
+  }
+}
+
+const normalizeChannelList = (data: any) => {
+  if (!data) return []
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data.results)) return data.results
+  if (Array.isArray(data.channels)) return data.channels
+  return []
+}
+
+const loadNotificationChannelList = async () => {
+  try {
+    const response = await getNotificationChannels()
+    notificationChannels.value = normalizeChannelList(response)
+  } catch (error) {
+    console.error('Failed to load notification channels:', error)
+  }
+}
+
+const loadProjectNotificationSettings = async () => {
+  try {
+    const projectId = route.params.id as string
+    const response = await getProjectNotifications(projectId)
+
+    if (response && response.status === 'success') {
+      gitlabCommentEnabled.value = response.gitlab_comment_enabled !== false
+      selectedChannelIds.value = Array.isArray(response.channels)
+        ? response.channels.map((item: any) => Number(item.channel_id)).filter(Boolean)
+        : []
+    }
+  } catch (error) {
+    console.error('Failed to load project notification settings:', error)
+  }
+}
+
+const saveProjectNotificationSettings = async () => {
+  notificationSaving.value = true
+  try {
+    const projectId = route.params.id as string
+    const normalizedIds = Array.from(new Set(selectedChannelIds.value.map(id => Number(id)))).filter(id => !Number.isNaN(id))
+    await updateProjectNotifications(projectId, {
+      gitlab_comment_enabled: gitlabCommentEnabled.value,
+      channel_ids: normalizedIds
+    })
+    alert('通知设置已更新')
+    await loadProjectNotificationSettings()
+  } catch (error) {
+    console.error('Failed to save project notifications:', error)
+    alert('保存通知设置失败')
+  } finally {
+    notificationSaving.value = false
   }
 }
 
@@ -617,9 +813,33 @@ const refreshData = async () => {
     loadRecentEvents(),
     loadReviewHistory()
   ])
+  await loadNotificationChannelList()
+  await loadProjectNotificationSettings()
+}
+
+const initializeCharts = () => {
+  // 延迟初始化图表，确保 DOM 元素已渲染
+  setTimeout(() => {
+    if (activeTab.value === 'stats') {
+      initReviewChart()
+      initIssueChart()
+    }
+  }, 100)
+}
+
+// 监听 tab 切换，当切换到统计 tab 时初始化图表
+const handleTabChange = (tabKey: string) => {
+  activeTab.value = tabKey
+  if (tabKey === 'stats') {
+    initializeCharts()
+  }
 }
 
 onMounted(() => {
   refreshData()
+  // 初始化时如果默认 tab 是 stats，也需要初始化图表
+  if (activeTab.value === 'stats') {
+    initializeCharts()
+  }
 })
 </script>

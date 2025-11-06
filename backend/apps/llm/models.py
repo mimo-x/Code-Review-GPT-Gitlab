@@ -60,7 +60,7 @@ class GitLabConfig(models.Model):
 
 class NotificationConfig(models.Model):
     """
-    通知配置模型 - 支持不同类型的通知配置
+    通知配置模型（兼容旧版本配置，建议使用 NotificationChannel）
     """
     NOTIFICATION_TYPES = [
         ('dingtalk', '钉钉通知'),
@@ -86,7 +86,6 @@ class NotificationConfig(models.Model):
     class Meta:
         db_table = 'notification_configs'
         ordering = ['-created_at']
-        unique_together = ['notification_type']
 
     def __str__(self):
         return f"{self.get_notification_type_display()} - {'Enabled' if self.enabled else 'Disabled'}"
@@ -111,3 +110,37 @@ class NotificationConfig(models.Model):
         config = self.config_dict
         config[key] = value
         self.config_dict = config
+
+
+class NotificationChannel(models.Model):
+    """面向项目的通知渠道配置，支持同一类型多条记录"""
+
+    NOTIFICATION_TYPES = NotificationConfig.NOTIFICATION_TYPES
+
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=255)
+    notification_type = models.CharField(max_length=50, choices=NOTIFICATION_TYPES)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    is_default = models.BooleanField(default=False, help_text="用于新项目的默认通道")
+    config_data = models.TextField(default='{}', blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'notification_channels'
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.notification_type})"
+
+    @property
+    def config_dict(self):
+        try:
+            return json.loads(self.config_data)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
+    @config_dict.setter
+    def config_dict(self, value):
+        self.config_data = json.dumps(value)

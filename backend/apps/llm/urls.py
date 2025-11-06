@@ -8,6 +8,7 @@ router.register(r'llm-configs', views.LLMConfigViewSet, basename='llm-config')
 router.register(r'gitlab-configs', views.GitLabConfigViewSet, basename='gitlab-config')
 router.register(r'notification-configs', views.NotificationConfigViewSet, basename='notification-config')
 router.register(r'configs', views.ConfigViewSet, basename='config')
+router.register(r'notification-channels', views.NotificationChannelViewSet, basename='notification-channel')
 
 # API URL配置
 urlpatterns = [

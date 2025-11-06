@@ -3,11 +3,12 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.shortcuts import get_object_or_404
-from .models import LLMConfig, GitLabConfig, NotificationConfig
+from .models import LLMConfig, GitLabConfig, NotificationConfig, NotificationChannel
 from .serializers import (
     LLMConfigSerializer,
     GitLabConfigSerializer,
     NotificationConfigSerializer,
+    NotificationChannelSerializer,
     ConfigSummarySerializer
 )
 
@@ -111,6 +112,19 @@ class NotificationConfigViewSet(viewsets.ModelViewSet):
         return Response({'error': 'Config not found'}, status=status.HTTP_404_NOT_FOUND)
 
 
+class NotificationChannelViewSet(viewsets.ModelViewSet):
+    """通知渠道管理API"""
+    serializer_class = NotificationChannelSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = NotificationChannel.objects.all()
+        notif_type = self.request.query_params.get('type')
+        if notif_type:
+            queryset = queryset.filter(notification_type=notif_type)
+        return queryset.order_by('name', '-updated_at')
+
+
 class ConfigViewSet(viewsets.GenericViewSet):
     """配置统一管理API"""
     permission_classes = [AllowAny]  # 临时允许所有访问，生产环境应该使用IsAuthenticated
@@ -121,11 +135,13 @@ class ConfigViewSet(viewsets.GenericViewSet):
         active_llm_config = LLMConfig.objects.filter(is_active=True).first()
         active_gitlab_config = GitLabConfig.objects.filter(is_active=True).first()
         notification_configs = NotificationConfig.objects.filter(is_active=True)
+        notification_channels = NotificationChannel.objects.all()
 
         data = {
             'llm': LLMConfigSerializer(active_llm_config).data if active_llm_config else None,
             'gitlab': GitLabConfigSerializer(active_gitlab_config).data if active_gitlab_config else None,
-            'notifications': NotificationConfigSerializer(notification_configs, many=True).data
+            'notifications': NotificationConfigSerializer(notification_configs, many=True).data,
+            'channels': NotificationChannelSerializer(notification_channels, many=True).data
         }
 
         return Response(data)
@@ -173,40 +189,9 @@ class ConfigViewSet(viewsets.GenericViewSet):
                     else:
                         errors['gitlab'] = gitlab_serializer.errors
 
-            # 更新通知配置
-            if 'notifications' in data:
-                notifications_data = data['notifications']
-                for notif_data in notifications_data:
-                    notification_type = notif_data.get('notification_type')
-                    if notification_type:
-                        existing_config = NotificationConfig.objects.filter(
-                            notification_type=notification_type
-                        ).first()
-
-                        if existing_config:
-                            notif_serializer = NotificationConfigSerializer(
-                                existing_config, data=notif_data, partial=True
-                            )
-                            if notif_serializer.is_valid():
-                                notif_serializer.save()
-                            else:
-                                if 'notifications' not in errors:
-                                    errors['notifications'] = []
-                                errors['notifications'].append({
-                                    'type': notification_type,
-                                    'errors': notif_serializer.errors
-                                })
-                        else:
-                            notif_serializer = NotificationConfigSerializer(data=notif_data)
-                            if notif_serializer.is_valid():
-                                notif_serializer.save()
-                            else:
-                                if 'notifications' not in errors:
-                                    errors['notifications'] = []
-                                errors['notifications'].append({
-                                    'type': notification_type,
-                                    'errors': notif_serializer.errors
-                                })
+            # 通知渠道维护改为单独接口，这里仅做兼容忽略
+            data.pop('notifications', None)
+            data.pop('channels', None)
 
             if errors:
                 return Response({'errors': errors}, status=status.HTTP_400_BAD_REQUEST)

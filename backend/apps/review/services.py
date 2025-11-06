@@ -5,7 +5,7 @@ import os
 import re
 import shutil
 import logging
-import requests
+import gitlab
 from retrying import retry
 from django.conf import settings
 
@@ -17,95 +17,163 @@ logger = logging.getLogger(__name__)
 
 class GitlabService:
     """
-    Service for interacting with GitLab API
+    Service for interacting with GitLab API using python-gitlab library
     """
 
-    def __init__(self):
-        self.server_url = settings.GITLAB_SERVER_URL
-        self.private_token = settings.GITLAB_PRIVATE_TOKEN
-        self.headers = {
-            "PRIVATE-TOKEN": self.private_token
-        }
+    def __init__(self, request_id=None):
+        self.request_id = request_id
+        self._load_config()
+        self._init_gitlab_client()
+
+    def _load_config(self):
+        """
+        从数据库加载GitLab配置，如果找不到活跃配置则回退到环境变量
+        """
+        try:
+            from apps.llm.models import GitLabConfig
+            gitlab_config = GitLabConfig.objects.filter(is_active=True).first()
+
+            if gitlab_config:
+                self.server_url = gitlab_config.server_url
+                self.private_token = gitlab_config.private_token
+                self.config_source = "database"
+                logger.info(f"[{self.request_id}] GitLab配置加载成功 - 来源:数据库, 服务器:{self.server_url}")
+            else:
+                # 回退到环境变量
+                self.server_url = getattr(settings, 'GITLAB_SERVER_URL', 'https://gitlab.com')
+                self.private_token = getattr(settings, 'GITLAB_PRIVATE_TOKEN', '')
+                self.config_source = "environment"
+                logger.info(f"[{self.request_id}] GitLab配置加载成功 - 来源:环境变量, 服务器:{self.server_url}")
+
+        except ImportError:
+            logger.warning(f"[{self.request_id}] 无法导入GitLabConfig模型，使用环境变量配置")
+            self.server_url = getattr(settings, 'GITLAB_SERVER_URL', 'https://gitlab.com')
+            self.private_token = getattr(settings, 'GITLAB_PRIVATE_TOKEN', '')
+            self.config_source = "environment"
+        except Exception as e:
+            logger.error(f"[{self.request_id}] GitLab配置加载失败: {e}", exc_info=True)
+            # 使用环境变量作为最后回退
+            self.server_url = getattr(settings, 'GITLAB_SERVER_URL', 'https://gitlab.com')
+            self.private_token = getattr(settings, 'GITLAB_PRIVATE_TOKEN', '')
+            self.config_source = "environment"
+
+    def _init_gitlab_client(self):
+        """
+        初始化GitLab客户端
+        """
+        try:
+            # 打印配置信息（隐藏敏感信息）
+            masked_token = f"{self.private_token[:8]}...{self.private_token[-8:]}" if len(self.private_token) > 16 else "***"
+            logger.info(f"[{self.request_id}] 开始初始化GitLab客户端 - 服务器:{self.server_url}, Token:{masked_token}")
+
+            self.gl = gitlab.Gitlab(
+                self.server_url,
+                private_token=self.private_token,
+                timeout=30
+            )
+            # 测试连接
+            self.gl.auth()
+            logger.info(f"[{self.request_id}] GitLab客户端初始化成功")
+        except Exception as e:
+            # 打印详细的错误信息和参数
+            masked_token = f"{self.private_token[:8]}...{self.private_token[-8:]}" if len(self.private_token) > 16 else "***"
+            logger.error(f"[{self.request_id}] GitLab客户端初始化失败")
+            logger.error(f"[{self.request_id}] 详细参数:")
+            logger.error(f"[{self.request_id}]   - 服务器URL: {self.server_url}")
+            logger.error(f"[{self.request_id}]   - Token: {masked_token} (长度: {len(self.private_token)})")
+            logger.error(f"[{self.request_id}]   - 配置来源: {self.config_source}")
+            logger.error(f"[{self.request_id}]   - 错误类型: {type(e).__name__}")
+            logger.error(f"[{self.request_id}]   - 错误信息: {str(e)}")
+            self.gl = None
 
     @retry(stop_max_attempt_number=3, wait_fixed=2000)
     def get_merge_request_changes(self, project_id, merge_request_iid):
         """
-        Get the changes of a merge request
+        Get the changes of a merge request using python-gitlab library
+        Returns the full response object including 'changes' field
         """
-        url = f"{self.server_url}/api/v4/projects/{project_id}/merge_requests/{merge_request_iid}/changes"
+        if not self.gl:
+            logger.error(f"[{self.request_id}] GitLab客户端未初始化")
+            return None
 
         try:
-            response = requests.get(url, headers=self.headers, timeout=30)
-            response.raise_for_status()
-            return response.json().get("changes", [])
-        except requests.RequestException as e:
-            logger.error(f"Error fetching merge request changes: {e}")
+            project = self.gl.projects.get(project_id)
+            merge_request = project.mergerequests.get(merge_request_iid)
+            changes = merge_request.changes()
+
+            # changes() 已经返回字典格式，直接返回
+            return changes
+        except Exception as e:
+            logger.error(f"[{self.request_id}] Error fetching merge request changes: {e}")
             return None
 
     @retry(stop_max_attempt_number=3, wait_fixed=2000)
     def get_merge_request_info(self, project_id, merge_request_iid):
         """
-        Get merge request information
+        Get merge request information using python-gitlab library
         """
-        url = f"{self.server_url}/api/v4/projects/{project_id}/merge_requests/{merge_request_iid}"
+        if not self.gl:
+            logger.error(f"[{self.request_id}] GitLab客户端未初始化")
+            return None
 
         try:
-            response = requests.get(url, headers=self.headers, timeout=30)
-            response.raise_for_status()
-            return response.json()
-        except requests.RequestException as e:
-            logger.error(f"Error fetching merge request info: {e}")
+            project = self.gl.projects.get(project_id)
+            merge_request = project.mergerequests.get(merge_request_iid)
+            return merge_request.asdict()
+        except Exception as e:
+            logger.error(f"[{self.request_id}] Error fetching merge request info: {e}")
             return None
 
     @retry(stop_max_attempt_number=3, wait_fixed=2000)
     def get_file_content(self, project_id, file_path, branch_name='main'):
         """
-        Get the content of a file from repository
+        Get the content of a file from repository using python-gitlab library
         """
-        encoded_path = file_path.replace('/', '%2F')
-        url = f"{self.server_url}/api/v4/projects/{project_id}/repository/files/{encoded_path}/raw?ref={branch_name}"
+        if not self.gl:
+            logger.error(f"[{self.request_id}] GitLab客户端未初始化")
+            return None
 
         try:
-            response = requests.get(url, headers=self.headers, timeout=30)
-            response.raise_for_status()
-            return response.text
-        except requests.RequestException as e:
-            logger.error(f"Error fetching file content: {e}")
+            project = self.gl.projects.get(project_id)
+            file_obj = project.files.get(file_path=file_path, ref=branch_name)
+            return file_obj.decode()
+        except Exception as e:
+            logger.error(f"[{self.request_id}] Error fetching file content: {e}")
             return None
 
     @retry(stop_max_attempt_number=3, wait_fixed=2000)
     def post_merge_request_comment(self, project_id, merge_request_iid, comment):
         """
-        Post a comment to a merge request
+        Post a comment to a merge request using python-gitlab library
         """
-        url = f"{self.server_url}/api/v4/projects/{project_id}/merge_requests/{merge_request_iid}/notes"
-
-        data = {
-            "body": comment
-        }
+        if not self.gl:
+            logger.error(f"[{self.request_id}] GitLab客户端未初始化")
+            return None
 
         try:
-            response = requests.post(url, headers=self.headers, json=data, timeout=30)
-            response.raise_for_status()
-            logger.info(f"Comment posted successfully to MR #{merge_request_iid}")
-            return response.json()
-        except requests.RequestException as e:
-            logger.error(f"Error posting comment: {e}")
+            project = self.gl.projects.get(project_id)
+            merge_request = project.mergerequests.get(merge_request_iid)
+            note = merge_request.notes.create({'body': comment})
+            logger.info(f"[{self.request_id}] Comment posted successfully to MR #{merge_request_iid}")
+            return note.asdict()
+        except Exception as e:
+            logger.error(f"[{self.request_id}] Error posting comment: {e}")
             return None
 
     @retry(stop_max_attempt_number=3, wait_fixed=2000)
     def get_project_info(self, project_id):
         """
-        Get project information
+        Get project information using python-gitlab library
         """
-        url = f"{self.server_url}/api/v4/projects/{project_id}"
+        if not self.gl:
+            logger.error(f"[{self.request_id}] GitLab客户端未初始化")
+            return None
 
         try:
-            response = requests.get(url, headers=self.headers, timeout=30)
-            response.raise_for_status()
-            return response.json()
-        except requests.RequestException as e:
-            logger.error(f"Error fetching project info: {e}")
+            project = self.gl.projects.get(project_id)
+            return project.asdict()
+        except Exception as e:
+            logger.error(f"[{self.request_id}] Error fetching project info: {e}")
             return None
 
 
@@ -114,12 +182,76 @@ class ReviewService:
     Service for performing code reviews
     """
 
-    def __init__(self):
-        self.llm_service = LLMService()
-        self.max_files = settings.GITLAB_MAX_FILES
-        self.exclude_file_types = settings.EXCLUDE_FILE_TYPES
-        self.ignore_file_types = settings.IGNORE_FILE_TYPES
-        self.context_lines = settings.CONTEXT_LINES_NUM
+    def __init__(self, project_id=None, request_id=None):
+        self.project_id = project_id
+        self.request_id = request_id
+        self.llm_service = LLMService(request_id=request_id)
+        self._load_config()
+
+    def _load_config(self):
+        """
+        从数据库加载配置（优先级：项目配置 > 全局配置 > 环境变量）
+        """
+        try:
+            from apps.llm.models import GitLabConfig
+            from apps.webhook.models import Project
+            
+            # 先加载全局GitLab配置
+            gitlab_config = GitLabConfig.objects.filter(is_active=True).first()
+            
+            if gitlab_config:
+                self.max_files = gitlab_config.max_files
+                self.context_lines = gitlab_config.context_lines
+                self.config_source = "database"
+            else:
+                # 回退到环境变量
+                self.max_files = getattr(settings, 'GITLAB_MAX_FILES', 50)
+                self.context_lines = getattr(settings, 'CONTEXT_LINES_NUM', 5)
+                self.config_source = "environment"
+            
+            # 尝试加载项目级配置
+            if self.project_id:
+                try:
+                    project = Project.objects.get(project_id=self.project_id)
+                    # 如果项目有自定义配置，使用项目配置
+                    if project.exclude_file_types_list:
+                        self.exclude_file_types = project.exclude_file_types_list
+                    else:
+                        self.exclude_file_types = getattr(settings, 'EXCLUDE_FILE_TYPES', [])
+                    
+                    if project.ignore_file_patterns_list:
+                        self.ignore_file_types = project.ignore_file_patterns_list
+                    else:
+                        self.ignore_file_types = getattr(settings, 'IGNORE_FILE_TYPES', [])
+                    
+                    logger.info(f"[{self.request_id}] 使用项目级配置 - 项目ID:{self.project_id}")
+                except Project.DoesNotExist:
+                    # 项目不存在，使用默认配置
+                    self.exclude_file_types = getattr(settings, 'EXCLUDE_FILE_TYPES', [])
+                    self.ignore_file_types = getattr(settings, 'IGNORE_FILE_TYPES', [])
+            else:
+                # 没有项目ID，使用全局配置
+                self.exclude_file_types = getattr(settings, 'EXCLUDE_FILE_TYPES', [])
+                self.ignore_file_types = getattr(settings, 'IGNORE_FILE_TYPES', [])
+            
+            logger.info(f"[{self.request_id}] Review配置加载成功 - 来源:{self.config_source}, "
+                       f"最大文件数:{self.max_files}, 上下文行数:{self.context_lines}")
+
+        except ImportError:
+            logger.warning(f"[{self.request_id}] 无法导入配置模型，使用环境变量配置")
+            self.max_files = getattr(settings, 'GITLAB_MAX_FILES', 50)
+            self.exclude_file_types = getattr(settings, 'EXCLUDE_FILE_TYPES', [])
+            self.ignore_file_types = getattr(settings, 'IGNORE_FILE_TYPES', [])
+            self.context_lines = getattr(settings, 'CONTEXT_LINES_NUM', 5)
+            self.config_source = "environment"
+        except Exception as e:
+            logger.error(f"[{self.request_id}] Review配置加载失败: {e}", exc_info=True)
+            # 使用环境变量作为最后回退
+            self.max_files = getattr(settings, 'GITLAB_MAX_FILES', 50)
+            self.exclude_file_types = getattr(settings, 'EXCLUDE_FILE_TYPES', [])
+            self.ignore_file_types = getattr(settings, 'IGNORE_FILE_TYPES', [])
+            self.context_lines = getattr(settings, 'CONTEXT_LINES_NUM', 5)
+            self.config_source = "environment"
 
     def review_merge_request(self, changes, payload):
         """

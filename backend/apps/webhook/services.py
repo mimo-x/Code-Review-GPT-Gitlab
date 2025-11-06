@@ -3,8 +3,10 @@ Webhook services for project and event management
 """
 import logging
 from datetime import timedelta
+from django.conf import settings
 from django.utils import timezone
 from django.db import models
+import pytz
 from .models import Project, WebhookLog, MergeRequestReview
 
 logger = logging.getLogger(__name__)
@@ -14,6 +16,21 @@ class ProjectService:
     """
     Service for managing GitLab projects
     """
+
+    @staticmethod
+    def _to_local_iso(dt):
+        """Convert aware datetimes to the configured local ISO string."""
+        if not dt:
+            return None
+
+        local_tz = pytz.timezone(getattr(settings, 'TIME_ZONE', 'Asia/Shanghai'))
+        
+        if timezone.is_naive(dt):
+            dt = local_tz.localize(dt)
+        else:
+            dt = dt.astimezone(local_tz)
+
+        return dt.replace(microsecond=0).isoformat()
 
     @staticmethod
     def get_or_create_project(project_data):
@@ -288,8 +305,8 @@ class ProjectService:
                 'id': project.project_id,
                 'name': project.project_name,
                 'review_enabled': project.review_enabled,
-                'created_at': project.created_at,
-                'last_webhook_at': project.last_webhook_at
+                'created_at': ProjectService._to_local_iso(project.created_at),
+                'last_webhook_at': ProjectService._to_local_iso(project.last_webhook_at)
             },
             'webhooks': {
                 'total': total_webhooks,

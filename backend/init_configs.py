@@ -11,7 +11,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
 django.setup()
 
-from apps.llm.models import LLMConfig, GitLabConfig, NotificationConfig
+from apps.llm.models import LLMConfig, GitLabConfig, NotificationConfig, NotificationChannel
 import json
 
 
@@ -164,6 +164,61 @@ def init_notification_configs():
         print(f"✓ 创建企业微信通知配置: {wechat_config}")
     else:
         print(f"✓ 企业微信通知配置已存在: {wechat_config}")
+
+    # 创建新的通知通道条目
+    channels_to_ensure = [
+        (
+            '默认GitLab评论通道',
+            'gitlab',
+            '系统默认的GitLab评论通知通道',
+            {},
+            True,
+        ),
+        (
+            '默认钉钉通知通道',
+            'dingtalk',
+            '示例钉钉机器人通道',
+            {'webhook_url': '', 'secret': ''},
+            False,
+        ),
+        (
+            '默认飞书通知通道',
+            'feishu',
+            '示例飞书机器人通道',
+            {'webhook_url': '', 'secret': ''},
+            False,
+        ),
+        (
+            '默认企业微信通知通道',
+            'wechat',
+            '示例企业微信机器人通道',
+            {'webhook_url': ''},
+            False,
+        ),
+        (
+            '默认Slack通知通道',
+            'slack',
+            '示例Slack通知通道',
+            {'webhook_url': ''},
+            False,
+        ),
+    ]
+
+    for name, notif_type, desc, config, is_default in channels_to_ensure:
+        channel, created = NotificationChannel.objects.get_or_create(
+            name=name,
+            notification_type=notif_type,
+            defaults={
+                'description': desc,
+                'config_data': json.dumps(config),
+                'is_default': is_default,
+                'is_active': True,
+            }
+        )
+        if created:
+            print(f"✓ 创建通知通道: {channel}")
+        else:
+            print(f"✓ 通知通道已存在: {channel}")
 
 
 def main():

@@ -9,10 +9,28 @@
       <h2 class="text-2xl font-bold text-gray-900 mt-3">审查详情 - MR !{{ reviewData.mrId }}</h2>
     </div>
 
-    <!-- Basic Info Card -->
-    <div class="card">
-      <div class="p-6">
-        <div class="flex items-center justify-between mb-6">
+    <!-- Tabs -->
+    <div class="config-tabs">
+      <nav class="-mb-px flex space-x-8">
+        <button
+          v-for="tab in tabs"
+          :key="tab.key"
+          @click="activeTab = tab.key"
+          :class="[
+            'config-tab',
+            activeTab === tab.key ? 'config-tab-active' : 'config-tab-inactive'
+          ]"
+        >
+          {{ tab.label }}
+        </button>
+      </nav>
+    </div>
+
+    <!-- Basic Info Tab -->
+    <div v-show="activeTab === 'basic'" class="config-section">
+      <div class="p-6 space-y-6">
+        <div class="flex items-center gap-3">
+          <div class="w-2 h-2 bg-blue-500 rounded-full"></div>
           <h3 class="text-lg font-semibold text-gray-800">基本信息</h3>
           <span :class="getStatusBadge(reviewData.status)">{{ reviewData.status }}</span>
         </div>
@@ -64,10 +82,11 @@
       </div>
     </div>
 
-    <!-- Summary Card -->
-    <div class="card">
-      <div class="p-6">
-        <div class="flex items-center justify-between mb-4">
+    <!-- Summary Tab -->
+    <div v-show="activeTab === 'summary'" class="config-section">
+      <div class="p-6 space-y-6">
+        <div class="flex items-center gap-3">
+          <div class="w-2 h-2 bg-yellow-500 rounded-full"></div>
           <h3 class="text-lg font-semibold text-gray-800">审查摘要</h3>
           <div class="flex items-center gap-2">
             <Star class="w-5 h-5 text-yellow-400 fill-yellow-400" />
@@ -80,10 +99,11 @@
       </div>
     </div>
 
-    <!-- Issues Card -->
-    <div class="card">
-      <div class="p-6">
-        <div class="flex items-center justify-between mb-6">
+    <!-- Issues Tab -->
+    <div v-show="activeTab === 'issues'" class="config-section">
+      <div class="p-6 space-y-6">
+        <div class="flex items-center gap-3">
+          <div class="w-2 h-2 bg-red-500 rounded-full"></div>
           <h3 class="text-lg font-semibold text-gray-800">审查问题</h3>
           <span class="badge-info">共 {{ reviewData.issues.length }} 个问题</span>
         </div>
@@ -126,7 +146,14 @@ import { ArrowLeft, ExternalLink, Star, ChevronDown } from 'lucide-vue-next'
 
 const router = useRouter()
 const route = useRoute()
+const activeTab = ref('basic')
 const openIssues = ref<number[]>([])
+
+const tabs = [
+  { key: 'basic', label: '基本信息' },
+  { key: 'summary', label: '审查摘要' },
+  { key: 'issues', label: '审查问题' }
+]
 
 const reviewData = ref({
   id: Number(route.params.id),

@@ -111,7 +111,7 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = 'zh-hans'
 TIME_ZONE = 'Asia/Shanghai'
 USE_I18N = True
-USE_TZ = True
+USE_TZ = False
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
@@ -131,6 +131,8 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 100,
     'EXCEPTION_HANDLER': 'core.exceptions.custom_exception_handler',
+    # 时区设置：使用本地时区（Asia/Shanghai）而不是 UTC
+    'DATETIME_FORMAT': '%Y-%m-%d %H:%M:%S',  # 返回格式化的本地时间
 }
 
 # CORS settings
@@ -246,3 +248,25 @@ GPT_MESSAGE = """
 
 # Create logs directory if it doesn't exist
 os.makedirs(os.path.join(BASE_DIR, 'logs'), exist_ok=True)
+
+# Mock Mode Configuration
+CODE_REVIEW_MOCK_MODE = os.environ.get('CODE_REVIEW_MOCK_MODE', 'False') == 'True'
+
+# Email Configuration
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_FROM = os.environ.get('EMAIL_FROM', EMAIL_HOST_USER)
+
+# Slack Configuration
+SLACK_WEBHOOK_URL = os.environ.get('SLACK_WEBHOOK_URL', '')
+
+# Feishu Configuration
+FEISHU_WEBHOOK_URL = os.environ.get('FEISHU_WEBHOOK_URL', '')
+FEISHU_SECRET = os.environ.get('FEISHU_SECRET', '')
+
+# WeChat Work Configuration
+WECHAT_WORK_WEBHOOK_URL = os.environ.get('WECHAT_WORK_WEBHOOK_URL', '')

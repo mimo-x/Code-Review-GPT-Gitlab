@@ -30,6 +30,8 @@ export const API_ENDPOINTS = {
   CONFIG: '/config/',
   CONFIG_SUMMARY: '/configs/summary/',
   CONFIG_BATCH_UPDATE: '/configs/batch_update/',
+  NOTIFICATION_CHANNELS: '/notification-channels/',
+  NOTIFICATION_CHANNEL_DETAIL: (id: string | number) => `/notification-channels/${id}/`,
 
   // 日志管理
   LOGS: '/webhook/logs/',
@@ -42,16 +44,18 @@ export const API_ENDPOINTS = {
 
   // 项目管理
   PROJECTS: '/webhook/projects/',
-  PROJECT_DETAIL: (id: string | number) => `/webhook/projects/${id}`,
-  PROJECT_ENABLE: (id: string | number) => `/webhook/projects/${id}/enable`,
-  PROJECT_DISABLE: (id: string | number) => `/webhook/projects/${id}/disable`,
-  PROJECT_UPDATE: (id: string | number) => `/webhook/projects/${id}/update`,
+  PROJECT_DETAIL: (id: string | number) => `/webhook/projects/${id}/`,
+  PROJECT_ENABLE: (id: string | number) => `/webhook/projects/${id}/enable/`,
+  PROJECT_DISABLE: (id: string | number) => `/webhook/projects/${id}/disable/`,
+  PROJECT_UPDATE: (id: string | number) => `/webhook/projects/${id}/update/`,
   PROJECT_STATS: '/webhook/projects/stats/',
-  PROJECT_WEBHOOK_LOGS: (id: string | number) => `/webhook/projects/${id}/webhook-logs`,
-  PROJECT_REVIEW_HISTORY: (id: string | number) => `/webhook/projects/${id}/review-history`,
+  PROJECT_WEBHOOK_LOGS: (id: string | number) => `/webhook/projects/${id}/webhook-logs/`,
+  PROJECT_REVIEW_HISTORY: (id: string | number) => `/webhook/projects/${id}/review-history/`,
+  PROJECT_NOTIFICATIONS: (id: string | number) => `/webhook/projects/${id}/notifications/`,
+  PROJECT_NOTIFICATIONS_UPDATE: (id: string | number) => `/webhook/projects/${id}/notifications/update/`,
 
   // GitLab Webhook
-  GITLAB_WEBHOOK: '/webhook/gitlab'
+  GITLAB_WEBHOOK: '/webhook/gitlab/'
 }
 
 // 完整URL生成函数

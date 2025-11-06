@@ -11,13 +11,9 @@
             <div class="absolute inset-y-0 start-0 flex items-center ps-3.5 pointer-events-none">
               <Search class="w-4 h-4 text-gray-400" />
             </div>
-            <input
-              v-model="searchText"
-              type="text"
+            <input v-model="searchText" type="text"
               class="py-2.5 ps-10 pe-4 block w-full sm:w-80 border-gray-200 rounded-lg text-sm focus:border-blue-500 focus:ring-blue-500"
-              placeholder="搜索 MR ID 或项目名"
-              @input="handleSearch"
-            />
+              placeholder="搜索 MR ID 或项目名" @input="handleSearch" />
           </div>
         </div>
       </div>
@@ -120,9 +116,10 @@ const fetchReviews = async () => {
   loading.value = true
   try {
     const response = await getReviews()
-    if (response.data.status === 'success') {
-      reviewsList.value = response.data.results || []
-      totalReviews.value = response.data.total || response.data.count || 0
+    console.log('Reviews response:', response)
+    if (response.status === 'success') {
+      reviewsList.value = response.results || []
+      totalReviews.value = response.total || response.count || 0
     }
   } catch (error) {
     console.error('获取审核记录失败:', error)

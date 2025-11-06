@@ -124,114 +124,123 @@
           <h3 class="text-lg font-semibold text-apple-900">通知配置</h3>
         </div>
 
-        <div class="space-y-6">
-          <div class="p-4 rounded-xl bg-apple-50/50 border border-apple-200/30">
-            <div class="flex items-center justify-between mb-4">
-              <div class="flex items-center gap-2">
-                <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <div class="w-4 h-4 bg-blue-500 rounded-sm"></div>
-                </div>
-                <h4 class="font-medium text-apple-900">钉钉通知</h4>
-              </div>
-              <label class="config-toggle">
-                <input v-model="config.notification.dingtalk.enabled" type="checkbox" class="config-toggle-input" />
-                <div class="config-toggle-slider"></div>
-              </label>
+        <div class="bg-apple-50/50 border border-apple-200/40 rounded-xl p-4 text-sm text-apple-600">
+          管理全局通知通道。每个项目可在项目详情页选择需要启用的通道，支持为不同项目配置独立的通知名称与 Webhook。
+        </div>
+
+        <div class="flex items-center justify-between">
+          <h4 class="text-sm font-semibold text-apple-900">通道列表</h4>
+          <button @click="openChannelForm()" class="btn-primary">
+            <PlusCircle class="w-4 h-4" />
+            新建通道
+          </button>
+        </div>
+
+        <div v-if="totalChannelCount === 0" class="p-6 bg-apple-50 border border-dashed border-apple-200 text-center rounded-xl text-sm text-apple-500">
+          暂无通知通道，请点击「新建通道」开始配置。
+        </div>
+
+        <div v-else class="space-y-6">
+          <div v-for="type in channelTypes" :key="type.value" class="space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="text-sm font-medium text-apple-900">{{ type.label }}</div>
+              <button @click="openChannelForm(type.value)" class="text-xs text-apple-blue-600 hover:text-apple-blue-500 flex items-center gap-1">
+                <PlusCircle class="w-3 h-3" />
+                新增
+              </button>
             </div>
 
-            <div v-if="config.notification.dingtalk.enabled" class="space-y-4">
-              <div class="config-field-group">
-                <label class="config-label">Webhook URL</label>
-                <input v-model="config.notification.dingtalk.webhook" type="text" class="input-field" placeholder="https://oapi.dingtalk.com/robot/send?access_token=xxx" />
+            <div v-if="groupedChannels[type.value]?.length" class="space-y-3">
+              <div
+                v-for="channel in groupedChannels[type.value]"
+                :key="channel.id"
+                class="p-4 border border-apple-200/60 rounded-xl bg-white shadow-sm space-y-3"
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <div class="text-sm font-semibold text-apple-900">{{ channel.name }}</div>
+                    <div class="text-xs text-apple-500 mt-1">{{ channel.description || '暂无备注' }}</div>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span v-if="channel.is_default" class="badge badge-success">默认</span>
+                    <span v-if="channel.is_active === false" class="badge bg-apple-200 text-apple-700">停用</span>
+                  </div>
+                </div>
+                <div class="text-xs text-apple-500 space-y-1">
+                  <div v-if="channel.webhook_url">Webhook：{{ channel.webhook_url }}</div>
+                  <div v-else>未配置 Webhook</div>
+                </div>
+                <div class="flex items-center gap-3 pt-2">
+                  <button class="btn-secondary" @click="editChannel(channel)">
+                    <Pencil class="w-4 h-4" />
+                    编辑
+                  </button>
+                  <button class="btn-ghost text-red-500 hover:text-red-600" @click="removeChannel(channel)">
+                    <Trash2 class="w-4 h-4" />
+                    删除
+                  </button>
+                </div>
               </div>
-              <div class="config-field-group">
-                <label class="config-label">Secret</label>
-                <input v-model="config.notification.dingtalk.secret" type="password" class="input-field" placeholder="钉钉机器人密钥" />
-              </div>
+            </div>
+            <div v-else class="text-xs text-apple-500 bg-apple-50 rounded-lg px-3 py-2">暂无 {{ type.label }} 通道</div>
+          </div>
+        </div>
+
+        <div v-if="channelEditorVisible" id="channel-editor" class="border-t border-apple-200/60 pt-6 space-y-4">
+          <div class="flex items-center justify-between">
+            <h4 class="text-sm font-semibold text-apple-900">{{ channelForm.id ? '编辑通道' : '新建通道' }}</h4>
+            <button class="text-xs text-apple-500 hover:text-apple-700" @click="cancelChannelEdit">取消</button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="config-field-group">
+              <label class="config-label">通道名称</label>
+              <input v-model="channelForm.name" type="text" class="input-field" placeholder="用于区分不同项目的通道名称" />
+            </div>
+            <div class="config-field-group">
+              <label class="config-label">通道类型</label>
+              <select v-model="channelForm.notification_type" class="input-field" :disabled="channelForm.id !== null">
+                <option v-for="type in channelTypes" :key="type.value" :value="type.value">{{ type.label }}</option>
+              </select>
+            </div>
+            <div class="config-field-group md:col-span-2">
+              <label class="config-label">备注</label>
+              <textarea v-model="channelForm.description" class="input-field" rows="2" placeholder="补充说明该通道的使用场景"></textarea>
+            </div>
+            <div
+              class="config-field-group md:col-span-2"
+              v-if="['dingtalk', 'feishu', 'slack', 'wechat'].includes(channelForm.notification_type)"
+            >
+              <label class="config-label">Webhook URL</label>
+              <input v-model="channelForm.webhook_url" type="text" class="input-field" placeholder="https://" />
+            </div>
+            <div
+              class="config-field-group md:col-span-2"
+              v-if="['dingtalk', 'feishu'].includes(channelForm.notification_type)"
+            >
+              <label class="config-label">Secret</label>
+              <input v-model="channelForm.secret" type="text" class="input-field" placeholder="可选：签名密钥" />
+            </div>
+            <div class="flex items-center gap-4 md:col-span-2">
+              <label class="flex items-center gap-2 text-xs text-apple-600">
+                <input v-model="channelForm.is_active" type="checkbox" />
+                启用此通道
+              </label>
+              <label class="flex items-center gap-2 text-xs text-apple-600">
+                <input v-model="channelForm.is_default" type="checkbox" />
+                设为默认通道
+              </label>
             </div>
           </div>
 
-          <div class="p-4 rounded-xl bg-apple-50/50 border border-apple-200/30">
-            <div class="flex items-center justify-between mb-4">
-              <div class="flex items-center gap-2">
-                <div class="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <div class="w-4 h-4 bg-orange-500 rounded-full"></div>
-                </div>
-                <h4 class="font-medium text-apple-900">GitLab 评论</h4>
-              </div>
-              <label class="config-toggle">
-                <input v-model="config.notification.gitlab.enabled" type="checkbox" class="config-toggle-input" checked />
-                <div class="config-toggle-slider"></div>
-              </label>
-            </div>
-          </div>
-
-          <div class="p-4 rounded-xl bg-apple-50/50 border border-apple-200/30">
-            <div class="flex items-center justify-between mb-4">
-              <div class="flex items-center gap-2">
-                <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                  <div class="w-4 h-4 bg-green-500 rounded-sm"></div>
-                </div>
-                <h4 class="font-medium text-apple-900">飞书通知</h4>
-              </div>
-              <label class="config-toggle">
-                <input v-model="config.notification.feishu.enabled" type="checkbox" class="config-toggle-input" />
-                <div class="config-toggle-slider"></div>
-              </label>
-            </div>
-
-            <div v-if="config.notification.feishu.enabled" class="space-y-4">
-              <div class="config-field-group">
-                <label class="config-label">Webhook URL</label>
-                <input v-model="config.notification.feishu.webhook" type="text" class="input-field" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/xxx" />
-              </div>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="config-field-group">
-                  <label class="config-label">App ID</label>
-                  <input v-model="config.notification.feishu.app_id" type="text" class="input-field" placeholder="应用ID" />
-                </div>
-                <div class="config-field-group">
-                  <label class="config-label">App Secret</label>
-                  <input v-model="config.notification.feishu.app_secret" type="password" class="input-field" placeholder="应用密钥" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="p-4 rounded-xl bg-apple-50/50 border border-apple-200/30">
-            <div class="flex items-center justify-between mb-4">
-              <div class="flex items-center gap-2">
-                <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <div class="w-4 h-4 bg-blue-500 rounded-sm"></div>
-                </div>
-                <h4 class="font-medium text-apple-900">企业微信通知</h4>
-              </div>
-              <label class="config-toggle">
-                <input v-model="config.notification.wechat.enabled" type="checkbox" class="config-toggle-input" />
-                <div class="config-toggle-slider"></div>
-              </label>
-            </div>
-
-            <div v-if="config.notification.wechat.enabled" class="space-y-4">
-              <div class="config-field-group">
-                <label class="config-label">Webhook URL</label>
-                <input v-model="config.notification.wechat.webhook" type="text" class="input-field" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx" />
-              </div>
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="config-field-group">
-                  <label class="config-label">企业ID</label>
-                  <input v-model="config.notification.wechat.corp_id" type="text" class="input-field" placeholder="企业ID" />
-                </div>
-                <div class="config-field-group">
-                  <label class="config-label">企业密钥</label>
-                  <input v-model="config.notification.wechat.corp_secret" type="password" class="input-field" placeholder="企业密钥" />
-                </div>
-                <div class="config-field-group">
-                  <label class="config-label">应用ID</label>
-                  <input v-model="config.notification.wechat.agent_id" type="text" class="input-field" placeholder="应用ID" />
-                </div>
-              </div>
-            </div>
+          <div class="flex items-center gap-3">
+            <button @click="submitChannelForm" class="btn-primary" :disabled="channelSaving">
+              <Save class="w-4 h-4" />
+              {{ channelSaving ? '保存中...' : '保存通道' }}
+            </button>
+            <button @click="cancelChannelEdit" class="btn-secondary" :disabled="channelSaving">
+              取消
+            </button>
           </div>
         </div>
       </div>
@@ -240,9 +249,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { Save, RotateCcw, CheckCircle, XCircle } from 'lucide-vue-next'
-import { getConfigSummary, batchUpdateConfig } from '@/api/index'
+import { ref, computed, onMounted, nextTick } from 'vue'
+import { Save, RotateCcw, CheckCircle, XCircle, PlusCircle, Pencil, Trash2 } from 'lucide-vue-next'
+import {
+  getConfigSummary,
+  batchUpdateConfig,
+  getNotificationChannels,
+  createNotificationChannel,
+  updateNotificationChannel,
+  deleteNotificationChannel
+} from '@/api/index'
 
 // 响应式数据
 const activeTab = ref('llm')
@@ -268,31 +284,56 @@ const config = ref({
     privateToken: '',
     maxFiles: 50,
     contextLines: 5
-  },
-  notification: {
-    dingtalk: {
-      enabled: false,
-      webhook: '',
-      secret: ''
-    },
-    gitlab: {
-      enabled: true
-    },
-    feishu: {
-      enabled: false,
-      webhook: '',
-      app_id: '',
-      app_secret: ''
-    },
-    wechat: {
-      enabled: false,
-      corp_id: '',
-      corp_secret: '',
-      agent_id: '',
-      webhook: ''
-    }
   }
 })
+
+const channels = ref<any[]>([])
+const baseChannelTypes: Record<string, string> = {
+  dingtalk: '钉钉通知',
+  feishu: '飞书通知',
+  wechat: '企业微信通知',
+  slack: 'Slack 通知',
+  gitlab: 'GitLab 评论',
+  email: '邮件通知'
+}
+
+const channelEditorVisible = ref(false)
+const channelSaving = ref(false)
+const channelForm = ref({
+  id: null as number | null,
+  name: '',
+  notification_type: 'dingtalk',
+  description: '',
+  webhook_url: '',
+  secret: '',
+  is_active: true,
+  is_default: false
+})
+
+const channelTypes = computed(() => {
+  const typeSet = new Set<string>(Object.keys(baseChannelTypes))
+  channels.value.forEach(channel => typeSet.add(channel.notification_type))
+  return Array.from(typeSet).map(value => ({
+    value,
+    label: baseChannelTypes[value] || value
+  }))
+})
+
+const groupedChannels = computed(() => {
+  const map: Record<string, any[]> = {}
+  channelTypes.value.forEach(item => {
+    map[item.value] = []
+  })
+  channels.value.forEach(channel => {
+    if (!map[channel.notification_type]) {
+      map[channel.notification_type] = []
+    }
+    map[channel.notification_type].push(channel)
+  })
+  return map
+})
+
+const totalChannelCount = computed(() => channels.value.length)
 
 // 原始配置，用于重置
 const originalConfig = ref({})
@@ -304,6 +345,37 @@ const showMessage = (text: string, type: 'success' | 'error' = 'success') => {
   setTimeout(() => {
     message.value = ''
   }, 3000)
+}
+
+const normalizeChannelList = (data: any) => {
+  if (!data) return []
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data.results)) return data.results
+  if (Array.isArray(data.channels)) return data.channels
+  return []
+}
+
+const resetChannelForm = (notificationType?: string) => {
+  channelForm.value = {
+    id: null,
+    name: '',
+    notification_type: notificationType || channelTypes.value[0]?.value || 'dingtalk',
+    description: '',
+    webhook_url: '',
+    secret: '',
+    is_active: true,
+    is_default: false
+  }
+}
+
+const refreshChannels = async () => {
+  try {
+    const response = await getNotificationChannels()
+    channels.value = normalizeChannelList(response)
+  } catch (error) {
+    console.error('Failed to load channels:', error)
+    showMessage('加载通知通道失败', 'error')
+  }
 }
 
 // 加载配置
@@ -333,39 +405,11 @@ const loadConfig = async () => {
       }
     }
 
-    // 更新通知配置
-    if (data.notifications && data.notifications.length > 0) {
-      console.log('Notifications data:', data.notifications)
-      data.notifications.forEach((notif: any) => {
-        if (notif.notification_type === 'dingtalk') {
-          console.log('Dingtalk config:', notif)
-          config.value.notification.dingtalk = {
-            enabled: notif.enabled,
-            webhook: notif.webhook || '',
-            secret: notif.secret || ''
-          }
-          console.log('Updated dingtalk config:', config.value.notification.dingtalk)
-        } else if (notif.notification_type === 'gitlab') {
-          config.value.notification.gitlab = {
-            enabled: notif.enabled
-          }
-        } else if (notif.notification_type === 'feishu') {
-          config.value.notification.feishu = {
-            enabled: notif.enabled,
-            webhook: notif.webhook || '',
-            app_id: notif.app_id || '',
-            app_secret: notif.app_secret || ''
-          }
-        } else if (notif.notification_type === 'wechat') {
-          config.value.notification.wechat = {
-            enabled: notif.enabled,
-            corp_id: notif.corp_id || '',
-            corp_secret: notif.corp_secret || '',
-            agent_id: notif.agent_id || '',
-            webhook: notif.webhook || ''
-          }
-        }
-      })
+    // 更新通知通道列表
+    if (data.channels) {
+      channels.value = normalizeChannelList(data.channels)
+    } else {
+      await refreshChannels()
     }
 
     // 保存原始配置
@@ -396,38 +440,7 @@ const handleSave = async () => {
         max_files: config.value.gitlab.maxFiles,
         context_lines: config.value.gitlab.contextLines,
         is_active: true
-      },
-      notifications: [
-        {
-          notification_type: 'dingtalk',
-          enabled: config.value.notification.dingtalk.enabled,
-          webhook: config.value.notification.dingtalk.webhook,
-          secret: config.value.notification.dingtalk.secret,
-          is_active: true
-        },
-        {
-          notification_type: 'gitlab',
-          enabled: config.value.notification.gitlab.enabled,
-          is_active: true
-        },
-        {
-          notification_type: 'feishu',
-          enabled: config.value.notification.feishu.enabled,
-          webhook: config.value.notification.feishu.webhook,
-          app_id: config.value.notification.feishu.app_id,
-          app_secret: config.value.notification.feishu.app_secret,
-          is_active: true
-        },
-        {
-          notification_type: 'wechat',
-          enabled: config.value.notification.wechat.enabled,
-          corp_id: config.value.notification.wechat.corp_id,
-          corp_secret: config.value.notification.wechat.corp_secret,
-          agent_id: config.value.notification.wechat.agent_id,
-          webhook: config.value.notification.wechat.webhook,
-          is_active: true
-        }
-      ]
+      }
     }
 
     await batchUpdateConfig(apiData)
@@ -441,6 +454,91 @@ const handleSave = async () => {
     showMessage('保存配置失败', 'error')
   } finally {
     saving.value = false
+  }
+}
+
+const openChannelForm = (notificationType?: string) => {
+  resetChannelForm(notificationType)
+  channelEditorVisible.value = true
+  nextTick(() => {
+    const el = document.getElementById('channel-editor')
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  })
+}
+
+const editChannel = (channel: any) => {
+  channelForm.value = {
+    id: channel.id,
+    name: channel.name,
+    notification_type: channel.notification_type,
+    description: channel.description || '',
+    webhook_url: channel.webhook_url || '',
+    secret: channel.secret || '',
+    is_active: channel.is_active !== false,
+    is_default: channel.is_default || false
+  }
+  channelEditorVisible.value = true
+}
+
+const cancelChannelEdit = () => {
+  channelEditorVisible.value = false
+  resetChannelForm()
+}
+
+const submitChannelForm = async () => {
+  channelSaving.value = true
+  try {
+    const payload: any = {
+      name: channelForm.value.name,
+      notification_type: channelForm.value.notification_type,
+      description: channelForm.value.description,
+      is_active: channelForm.value.is_active,
+      is_default: channelForm.value.is_default
+    }
+
+    if (['dingtalk', 'feishu', 'slack', 'wechat'].includes(channelForm.value.notification_type)) {
+      payload.webhook_url = channelForm.value.webhook_url
+    }
+
+    if (['dingtalk', 'feishu'].includes(channelForm.value.notification_type)) {
+      payload.secret = channelForm.value.secret
+    }
+
+    if (channelForm.value.id) {
+      await updateNotificationChannel(channelForm.value.id, payload)
+      showMessage('通知通道更新成功')
+    } else {
+      await createNotificationChannel(payload)
+      showMessage('通知通道创建成功')
+    }
+
+    channelEditorVisible.value = false
+    resetChannelForm()
+    await refreshChannels()
+
+  } catch (error) {
+    console.error('Failed to save notification channel:', error)
+    showMessage('保存通知通道失败', 'error')
+  } finally {
+    channelSaving.value = false
+  }
+}
+
+const removeChannel = async (channel: any) => {
+  if (!channel?.id) return
+
+  const confirmed = window.confirm(`确认删除通道「${channel.name}」吗？`)
+  if (!confirmed) return
+
+  try {
+    await deleteNotificationChannel(channel.id)
+    showMessage('已删除通知通道')
+    await refreshChannels()
+  } catch (error) {
+    console.error('Failed to delete notification channel:', error)
+    showMessage('删除通知通道失败', 'error')
   }
 }
 

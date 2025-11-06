@@ -2,24 +2,29 @@ import json
 import logging
 import threading
 import uuid
+import time
 from django.utils import timezone
 from django.db import models, transaction
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from .models import WebhookLog, MergeRequestReview, Project
+from .models import WebhookLog, MergeRequestReview, Project, ProjectNotificationSetting
 from .serializers import (
     WebhookLogSerializer,
     ProjectSerializer,
     ProjectListSerializer,
     ProjectUpdateSerializer,
-    MergeRequestReviewSerializer
+    MergeRequestReviewSerializer,
+    ProjectNotificationSettingSerializer,
+    ProjectNotificationUpdateSerializer
 )
 from .services import ProjectService
 from apps.review.services import GitlabService, ReviewService
+from apps.common.logging_utils import get_logger, TimerContext
 
 logger = logging.getLogger(__name__)
+
 
 
 @api_view(['POST'])
@@ -28,18 +33,19 @@ def gitlab_webhook(request):
     GitLab Webhook endpoint
     Handles incoming webhook events from GitLab
 
-    优化版本：确保所有请求都被记录到webhook_logs表中
+    优化版本：确保所有请求都被记录到webhook_logs表中，使用结构化日志
     """
     # 生成请求ID用于日志追踪
     request_id = str(uuid.uuid4())
+    structured_logger = get_logger('webhook', request_id)
 
     # 立即创建初始日志记录，确保请求被记录
     webhook_log = create_initial_webhook_log(request)
 
     if webhook_log:
-        logger.info(f"Received webhook event: {webhook_log.event_type} (Request ID: {webhook_log.request_id})")
+        structured_logger.info("Webhook事件接收成功", request_id=webhook_log.request_id)
     else:
-        logger.error(f"Critical: Failed to create webhook log for request {request_id}")
+        structured_logger.error("严重错误：无法创建Webhook日志记录", request_id=request_id)
 
     try:
         with transaction.atomic():
@@ -48,49 +54,89 @@ def gitlab_webhook(request):
                 payload = request.data
             except Exception:
                 payload = {}
-                logger.warning(f"Failed to parse request data for request {request_id}")
+                structured_logger.warning("请求数据解析失败")
 
             event_type = payload.get('object_kind', 'unknown')
             project_data = payload.get('project', {})
+            project_id = project_data.get('id')
+            project_name = project_data.get('name', '')
+
+            # 记录Webhook入站日志
+            structured_logger.log_webhook_inbound(
+                event_type=event_type,
+                project_id=project_id,
+                project_name=project_name,
+                mr_iid=payload.get('object_attributes', {}).get('iid')
+            )
 
             # 更新日志记录中的事件类型（如果之前是unknown）
             if webhook_log and webhook_log.event_type == 'unknown' and event_type != 'unknown':
                 webhook_log.event_type = event_type
                 webhook_log.save(update_fields=['event_type'])
+                structured_logger.log_database_operation(
+                    operation="update",
+                    table="webhook_logs",
+                    success=True,
+                    record_id=webhook_log.id,
+                    field="event_type"
+                )
 
             # Check or create project
             try:
                 project, created = ProjectService.get_or_create_project(project_data)
                 if created:
-                    logger.info(f"🆕 New project added: {project.project_name} (ID: {project.project_id}) - Review disabled by default")
+                    structured_logger.info(
+                        "新增项目",
+                        project_name=project.project_name,
+                        project_id=project.project_id,
+                        review_enabled=project.review_enabled
+                    )
             except Exception as project_error:
-                logger.error(f"Error creating/retrieving project for request {request_id}: {str(project_error)}")
+                structured_logger.log_error_with_context(
+                    project_error,
+                    context={"operation": "project_creation", "project_id": project_id}
+                )
                 # 继续处理，不因为项目创建失败而停止
 
             # Handle different event types
             try:
-                if event_type == 'merge_request':
-                    return handle_merge_request(payload, webhook_log)
-                elif event_type == 'push':
-                    return handle_push(payload, webhook_log)
-                elif event_type == 'issue':
-                    return handle_issue(payload, webhook_log)
-                elif event_type == 'note':
-                    return handle_note(payload, webhook_log)
-                elif event_type == 'pipeline':
-                    return handle_pipeline(payload, webhook_log)
-                elif event_type == 'tag_push':
-                    return handle_tag_push(payload, webhook_log)
-                else:
-                    return handle_other(payload, webhook_log, event_type)
+                with TimerContext(structured_logger, f"handle_{event_type}"):
+                    if event_type == 'merge_request':
+                        return handle_merge_request(payload, webhook_log)
+                    elif event_type == 'push':
+                        return handle_push(payload, webhook_log)
+                    elif event_type == 'issue':
+                        return handle_issue(payload, webhook_log)
+                    elif event_type == 'note':
+                        return handle_note(payload, webhook_log)
+                    elif event_type == 'pipeline':
+                        return handle_pipeline(payload, webhook_log)
+                    elif event_type == 'tag_push':
+                        return handle_tag_push(payload, webhook_log)
+                    else:
+                        return handle_other(payload, webhook_log, event_type)
             except Exception as handler_error:
-                logger.error(f"Error in event handler for request {request_id}: {str(handler_error)}", exc_info=True)
+                structured_logger.log_error_with_context(
+                    handler_error,
+                    context={
+                        "event_type": event_type,
+                        "project_id": project_id,
+                        "stage": "event_handler"
+                    }
+                )
                 # 标记日志为处理失败
                 if webhook_log:
                     webhook_log.processed = True
                     webhook_log.processed_at = timezone.now()
                     webhook_log.error_message = f"Handler error: {str(handler_error)}"
                     webhook_log.save(update_fields=['processed', 'processed_at', 'error_message'])
+                    structured_logger.log_database_operation(
+                        operation="update",
+                        table="webhook_logs",
+                        success=True,
+                        record_id=webhook_log.id,
+                        field="error_message"
+                    )
 
                 return Response(
                     {'status': 'error', 'message': f'Event handler failed: {str(handler_error)}'},
@@ -261,28 +307,32 @@ def handle_merge_request(payload, webhook_log):
                 'message': 'Code review is disabled for this project. Enable it in project settings to start reviewing.'
             })
 
-        # Create or update MergeRequestReview record
-        review, created = MergeRequestReview.objects.get_or_create(
+        # Create a new MergeRequestReview record for this merge request event
+        request_id = webhook_log.request_id if webhook_log else str(uuid.uuid4())
+        review = MergeRequestReview.objects.create(
             project_id=project_id,
+            project_name=project.get('name', ''),
             merge_request_iid=merge_request_iid,
-            defaults={
-                'project_name': project.get('name', ''),
-                'merge_request_title': object_attributes.get('title', ''),
-                'source_branch': object_attributes.get('source_branch', ''),
-                'target_branch': object_attributes.get('target_branch', ''),
-                'author_name': object_attributes.get('last_commit', {}).get('author', {}).get('name', ''),
-                'author_email': object_attributes.get('last_commit', {}).get('author', {}).get('email', ''),
-                'status': 'pending'
-            }
+            merge_request_title=object_attributes.get('title', ''),
+            source_branch=object_attributes.get('source_branch', ''),
+            target_branch=object_attributes.get('target_branch', ''),
+            author_name=object_attributes.get('last_commit', {}).get('author', {}).get('name', ''),
+            author_email=object_attributes.get('last_commit', {}).get('author', {}).get('email', ''),
+            status='pending',
+            request_id=request_id,
+            review_content=''  # 初始占位，稍后填充真实审查内容
         )
 
-        # Start review process in a separate thread
-        thread = threading.Thread(
-            target=process_merge_request_review,
-            args=(project_id, merge_request_iid, review.pk, payload)
-        )
-        thread.daemon = True
-        thread.start()
+        # Start review process after the transaction commits to avoid racing the DB write
+        def launch_review_thread():
+            thread = threading.Thread(
+                target=process_merge_request_review,
+                args=(project_id, merge_request_iid, review.pk, payload)
+            )
+            thread.daemon = True
+            thread.start()
+
+        transaction.on_commit(launch_review_thread)
 
         # Mark webhook as processed
         if webhook_log:
@@ -330,62 +380,221 @@ def handle_other(payload, webhook_log, event_type):
 def process_merge_request_review(project_id, merge_request_iid, review_id, payload):
     """
     Process merge request review in a separate thread
+    新版本：整合报告生成器和多渠道通知分发器，使用结构化日志
     """
-    try:
-        from apps.review.services import ReviewService
+    import time
+    from django.conf import settings
 
-        # Get review record
+    # 获取request_id用于日志追踪
+    try:
         review = MergeRequestReview.objects.get(pk=review_id)
+    except MergeRequestReview.DoesNotExist:
+        logger.error("MergeRequestReview %s not found when starting review processing", review_id)
+        return
+
+    request_id = review.request_id or str(uuid.uuid4())
+    structured_logger = get_logger('mr_review', request_id)
+
+    structured_logger.log_thread_start(project_id, merge_request_iid)
+
+    try:
+        # 获取MR基本信息
+        project_data = payload.get('project', {})
+        mr_data = payload.get('object_attributes', {})
+        mr_info = {
+            'project_id': project_id,
+            'mr_iid': merge_request_iid,
+            'project_name': project_data.get('name', '未知项目'),
+            'title': mr_data.get('title', '未知MR'),
+            'author': mr_data.get('author', {}).get('name', '未知作者'),
+            'description': mr_data.get('description', ''),
+            'url': mr_data.get('url', ''),
+        }
+
+        # 更新审查记录状态
         review.status = 'processing'
         review.save()
+        structured_logger.log_database_operation(
+            operation="update",
+            table="merge_request_reviews",
+            success=True,
+            record_id=review_id,
+            field="status"
+        )
 
-        # Initialize services
-        gitlab_service = GitlabService()
-        review_service = ReviewService()
+        # 初始化服务
+        gitlab_service = GitlabService(request_id=request_id)
 
-        # Fetch merge request changes
-        changes = gitlab_service.get_merge_request_changes(project_id, merge_request_iid)
+        # 获取MR变更信息
+        with TimerContext(structured_logger, "get_mr_changes"):
+            changes = gitlab_service.get_merge_request_changes(project_id, merge_request_iid)
 
         if not changes:
+            structured_logger.error("未找到MR变更信息")
             review.status = 'failed'
-            review.error_message = 'No changes found in merge request'
+            review.error_message = '未找到MR变更信息'
             review.save()
             return
 
-        # Perform review
-        review_result = review_service.review_merge_request(changes, payload)
+        # 统计文件和变更信息
+        file_count = len(changes.get('changes', []))
+        changes_count = sum(
+            change.get('diff', '').count('\n')
+            for change in changes.get('changes', [])
+        )
+        mr_info.update({
+            'file_count': file_count,
+            'changes_count': changes_count
+        })
 
-        # Update review record
-        review.review_content = review_result.get('content', '')
-        review.review_score = review_result.get('score')
-        review.files_reviewed = review_result.get('files_reviewed', [])
-        review.total_files = len(review_result.get('files_reviewed', []))
+        structured_logger.info(f"获取到 {file_count} 个文件变更，{changes_count} 行代码变更")
+
+        # 判断是否使用Mock模式
+        is_mock_mode = getattr(settings, 'CODE_REVIEW_MOCK_MODE', False)
+        structured_logger.info(f"使用模式: {'Mock' if is_mock_mode else 'Real LLM'}")
+
+        # 生成报告
+        if is_mock_mode:
+            # Mock模式
+            from apps.review.report_generator import ReportGenerator
+            with TimerContext(structured_logger, "generate_mock_report"):
+                report_generator = ReportGenerator(request_id=request_id)
+                report_data = report_generator.generate_mock(mr_info)
+
+            llm_provider = 'mock'
+            llm_model = 'mock'
+
+            structured_logger.log_report_generation(
+                is_mock=True,
+                score=report_data['metadata'].get('score'),
+                file_count=file_count,
+                success=True
+            )
+        else:
+            # 真实LLM模式
+            from apps.llm.services import LLMService
+            from apps.review.report_generator import ReportGenerator
+
+            # 构建代码上下文
+            code_context = build_code_context(changes)
+
+            # 调用LLM进行代码审查
+            llm_service = LLMService(request_id=request_id)
+            llm_start_time = time.time()
+            llm_result = llm_service.review_code(code_context, mr_info)
+            llm_duration = time.time() - llm_start_time
+
+            # 生成报告
+            with TimerContext(structured_logger, "generate_real_report"):
+                report_generator = ReportGenerator(request_id=request_id)
+                report_data = report_generator.generate(llm_result, mr_info, llm_service.model)
+
+            llm_provider = llm_service.provider
+            llm_model = llm_service.model
+
+            structured_logger.log_llm_call(
+                provider=llm_provider,
+                model=llm_model,
+                success=bool(llm_result) and "代码审查失败" not in llm_result,
+                duration=llm_duration,
+                prompt_length=len(code_context),
+                response_length=len(llm_result) if llm_result else 0
+            )
+
+            structured_logger.log_report_generation(
+                is_mock=False,
+                score=report_data['metadata'].get('score'),
+                file_count=file_count,
+                success=True
+            )
+
+        # 更新审查记录
+        review.review_content = report_data['content']
+        review.review_score = report_data['metadata'].get('score', 0)
+        review.files_reviewed = [change.get('new_path') for change in changes.get('changes', [])]
+        review.total_files = file_count
+        review.llm_provider = llm_provider
+        review.llm_model = llm_model
+        review.is_mock = is_mock_mode
         review.status = 'completed'
         review.completed_at = timezone.now()
         review.save()
 
-        # Post comment to GitLab
-        gitlab_service.post_merge_request_comment(
-            project_id,
-            merge_request_iid,
-            review.review_content
+        structured_logger.log_database_operation(
+            operation="update",
+            table="merge_request_reviews",
+            success=True,
+            record_id=review_id,
+            fields=["content", "score", "status", "metadata"]
         )
 
-        review.response_sent = True
-        review.response_type = 'gitlab_comment'
+        structured_logger.info(f"报告生成完成 - 评分:{review.review_score}, 模型:{llm_model}")
+
+        # 分发通知到各个渠道
+        from apps.response.notification_dispatcher import NotificationDispatcher
+        notification_dispatcher = NotificationDispatcher(request_id=request_id)
+
+        with TimerContext(structured_logger, "notification_dispatch"):
+            notification_result = notification_dispatcher.dispatch(
+                report_data,
+                mr_info,
+                project_id=project_id
+            )
+
+        # 更新通知结果
+        review.notification_sent = notification_result.get('success', False)
+        review.notification_result = json.dumps(notification_result, ensure_ascii=False)
         review.save()
 
-        logger.info(f"Review completed for MR #{merge_request_iid}")
+        structured_logger.log_notification_dispatch(
+            total_channels=notification_result.get('total_channels', 0),
+            success_channels=notification_result.get('success_channels', 0),
+            failed_channels=notification_result.get('failed_channels', 0),
+            duration=notification_result.get('results', [{}])[0].get('response_time', 0)
+        )
+
+        structured_logger.log_business_metric(
+            "mr_review_completed",
+            value={
+                "score": review.review_score,
+                "files": file_count,
+                "duration": notification_result.get('results', [{}])[0].get('response_time', 0),
+                "notification_success": notification_result.get('success', False)
+            }
+        )
 
     except Exception as e:
-        logger.error(f"Error processing review: {str(e)}", exc_info=True)
+        structured_logger.log_error_with_context(
+            e,
+            context={
+                "operation": "mr_review_processing",
+                "project_id": project_id,
+                "mr_iid": merge_request_iid
+            }
+        )
+
         try:
-            review = MergeRequestReview.objects.get(pk=review_id)
             review.status = 'failed'
             review.error_message = str(e)
             review.save()
         except:
             pass
+
+
+def build_code_context(changes):
+    """
+    构建代码上下文用于LLM审查
+    """
+    context_parts = []
+
+    for change in changes.get('changes', []):
+        file_path = change.get('new_path') or change.get('old_path', '')
+        diff = change.get('diff', '')
+
+        if diff:
+            context_parts.append(f"## 文件: {file_path}\n```diff\n{diff}\n```")
+
+    return "\n\n".join(context_parts)
 
 
 # ==================== Project Management APIs ====================
@@ -518,6 +727,92 @@ def update_project(request, project_id):
         )
     except Exception as e:
         logger.error(f"Error updating project: {str(e)}", exc_info=True)
+        return Response(
+            {'status': 'error', 'message': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+def get_project_notifications(request, project_id):
+    """获取项目已启用的通知通道"""
+    try:
+        project = Project.objects.get(project_id=project_id)
+        settings = ProjectNotificationSetting.objects.filter(
+            project=project,
+            enabled=True,
+            channel__is_active=True
+        ).select_related('channel')
+
+        serializer = ProjectNotificationSettingSerializer(settings, many=True)
+
+        return Response({
+            'status': 'success',
+            'gitlab_comment_enabled': project.gitlab_comment_notifications_enabled,
+            'channels': serializer.data
+        })
+
+    except Project.DoesNotExist:
+        return Response(
+            {'status': 'error', 'message': f'Project {project_id} not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Error getting project notifications: {str(e)}", exc_info=True)
+        return Response(
+            {'status': 'error', 'message': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+def update_project_notifications(request, project_id):
+    """更新项目通知通道选择"""
+    try:
+        project = Project.objects.get(project_id=project_id)
+
+        serializer = ProjectNotificationUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated = serializer.validated_data
+
+        channel_ids = validated.get('channel_ids')
+        gitlab_enabled = validated.get('gitlab_comment_enabled')
+
+        if gitlab_enabled is not None:
+            project.gitlab_comment_notifications_enabled = gitlab_enabled
+            project.save(update_fields=['gitlab_comment_notifications_enabled', 'updated_at'])
+
+        if channel_ids is not None:
+            ProjectNotificationSetting.objects.filter(project=project).exclude(channel_id__in=channel_ids).update(enabled=False)
+
+            for channel_id in channel_ids:
+                ProjectNotificationSetting.objects.update_or_create(
+                    project=project,
+                    channel_id=channel_id,
+                    defaults={'enabled': True}
+                )
+
+        refreshed = ProjectNotificationSetting.objects.filter(
+            project=project,
+            enabled=True,
+            channel__is_active=True
+        ).select_related('channel')
+
+        response_serializer = ProjectNotificationSettingSerializer(refreshed, many=True)
+
+        return Response({
+            'status': 'success',
+            'gitlab_comment_enabled': project.gitlab_comment_notifications_enabled,
+            'channels': response_serializer.data
+        })
+
+    except Project.DoesNotExist:
+        return Response(
+            {'status': 'error', 'message': f'Project {project_id} not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Error updating project notifications: {str(e)}", exc_info=True)
         return Response(
             {'status': 'error', 'message': str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -890,6 +1185,10 @@ def list_reviews(request):
         reviews = reviews.order_by('-created_at')
         reviews = reviews[offset:offset + limit]
 
+        # 预先查询项目信息以获取 project_url
+        project_ids = list(set(review.project_id for review in reviews))
+        projects = {project.project_id: project for project in Project.objects.filter(project_id__in=project_ids)}
+
         # Serialize data
         serializer = MergeRequestReviewSerializer(reviews, many=True)
 
@@ -914,7 +1213,7 @@ def list_reviews(request):
                 'targetBranch': review['target_branch'],
                 'createdAt': review['created_at'],
                 'completedAt': review['completed_at'],
-                'mrUrl': f"https://gitlab.com/gitlab-instance/-/merge_requests/{review['merge_request_iid']}"  # Generic URL
+                'mrUrl': f"{projects.get(review['project_id']).project_url}/-/merge_requests/{review['merge_request_iid']}" if projects.get(review['project_id']) and projects.get(review['project_id']).project_url else None
             }
             formatted_reviews.append(formatted_review)
 

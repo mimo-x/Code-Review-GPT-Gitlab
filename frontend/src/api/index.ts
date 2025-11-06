@@ -60,6 +60,41 @@ export const batchUpdateConfig = (data: any) => {
   })
 }
 
+// 通知通道列表
+export const getNotificationChannels = (params?: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.NOTIFICATION_CHANNELS),
+    method: 'get',
+    params
+  })
+}
+
+// 创建通知通道
+export const createNotificationChannel = (data: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.NOTIFICATION_CHANNELS),
+    method: 'post',
+    data
+  })
+}
+
+// 更新通知通道
+export const updateNotificationChannel = (id: string | number, data: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.NOTIFICATION_CHANNEL_DETAIL(id)),
+    method: 'patch',
+    data
+  })
+}
+
+// 删除通知通道
+export const deleteNotificationChannel = (id: string | number) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.NOTIFICATION_CHANNEL_DETAIL(id)),
+    method: 'delete'
+  })
+}
+
 // 日志列表
 export const getLogs = (params?: any) => {
   return request({
@@ -143,6 +178,23 @@ export const getProjectReviewHistory = (id: string, params?: any) => {
     url: getApiUrl(API_ENDPOINTS.PROJECT_REVIEW_HISTORY(id)),
     method: 'get',
     params
+  })
+}
+
+// 项目通知 - 获取
+export const getProjectNotifications = (id: string | number) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.PROJECT_NOTIFICATIONS(id)),
+    method: 'get'
+  })
+}
+
+// 项目通知 - 更新
+export const updateProjectNotifications = (id: string | number, data: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.PROJECT_NOTIFICATIONS_UPDATE(id)),
+    method: 'post',
+    data
   })
 }
 

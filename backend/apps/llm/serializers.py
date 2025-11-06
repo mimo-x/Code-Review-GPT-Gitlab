@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import LLMConfig, GitLabConfig, NotificationConfig
+from .models import LLMConfig, GitLabConfig, NotificationConfig, NotificationChannel
 
 
 class LLMConfigSerializer(serializers.ModelSerializer):
@@ -145,8 +145,72 @@ class NotificationConfigSerializer(serializers.ModelSerializer):
         return super().to_internal_value(clean_data)
 
 
+class NotificationChannelSerializer(serializers.ModelSerializer):
+    config_data = serializers.JSONField(write_only=True, required=False)
+
+    class Meta:
+        model = NotificationChannel
+        fields = [
+            'id',
+            'name',
+            'notification_type',
+            'description',
+            'is_active',
+            'is_default',
+            'config_data',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        config_data = instance.config_dict
+
+        if instance.notification_type in {'dingtalk', 'slack', 'feishu', 'wechat'}:
+            data['webhook_url'] = config_data.get('webhook_url') or config_data.get('webhook', '')
+
+        if instance.notification_type in {'dingtalk', 'feishu'}:
+            data['secret'] = config_data.get('secret', '')
+        elif instance.notification_type == 'email':
+            data['smtp_host'] = config_data.get('smtp_host', '')
+            data['smtp_port'] = config_data.get('smtp_port', '')
+            data['username'] = config_data.get('username', '')
+            data['password'] = config_data.get('password', '')
+            data['from_email'] = config_data.get('from_email', '')
+
+        return data
+
+    def to_internal_value(self, data):
+        notification_type = data.get('notification_type') or getattr(self.instance, 'notification_type', None)
+        config_data = {}
+
+        if notification_type in {'dingtalk', 'slack', 'feishu', 'wechat'}:
+            config_data['webhook_url'] = data.get('webhook_url') or data.get('webhook', '')
+
+        if notification_type in {'dingtalk', 'feishu'}:
+            config_data['secret'] = data.get('secret', '')
+        elif notification_type == 'email':
+            config_data = {
+                'smtp_host': data.get('smtp_host', ''),
+                'smtp_port': data.get('smtp_port', ''),
+                'username': data.get('username', ''),
+                'password': data.get('password', ''),
+                'from_email': data.get('from_email', ''),
+            }
+
+        clean_data = {}
+        for field in self.fields:
+            if field in data:
+                clean_data[field] = data[field]
+
+        clean_data['config_data'] = config_data
+        return super().to_internal_value(clean_data)
+
+
 class ConfigSummarySerializer(serializers.Serializer):
     """配置摘要序列化器，用于返回所有配置的概览"""
     llm = LLMConfigSerializer(source='active_llm_config', read_only=True)
     gitlab = GitLabConfigSerializer(source='active_gitlab_config', read_only=True)
     notifications = NotificationConfigSerializer(many=True, read_only=True)
+    channels = NotificationChannelSerializer(many=True, read_only=True)

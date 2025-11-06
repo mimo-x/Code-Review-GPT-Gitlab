@@ -26,14 +26,14 @@
           <ul class="space-y-1">
             <li>
               <router-link
-                to="/dashboard"
+                to="/projects"
                 class="group flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200"
-                :class="isActiveRoute('/dashboard')
+                :class="isActiveRoute('/projects')
                   ? 'bg-apple-blue-500 text-white shadow-lg shadow-apple-blue-500/30'
                   : 'text-apple-600 hover:bg-apple-100 hover:text-apple-900'"
               >
-                <LayoutDashboard class="w-5 h-5 transition-transform duration-200" :class="isActiveRoute('/dashboard') ? '' : 'group-hover:scale-110'" />
-                <span>仪表盘</span>
+                <FolderKanban class="w-5 h-5 transition-transform duration-200" :class="isActiveRoute('/projects') ? '' : 'group-hover:scale-110'" />
+                <span>项目管理</span>
               </router-link>
             </li>
             <li>
@@ -46,18 +46,6 @@
               >
                 <FileText class="w-5 h-5 transition-transform duration-200" :class="isActiveRoute('/reviews') ? '' : 'group-hover:scale-110'" />
                 <span>审查记录</span>
-              </router-link>
-            </li>
-            <li>
-              <router-link
-                to="/projects"
-                class="group flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200"
-                :class="isActiveRoute('/projects')
-                  ? 'bg-apple-blue-500 text-white shadow-lg shadow-apple-blue-500/30'
-                  : 'text-apple-600 hover:bg-apple-100 hover:text-apple-900'"
-              >
-                <FolderKanban class="w-5 h-5 transition-transform duration-200" :class="isActiveRoute('/projects') ? '' : 'group-hover:scale-110'" />
-                <span>项目管理</span>
               </router-link>
             </li>
             <li>
@@ -166,7 +154,6 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  LayoutDashboard,
   FileText,
   Settings,
   ScrollText,
@@ -178,7 +165,6 @@ const route = useRoute()
 const router = useRouter()
 
 const iconMap: Record<string, any> = {
-  'LayoutDashboard': LayoutDashboard,
   'FileText': FileText,
   'Settings': Settings,
   'ScrollText': ScrollText,
