@@ -16,4 +16,5 @@ urlpatterns = [
     path('health/', health_check, name='health_check'),
     path('api/webhook/', include('apps.webhook.urls')),
     path('api/review/', include('apps.review.urls')),
+    path('api/', include('apps.llm.urls')),
 ]

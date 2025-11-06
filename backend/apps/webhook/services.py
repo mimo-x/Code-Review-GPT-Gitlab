@@ -2,8 +2,10 @@
 Webhook services for project and event management
 """
 import logging
+from datetime import timedelta
 from django.utils import timezone
-from .models import Project
+from django.db import models
+from .models import Project, WebhookLog, MergeRequestReview
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +53,11 @@ class ProjectService:
                 namespace=project_data.get('namespace', ''),
                 review_enabled=False,  # Default: disabled
                 auto_review_on_mr=True,
-                gitlab_data=project_data,
                 last_webhook_at=timezone.now()
             )
+            # Set gitlab_data using the property
+            project.gitlab_data_dict = project_data
+            project.save()
             created = True
 
             logger.info(f"New project created: {project.project_name} (ID: {project_id}) - Review disabled by default")
@@ -187,7 +191,7 @@ class ProjectService:
     @staticmethod
     def get_project_stats():
         """
-        Get project statistics
+        Get comprehensive project statistics
 
         Returns:
             dict: Statistics about projects
@@ -196,8 +200,150 @@ class ProjectService:
         enabled = Project.objects.filter(review_enabled=True).count()
         disabled = total - enabled
 
+        # Weekly statistics
+        week_ago = timezone.now() - timedelta(days=7)
+        weekly_reviews = MergeRequestReview.objects.filter(
+            created_at__gte=week_ago,
+            status='completed'
+        ).count()
+
+        # Recent events (last 24 hours)
+        day_ago = timezone.now() - timedelta(hours=24)
+        recent_events = WebhookLog.objects.filter(
+            created_at__gte=day_ago
+        ).count()
+
+        # Active projects (projects with recent webhook events)
+        active_projects = Project.objects.filter(
+            last_webhook_at__gte=week_ago
+        ).count()
+
         return {
             'total_projects': total,
+            'active_projects': active_projects,
             'review_enabled': enabled,
-            'review_disabled': disabled
+            'review_disabled': disabled,
+            'weekly_reviews': weekly_reviews,
+            'recent_events': recent_events,
+            'recent_events_24h': recent_events
         }
+
+    @staticmethod
+    def get_project_detail_stats(project_id):
+        """
+        Get detailed statistics for a specific project
+
+        Args:
+            project_id: GitLab project ID
+
+        Returns:
+            dict: Detailed statistics for the project
+        """
+        try:
+            project = Project.objects.get(project_id=project_id)
+        except Project.DoesNotExist:
+            return None
+
+        # Time ranges
+        week_ago = timezone.now() - timedelta(days=7)
+        day_ago = timezone.now() - timedelta(hours=24)
+
+        # Webhook statistics
+        total_webhooks = WebhookLog.objects.filter(project_id=project_id).count()
+        recent_webhooks = WebhookLog.objects.filter(
+            project_id=project_id,
+            created_at__gte=week_ago
+        ).count()
+
+        # Merge request statistics
+        total_mrs = WebhookLog.objects.filter(
+            project_id=project_id,
+            event_type='merge_request'
+        ).values('merge_request_iid').distinct().count()
+
+        # Review statistics
+        total_reviews = MergeRequestReview.objects.filter(project_id=project_id).count()
+        completed_reviews = MergeRequestReview.objects.filter(
+            project_id=project_id,
+            status='completed'
+        ).count()
+        weekly_reviews = MergeRequestReview.objects.filter(
+            project_id=project_id,
+            created_at__gte=week_ago,
+            status='completed'
+        ).count()
+
+        # Member statistics
+        unique_members = WebhookLog.objects.filter(
+            project_id=project_id
+        ).values('user_email').distinct().count()
+
+        # Event type distribution
+        event_types = WebhookLog.objects.filter(
+            project_id=project_id
+        ).values('event_type').annotate(count=models.Count('event_type'))
+
+        return {
+            'project': {
+                'id': project.project_id,
+                'name': project.project_name,
+                'review_enabled': project.review_enabled,
+                'created_at': project.created_at,
+                'last_webhook_at': project.last_webhook_at
+            },
+            'webhooks': {
+                'total': total_webhooks,
+                'recent': recent_webhooks,
+                'event_types': list(event_types)
+            },
+            'merge_requests': {
+                'total': total_mrs
+            },
+            'reviews': {
+                'total': total_reviews,
+                'completed': completed_reviews,
+                'weekly': weekly_reviews,
+                'completion_rate': (completed_reviews / total_reviews * 100) if total_reviews > 0 else 0
+            },
+            'members': {
+                'unique_count': unique_members
+            }
+        }
+
+    @staticmethod
+    def get_recent_webhook_logs(project_id=None, limit=50):
+        """
+        Get recent webhook logs with optional project filtering
+
+        Args:
+            project_id: Optional project ID to filter by
+            limit: Maximum number of logs to return
+
+        Returns:
+            QuerySet: Webhook logs ordered by creation time
+        """
+        queryset = WebhookLog.objects.all().order_by('-created_at')
+
+        if project_id:
+            queryset = queryset.filter(project_id=project_id)
+
+        return queryset[:limit]
+
+    @staticmethod
+    def get_project_review_history(project_id, days=30):
+        """
+        Get review history for a project over the specified period
+
+        Args:
+            project_id: GitLab project ID
+            days: Number of days to look back
+
+        Returns:
+            QuerySet: Review history ordered by creation time
+        """
+        start_date = timezone.now() - timedelta(days=days)
+
+        return MergeRequestReview.objects.filter(
+            project_id=project_id,
+            created_at__gte=start_date
+        ).order_by('-created_at')

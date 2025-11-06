@@ -62,7 +62,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
       <div
         v-for="project in filteredProjects"
-        :key="project.id"
+        :key="project.project_id"
         class="card group hover:shadow-apple-lg transition-all duration-300 hover:-translate-y-1"
       >
         <div class="p-6 space-y-4">
@@ -74,7 +74,7 @@
               </div>
               <div class="flex-1 min-w-0">
                 <h3 class="text-base font-semibold text-apple-900 truncate group-hover:text-apple-blue-600 transition-colors">
-                  {{ project.name }}
+                  {{ project.project_name }}
                 </h3>
                 <p class="text-xs text-apple-500 mt-0.5">{{ project.namespace }}</p>
               </div>
@@ -83,16 +83,17 @@
             <!-- Enable/Disable Toggle -->
             <div class="flex-shrink-0">
               <button
-                @click="toggleProjectReview(project.id)"
+                @click="toggleProjectReview(project.project_id)"
+                :disabled="loading"
                 :class="[
                   'relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ease-in-out',
-                  project.reviewEnabled ? 'bg-apple-blue-500' : 'bg-apple-300'
+                  project.review_enabled ? 'bg-apple-blue-500' : 'bg-apple-300'
                 ]"
               >
                 <span
                   :class="[
                     'inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform duration-200 ease-in-out',
-                    project.reviewEnabled ? 'translate-x-6' : 'translate-x-1'
+                    project.review_enabled ? 'translate-x-6' : 'translate-x-1'
                   ]"
                 ></span>
               </button>
@@ -108,15 +109,15 @@
           <div class="flex items-center gap-4 pt-2 border-t border-apple-200/50">
             <div class="flex items-center gap-1.5 text-xs text-apple-600">
               <GitCommit class="w-3.5 h-3.5" />
-              <span>{{ project.commitsCount }} commits</span>
+              <span>{{ project.commits_count || 0 }} commits</span>
             </div>
             <div class="flex items-center gap-1.5 text-xs text-apple-600">
               <GitPullRequest class="w-3.5 h-3.5" />
-              <span>{{ project.mrCount }} MRs</span>
+              <span>{{ project.mr_count || 0 }} MRs</span>
             </div>
             <div class="flex items-center gap-1.5 text-xs text-apple-600">
               <Users class="w-3.5 h-3.5" />
-              <span>{{ project.membersCount }}</span>
+              <span>{{ project.members_count || 0 }}</span>
             </div>
           </div>
 
@@ -124,30 +125,31 @@
           <div class="flex items-center justify-between pt-2">
             <div class="flex items-center gap-2 text-xs text-apple-500">
               <Clock class="w-3.5 h-3.5" />
-              <span>{{ project.lastActivity }}</span>
+              <span>{{ project.last_activity || '未知' }}</span>
             </div>
             <span
               :class="[
                 'badge',
-                project.reviewEnabled ? 'badge-success' : 'bg-apple-200 text-apple-700'
+                project.review_enabled ? 'badge-success' : 'bg-apple-200 text-apple-700'
               ]"
             >
-              {{ project.reviewEnabled ? '审查已开启' : '审查已关闭' }}
+              {{ project.review_enabled ? '审查已开启' : '审查已关闭' }}
             </span>
           </div>
 
           <!-- Actions -->
           <div class="flex gap-2 pt-2">
             <button
-              @click="viewProjectDetail(project.id)"
+              @click="viewProjectDetail(project.project_id)"
               class="btn-primary flex-1"
+              :disabled="loading"
             >
               <Eye class="w-4 h-4" />
               <span>查看详情</span>
             </button>
             <button
               class="btn-ghost flex-shrink-0"
-              @click="openWebhookUrl(project.webhookUrl)"
+              @click="openWebhookUrl(project.webhook_url)"
             >
               <ExternalLink class="w-4 h-4" />
             </button>
@@ -175,7 +177,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Search,
@@ -190,186 +192,94 @@ import {
   Eye,
   ExternalLink
 } from 'lucide-vue-next'
+import {
+  getProjects,
+  getAllProjectStats,
+  enableProjectReview,
+  disableProjectReview
+} from '@/api'
 
 const router = useRouter()
 const searchQuery = ref('')
+const loading = ref(false)
 
 const stats = ref({
-  totalProjects: 12,
-  activeProjects: 8,
-  weeklyReviews: 156,
-  recentEvents: 43
+  totalProjects: 0,
+  activeProjects: 0,
+  weeklyReviews: 0,
+  recentEvents: 0
 })
 
-const projects = ref([
-  {
-    id: 1,
-    name: 'Code-Review-GPT-Gitlab',
-    namespace: 'DevOps / AI Tools',
-    description: 'AI-powered code review tool for GitLab merge requests using LLM models',
-    reviewEnabled: true,
-    commitsCount: 324,
-    mrCount: 45,
-    membersCount: 8,
-    lastActivity: '2 分钟前',
-    webhookUrl: 'https://gitlab.com/devops/code-review-gpt'
-  },
-  {
-    id: 2,
-    name: 'Frontend-Dashboard',
-    namespace: 'Frontend / Vue',
-    description: 'Modern dashboard built with Vue 3, Vite, and Tailwind CSS',
-    reviewEnabled: true,
-    commitsCount: 189,
-    mrCount: 28,
-    membersCount: 5,
-    lastActivity: '15 分钟前',
-    webhookUrl: 'https://gitlab.com/frontend/dashboard'
-  },
-  {
-    id: 3,
-    name: 'Backend-API-Service',
-    namespace: 'Backend / Microservices',
-    description: 'RESTful API service built with FastAPI and PostgreSQL',
-    reviewEnabled: true,
-    commitsCount: 456,
-    mrCount: 67,
-    membersCount: 12,
-    lastActivity: '1 小时前',
-    webhookUrl: 'https://gitlab.com/backend/api-service'
-  },
-  {
-    id: 4,
-    name: 'Mobile-App-iOS',
-    namespace: 'Mobile / iOS',
-    description: 'Native iOS application built with Swift and SwiftUI',
-    reviewEnabled: false,
-    commitsCount: 267,
-    mrCount: 34,
-    membersCount: 6,
-    lastActivity: '3 小时前',
-    webhookUrl: 'https://gitlab.com/mobile/ios-app'
-  },
-  {
-    id: 5,
-    name: 'DevOps-Infrastructure',
-    namespace: 'DevOps / Infrastructure',
-    description: 'Infrastructure as Code using Terraform and Ansible',
-    reviewEnabled: true,
-    commitsCount: 145,
-    mrCount: 23,
-    membersCount: 4,
-    lastActivity: '5 小时前',
-    webhookUrl: 'https://gitlab.com/devops/infrastructure'
-  },
-  {
-    id: 6,
-    name: 'ML-Model-Training',
-    namespace: 'AI / Machine Learning',
-    description: 'Machine learning model training pipeline using PyTorch',
-    reviewEnabled: true,
-    commitsCount: 198,
-    mrCount: 31,
-    membersCount: 7,
-    lastActivity: '8 小时前',
-    webhookUrl: 'https://gitlab.com/ai/ml-training'
-  },
-  {
-    id: 7,
-    name: 'Documentation-Site',
-    namespace: 'Documentation / Docs',
-    description: 'Technical documentation site built with VitePress',
-    reviewEnabled: false,
-    commitsCount: 89,
-    mrCount: 15,
-    membersCount: 3,
-    lastActivity: '1 天前',
-    webhookUrl: 'https://gitlab.com/docs/documentation'
-  },
-  {
-    id: 8,
-    name: 'Testing-Framework',
-    namespace: 'QA / Testing',
-    description: 'Automated testing framework using Playwright and Jest',
-    reviewEnabled: true,
-    commitsCount: 234,
-    mrCount: 41,
-    membersCount: 9,
-    lastActivity: '1 天前',
-    webhookUrl: 'https://gitlab.com/qa/testing-framework'
-  },
-  {
-    id: 9,
-    name: 'Design-System',
-    namespace: 'Design / UI',
-    description: 'Component library and design system for all products',
-    reviewEnabled: true,
-    commitsCount: 312,
-    mrCount: 52,
-    membersCount: 11,
-    lastActivity: '2 天前',
-    webhookUrl: 'https://gitlab.com/design/design-system'
-  },
-  {
-    id: 10,
-    name: 'Analytics-Dashboard',
-    namespace: 'Data / Analytics',
-    description: 'Real-time analytics dashboard with data visualization',
-    reviewEnabled: false,
-    commitsCount: 167,
-    mrCount: 29,
-    membersCount: 6,
-    lastActivity: '2 天前',
-    webhookUrl: 'https://gitlab.com/data/analytics'
-  },
-  {
-    id: 11,
-    name: 'Security-Scanner',
-    namespace: 'Security / Tools',
-    description: 'Automated security vulnerability scanner for code repositories',
-    reviewEnabled: true,
-    commitsCount: 201,
-    mrCount: 36,
-    membersCount: 8,
-    lastActivity: '3 天前',
-    webhookUrl: 'https://gitlab.com/security/scanner'
-  },
-  {
-    id: 12,
-    name: 'Notification-Service',
-    namespace: 'Backend / Microservices',
-    description: 'Multi-channel notification service supporting email, SMS, and webhooks',
-    reviewEnabled: false,
-    commitsCount: 143,
-    mrCount: 22,
-    membersCount: 5,
-    lastActivity: '4 天前',
-    webhookUrl: 'https://gitlab.com/backend/notification-service'
-  }
-])
+const projects = ref<any[]>([])
 
 const filteredProjects = computed(() => {
   if (!searchQuery.value) return projects.value
 
   const query = searchQuery.value.toLowerCase()
   return projects.value.filter(project =>
-    project.name.toLowerCase().includes(query) ||
-    project.namespace.toLowerCase().includes(query) ||
+    project.project_name?.toLowerCase().includes(query) ||
+    project.namespace?.toLowerCase().includes(query) ||
     project.description?.toLowerCase().includes(query)
   )
 })
 
-const toggleProjectReview = (projectId: number) => {
-  const project = projects.value.find(p => p.id === projectId)
-  if (project) {
-    project.reviewEnabled = !project.reviewEnabled
-
-    // Update stats
-    if (project.reviewEnabled) {
-      stats.value.activeProjects++
-    } else {
-      stats.value.activeProjects--
+const loadProjects = async () => {
+  try {
+    loading.value = true
+    const response = await getProjects()
+    if (response && response.projects) {
+      projects.value = response.projects
     }
+  } catch (error) {
+    console.error('Failed to load projects:', error)
+    alert('加载项目列表失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+const loadStats = async () => {
+  try {
+    const response = await getAllProjectStats()
+    if (response && response.stats) {
+      stats.value = {
+        totalProjects: response.stats.total_projects || 0,
+        activeProjects: response.stats.active_projects || 0,
+        weeklyReviews: response.stats.weekly_reviews || 0,
+        recentEvents: response.stats.recent_events || 0
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load stats:', error)
+  }
+}
+
+const toggleProjectReview = async (projectId: number) => {
+  try {
+    const project = projects.value.find(p => p.project_id === projectId)
+    if (!project) return
+
+    const originalStatus = project.review_enabled
+    project.review_enabled = !originalStatus
+
+    try {
+      if (project.review_enabled) {
+        await enableProjectReview(projectId.toString())
+        alert('已启用代码审查')
+        stats.value.activeProjects++
+      } else {
+        await disableProjectReview(projectId.toString())
+        alert('已禁用代码审查')
+        stats.value.activeProjects--
+      }
+    } catch (apiError) {
+      // Revert on API error
+      project.review_enabled = originalStatus
+      throw apiError
+    }
+  } catch (error) {
+    console.error('Failed to toggle project review:', error)
+    alert('操作失败，请重试')
   }
 }
 
@@ -378,6 +288,16 @@ const viewProjectDetail = (projectId: number) => {
 }
 
 const openWebhookUrl = (url: string) => {
-  window.open(url, '_blank')
+  if (url) {
+    window.open(url, '_blank')
+  }
 }
+
+const refreshData = async () => {
+  await Promise.all([loadProjects(), loadStats()])
+}
+
+onMounted(() => {
+  refreshData()
+})
 </script>

@@ -10,16 +10,16 @@
         <span>返回</span>
       </button>
       <div class="flex-1">
-        <h1 class="section-header">{{ project?.name }}</h1>
+        <h1 class="section-header">{{ project?.project_name }}</h1>
         <p class="text-xs text-apple-500 mt-1">{{ project?.namespace }}</p>
       </div>
       <span
         :class="[
           'badge',
-          project?.reviewEnabled ? 'badge-success' : 'bg-apple-200 text-apple-700'
+          project?.review_enabled ? 'badge-success' : 'bg-apple-200 text-apple-700'
         ]"
       >
-        {{ project?.reviewEnabled ? '审查已开启' : '审查已关闭' }}
+        {{ project?.review_enabled ? '审查已开启' : '审查已关闭' }}
       </span>
     </div>
 
@@ -34,7 +34,7 @@
               <div class="space-y-4">
                 <div>
                   <div class="text-xs font-medium text-apple-600 mb-1 uppercase tracking-wide">项目名称</div>
-                  <div class="text-sm text-apple-900">{{ project?.name }}</div>
+                  <div class="text-sm text-apple-900">{{ project?.project_name }}</div>
                 </div>
                 <div>
                   <div class="text-xs font-medium text-apple-600 mb-1 uppercase tracking-wide">命名空间</div>
@@ -43,9 +43,9 @@
                 <div>
                   <div class="text-xs font-medium text-apple-600 mb-1 uppercase tracking-wide">Webhook URL</div>
                   <div class="flex items-center gap-2">
-                    <span class="text-sm text-apple-blue-600 truncate">{{ project?.webhookUrl }}</span>
+                    <span class="text-sm text-apple-blue-600 truncate">{{ project?.webhook_url }}</span>
                     <button
-                      @click="openWebhookUrl(project?.webhookUrl)"
+                      @click="openWebhookUrl(project?.webhook_url)"
                       class="flex-shrink-0 text-apple-600 hover:text-apple-blue-600 transition-colors"
                     >
                       <ExternalLink class="w-4 h-4" />
@@ -56,17 +56,17 @@
               <div class="space-y-4">
                 <div>
                   <div class="text-xs font-medium text-apple-600 mb-1 uppercase tracking-wide">创建时间</div>
-                  <div class="text-sm text-apple-900">{{ project?.createdAt }}</div>
+                  <div class="text-sm text-apple-900">{{ project?.created_at ? new Date(project.created_at).toLocaleDateString() : '未知' }}</div>
                 </div>
                 <div>
                   <div class="text-xs font-medium text-apple-600 mb-1 uppercase tracking-wide">最后活动</div>
-                  <div class="text-sm text-apple-900">{{ project?.lastActivity }}</div>
+                  <div class="text-sm text-apple-900">{{ project?.last_activity || '未知' }}</div>
                 </div>
                 <div>
                   <div class="text-xs font-medium text-apple-600 mb-1 uppercase tracking-wide">团队成员</div>
                   <div class="flex items-center gap-2">
                     <Users class="w-4 h-4 text-apple-600" />
-                    <span class="text-sm text-apple-900">{{ project?.membersCount }} 成员</span>
+                    <span class="text-sm text-apple-900">{{ project?.members_count || 0 }} 成员</span>
                   </div>
                 </div>
               </div>
@@ -165,7 +165,7 @@
                   <GitCommit class="w-4 h-4" />
                   <span>总提交数</span>
                 </div>
-                <span class="text-sm font-semibold text-apple-900">{{ project?.commitsCount }}</span>
+                <span class="text-sm font-semibold text-apple-900">{{ project?.commits_count || 0 }}</span>
               </div>
 
               <div class="divider"></div>
@@ -175,7 +175,7 @@
                   <GitPullRequest class="w-4 h-4" />
                   <span>合并请求</span>
                 </div>
-                <span class="text-sm font-semibold text-apple-900">{{ project?.mrCount }}</span>
+                <span class="text-sm font-semibold text-apple-900">{{ project?.mr_count || 0 }}</span>
               </div>
 
               <div class="divider"></div>
@@ -185,7 +185,7 @@
                   <CheckCircle2 class="w-4 h-4" />
                   <span>审查完成</span>
                 </div>
-                <span class="text-sm font-semibold text-green-600">{{ projectStats.reviewsCompleted }}</span>
+                <span class="text-sm font-semibold text-green-600">{{ projectStats?.reviews?.completed || 0 }}</span>
               </div>
 
               <div class="divider"></div>
@@ -193,9 +193,9 @@
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2 text-xs text-apple-600">
                   <AlertCircle class="w-4 h-4" />
-                  <span>发现问题</span>
+                  <span>本周审查</span>
                 </div>
-                <span class="text-sm font-semibold text-orange-600">{{ projectStats.issuesFound }}</span>
+                <span class="text-sm font-semibold text-orange-600">{{ projectStats?.reviews?.weekly || 0 }}</span>
               </div>
 
               <div class="divider"></div>
@@ -205,7 +205,7 @@
                   <TrendingUp class="w-4 h-4" />
                   <span>审查成功率</span>
                 </div>
-                <span class="text-sm font-semibold text-apple-blue-600">{{ projectStats.successRate }}%</span>
+                <span class="text-sm font-semibold text-apple-blue-600">{{ projectStats?.reviews?.completion_rate?.toFixed(1) || 0 }}%</span>
               </div>
             </div>
           </div>
@@ -238,21 +238,26 @@
           <div class="p-6 space-y-3">
             <button
               @click="toggleReview"
+              :disabled="loading"
               class="btn-primary w-full"
             >
               <Power class="w-4 h-4" />
-              <span>{{ project?.reviewEnabled ? '关闭审查' : '开启审查' }}</span>
+              <span>{{ project?.review_enabled ? '关闭审查' : '开启审查' }}</span>
             </button>
             <button
-              @click="openWebhookUrl(project?.webhookUrl)"
+              @click="openWebhookUrl(project?.webhook_url)"
               class="btn-secondary w-full"
             >
               <ExternalLink class="w-4 h-4" />
               <span>查看 GitLab</span>
             </button>
-            <button class="btn-ghost w-full">
+            <button
+              @click="refreshData"
+              :disabled="loading"
+              class="btn-ghost w-full"
+            >
               <Settings class="w-4 h-4" />
-              <span>项目配置</span>
+              <span>{{ loading ? '刷新中...' : '刷新数据' }}</span>
             </button>
           </div>
         </div>
@@ -283,87 +288,160 @@ import {
   AlertTriangle,
   XCircle
 } from 'lucide-vue-next'
+import {
+  getProjectDetail,
+  getProjectWebhookLogs,
+  getProjectReviewHistory,
+  enableProjectReview,
+  disableProjectReview
+} from '@/api'
 
 const route = useRoute()
 const router = useRouter()
 
 const reviewChartRef = ref<HTMLElement>()
 const issueChartRef = ref<HTMLElement>()
+const loading = ref(false)
 
-const project = ref({
-  id: 1,
-  name: 'Code-Review-GPT-Gitlab',
-  namespace: 'DevOps / AI Tools',
-  description: 'AI-powered code review tool for GitLab merge requests using LLM models',
-  reviewEnabled: true,
-  commitsCount: 324,
-  mrCount: 45,
-  membersCount: 8,
-  lastActivity: '2 分钟前',
-  webhookUrl: 'https://gitlab.com/devops/code-review-gpt',
-  createdAt: '2024-01-15'
-})
+const project = ref<any>(null)
+const projectStats = ref<any>(null)
+const recentEvents = ref<any[]>([])
+const topContributors = ref<any[]>([])
 
-const projectStats = ref({
-  reviewsCompleted: 145,
-  issuesFound: 267,
-  successRate: 96.5
-})
+const loadProjectDetail = async () => {
+  try {
+    loading.value = true
+    const projectId = route.params.id as string
+    const response = await getProjectDetail(projectId)
 
-const recentEvents = ref([
-  {
-    type: 'merge',
-    title: 'Merge Request #123 已审查',
-    description: 'feat: Add project management module',
-    author: '张三',
-    branch: 'feature/project-manage',
-    status: '通过',
-    time: '2 分钟前'
-  },
-  {
-    type: 'commit',
-    title: '新的提交已推送',
-    description: 'fix: Resolve authentication bug',
-    author: '李四',
-    branch: 'fix/auth-bug',
-    status: '待审查',
-    time: '15 分钟前'
-  },
-  {
-    type: 'issue',
-    title: '发现代码问题',
-    description: '检测到潜在的安全漏洞',
-    author: '王五',
-    branch: 'develop',
-    status: '警告',
-    time: '1 小时前'
-  },
-  {
-    type: 'merge',
-    title: 'Merge Request #122 已审查',
-    description: 'refactor: Improve error handling',
-    author: '赵六',
-    branch: 'refactor/error-handling',
-    status: '通过',
-    time: '3 小时前'
-  },
-  {
-    type: 'error',
-    title: '审查失败',
-    description: 'LLM API 调用超时',
-    author: '钱七',
-    branch: 'feature/new-feature',
-    status: '失败',
-    time: '5 小时前'
+    if (response.data && response.data.project) {
+      project.value = response.data.project
+      projectStats.value = response.data.stats
+    }
+  } catch (error) {
+    console.error('Failed to load project detail:', error)
+    alert('加载项目详情失败')
+  } finally {
+    loading.value = false
   }
-])
+}
 
-const topContributors = ref([
-  { name: '张三', initials: 'ZS', commits: 142 },
-  { name: '李四', initials: 'LS', commits: 98 },
-  { name: '王五', initials: 'WW', commits: 76 },
-  { name: '赵六', initials: 'ZL', commits: 54 }
-])
+const loadRecentEvents = async () => {
+  try {
+    const projectId = route.params.id as string
+    const response = await getProjectWebhookLogs(projectId, { limit: 10 })
+
+    if (response.data && response.data.logs) {
+      recentEvents.value = response.data.logs.map((log: any) => ({
+        type: log.event_type,
+        title: getEventTitle(log.event_type, log.merge_request_iid),
+        description: getEventDescription(log.event_type, log.object_attributes),
+        author: log.user_name,
+        branch: log.source_branch || log.target_branch,
+        status: getEventStatus(log.event_type, log.processed),
+        time: formatTimeAgo(log.created_at)
+      }))
+    }
+  } catch (error) {
+    console.error('Failed to load recent events:', error)
+  }
+}
+
+const loadReviewHistory = async () => {
+  try {
+    const projectId = route.params.id as string
+    const response = await getProjectReviewHistory(projectId, { limit: 20, days: 30 })
+
+    if (response.data && response.data.reviews) {
+      // Process review history to create charts data
+      processReviewData(response.data.reviews)
+    }
+  } catch (error) {
+    console.error('Failed to load review history:', error)
+  }
+}
+
+const getEventTitle = (eventType: string, mrIid?: number) => {
+  const titleMap: Record<string, string> = {
+    'merge_request': `Merge Request #${mrIid} 已审查`,
+    'push': '新的提交已推送',
+    'issue': '发现代码问题',
+    'note': '新增评论'
+  }
+  return titleMap[eventType] || '未知事件'
+}
+
+const getEventDescription = (eventType: string, objectAttributes?: any) => {
+  if (eventType === 'merge_request' && objectAttributes) {
+    return objectAttributes.title || '合并请求'
+  }
+  if (eventType === 'push' && objectAttributes) {
+    return objectAttributes.message || '代码提交'
+  }
+  return '事件描述'
+}
+
+const getEventStatus = (eventType: string, processed: boolean) => {
+  if (!processed) return '处理中'
+
+  const statusMap: Record<string, string> = {
+    'merge_request': '通过',
+    'push': '已推送',
+    'issue': '警告',
+    'note': '已评论'
+  }
+  return statusMap[eventType] || '完成'
+}
+
+const formatTimeAgo = (timestamp: string) => {
+  const date = new Date(timestamp)
+  const now = new Date()
+  const diff = now.getTime() - date.getTime()
+
+  const minutes = Math.floor(diff / 60000)
+  const hours = Math.floor(diff / 3600000)
+  const days = Math.floor(diff / 86400000)
+
+  if (minutes < 1) return '刚刚'
+  if (minutes < 60) return `${minutes} 分钟前`
+  if (hours < 24) return `${hours} 小时前`
+  if (days < 30) return `${days} 天前`
+
+  return date.toLocaleDateString()
+}
+
+const processReviewData = (reviews: any[]) => {
+  // Process reviews to create charts data
+  const dailyStats: Record<string, number> = {}
+  const issueTypes: Record<string, number> = {}
+
+  reviews.forEach(review => {
+    const date = new Date(review.created_at).toLocaleDateString()
+    dailyStats[date] = (dailyStats[date] || 0) + 1
+
+    // Analyze review content for issue types
+    if (review.review_content) {
+      const content = review.review_content.toLowerCase()
+      if (content.includes('security') || content.includes('安全')) {
+        issueTypes['安全问题'] = (issueTypes['安全问题'] || 0) + 1
+      } else if (content.includes('performance') || content.includes('性能')) {
+        issueTypes['性能优化'] = (issueTypes['性能优化'] || 0) + 1
+      } else if (content.includes('style') || content.includes('规范')) {
+        issueTypes['代码规范'] = (issueTypes['代码规范'] || 0) + 1
+      } else {
+        issueTypes['代码质量'] = (issueTypes['代码质量'] || 0) + 1
+      }
+    }
+  })
+
+  // Update charts with real data
+  updateChartsWithData(dailyStats, issueTypes)
+}
+
+const updateChartsWithData = (dailyStats: Record<string, number>, issueTypes: Record<string, number>) => {
+  // This will be called after data is loaded to update charts
+  // Implementation depends on chart initialization
+}
 
 const getEventIcon = (type: string) => {
   const iconMap: Record<string, any> = {
@@ -500,9 +578,30 @@ const goBack = () => {
   router.push('/projects')
 }
 
-const toggleReview = () => {
-  if (project.value) {
-    project.value.reviewEnabled = !project.value.reviewEnabled
+const toggleReview = async () => {
+  if (!project.value) return
+
+  try {
+    const projectId = project.value.project_id
+    const originalStatus = project.value.review_enabled
+    project.value.review_enabled = !originalStatus
+
+    try {
+      if (project.value.review_enabled) {
+        await enableProjectReview(projectId.toString())
+        alert('已启用代码审查')
+      } else {
+        await disableProjectReview(projectId.toString())
+        alert('已禁用代码审查')
+      }
+    } catch (apiError) {
+      // Revert on API error
+      project.value.review_enabled = originalStatus
+      throw apiError
+    }
+  } catch (error) {
+    console.error('Failed to toggle review:', error)
+    alert('操作失败，请重试')
   }
 }
 
@@ -512,8 +611,15 @@ const openWebhookUrl = (url?: string) => {
   }
 }
 
+const refreshData = async () => {
+  await Promise.all([
+    loadProjectDetail(),
+    loadRecentEvents(),
+    loadReviewHistory()
+  ])
+}
+
 onMounted(() => {
-  initReviewChart()
-  initIssueChart()
+  refreshData()
 })
 </script>

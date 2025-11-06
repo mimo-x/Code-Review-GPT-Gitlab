@@ -116,6 +116,74 @@
            text-xs font-medium bg-apple-100 text-apple-700
            hover:bg-apple-200 transition-colors duration-200;
   }
+
+  /* Configuration Page Styles */
+  .config-tabs {
+    @apply border-b border-apple-200/50;
+  }
+
+  .config-tab {
+    @apply py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200;
+  }
+
+  .config-tab-active {
+    @apply border-apple-blue-500 text-apple-blue-600;
+  }
+
+  .config-tab-inactive {
+    @apply border-transparent text-apple-500 hover:text-apple-700 hover:border-apple-300;
+  }
+
+  .config-section {
+    @apply bg-white/60 backdrop-blur-2xl rounded-2xl shadow-apple border border-apple-200/50;
+  }
+
+  .config-field-group {
+    @apply space-y-1;
+  }
+
+  .config-label {
+    @apply block text-sm font-medium text-apple-700 mb-2;
+  }
+
+  .config-toggle {
+    @apply relative inline-flex items-center cursor-pointer;
+  }
+
+  .config-toggle-input {
+    @apply sr-only;
+  }
+
+  .config-toggle-slider {
+    @apply w-11 h-6 bg-gray-200 rounded-full transition-colors duration-200 ease-in-out;
+  }
+
+  .config-toggle-slider::after {
+    content: '';
+    @apply absolute top-0.5 left-[2px] bg-white border border-gray-300 rounded-full h-5 w-5 transition-transform duration-200 ease-in-out;
+  }
+
+  input:checked ~ .config-toggle-slider {
+    @apply bg-apple-blue-500;
+  }
+
+  input:checked ~ .config-toggle-slider::after {
+    @apply translate-x-full border-white;
+  }
+
+  /* Loading State */
+  .loading-spinner {
+    @apply animate-spin rounded-full h-4 w-4 border-2 border-apple-200 border-t-apple-blue-500;
+  }
+
+  /* Form Validation */
+  .input-field-error {
+    @apply border-red-300 focus:ring-red-500/20 focus:border-red-500;
+  }
+
+  .error-message {
+    @apply text-red-600 text-sm mt-1;
+  }
 }
 
 /* Custom Scrollbar - Apple Style */

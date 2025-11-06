@@ -1,9 +1,10 @@
 import request from '@/utils/request'
+import { API_ENDPOINTS, getApiUrl } from '@/config/api'
 
 // 统计数据
 export const getStatistics = () => {
   return request({
-    url: '/statistics',
+    url: getApiUrl(API_ENDPOINTS.STATISTICS),
     method: 'get'
   })
 }
@@ -11,7 +12,7 @@ export const getStatistics = () => {
 // 审查记录列表
 export const getReviews = (params?: any) => {
   return request({
-    url: '/reviews',
+    url: getApiUrl(API_ENDPOINTS.REVIEWS),
     method: 'get',
     params
   })
@@ -20,7 +21,7 @@ export const getReviews = (params?: any) => {
 // 审查详情
 export const getReviewDetail = (id: string) => {
   return request({
-    url: `/reviews/${id}`,
+    url: getApiUrl(API_ENDPOINTS.REVIEW_DETAIL(id)),
     method: 'get'
   })
 }
@@ -28,7 +29,7 @@ export const getReviewDetail = (id: string) => {
 // 配置信息
 export const getConfig = () => {
   return request({
-    url: '/config',
+    url: getApiUrl(API_ENDPOINTS.CONFIG),
     method: 'get'
   })
 }
@@ -36,7 +37,24 @@ export const getConfig = () => {
 // 更新配置
 export const updateConfig = (data: any) => {
   return request({
-    url: '/config',
+    url: getApiUrl(API_ENDPOINTS.CONFIG),
+    method: 'post',
+    data
+  })
+}
+
+// 获取配置摘要
+export const getConfigSummary = () => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.CONFIG_SUMMARY),
+    method: 'get'
+  })
+}
+
+// 批量更新配置
+export const batchUpdateConfig = (data: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.CONFIG_BATCH_UPDATE),
     method: 'post',
     data
   })
@@ -45,7 +63,7 @@ export const updateConfig = (data: any) => {
 // 日志列表
 export const getLogs = (params?: any) => {
   return request({
-    url: '/logs',
+    url: getApiUrl(API_ENDPOINTS.LOGS),
     method: 'get',
     params
   })
@@ -54,7 +72,7 @@ export const getLogs = (params?: any) => {
 // 系统信息
 export const getSystemInfo = () => {
   return request({
-    url: '/system/info',
+    url: getApiUrl(API_ENDPOINTS.SYSTEM_INFO),
     method: 'get'
   })
 }
@@ -62,7 +80,7 @@ export const getSystemInfo = () => {
 // Webhook 测试
 export const testWebhook = (data: any) => {
   return request({
-    url: '/test/webhook',
+    url: getApiUrl(API_ENDPOINTS.WEBHOOK_TEST),
     method: 'post',
     data
   })
@@ -71,7 +89,7 @@ export const testWebhook = (data: any) => {
 // 项目管理 - 获取项目列表
 export const getProjects = (params?: any) => {
   return request({
-    url: '/projects',
+    url: getApiUrl(API_ENDPOINTS.PROJECTS),
     method: 'get',
     params
   })
@@ -80,33 +98,74 @@ export const getProjects = (params?: any) => {
 // 项目管理 - 获取项目详情
 export const getProjectDetail = (id: string) => {
   return request({
-    url: `/projects/${id}`,
+    url: getApiUrl(API_ENDPOINTS.PROJECT_DETAIL(id)),
     method: 'get'
   })
 }
 
-// 项目管理 - 切换项目审查状态
-export const toggleProjectReview = (id: string, enabled: boolean) => {
+// 项目管理 - 启用项目审查
+export const enableProjectReview = (id: string) => {
   return request({
-    url: `/projects/${id}/review`,
-    method: 'post',
-    data: { enabled }
+    url: getApiUrl(API_ENDPOINTS.PROJECT_ENABLE(id)),
+    method: 'post'
   })
 }
 
-// 项目管理 - 获取项目事件列表
-export const getProjectEvents = (id: string, params?: any) => {
+// 项目管理 - 禁用项目审查
+export const disableProjectReview = (id: string) => {
   return request({
-    url: `/projects/${id}/events`,
+    url: getApiUrl(API_ENDPOINTS.PROJECT_DISABLE(id)),
+    method: 'post'
+  })
+}
+
+// 项目管理 - 更新项目设置
+export const updateProject = (id: string, data: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.PROJECT_UPDATE(id)),
+    method: 'patch',
+    data
+  })
+}
+
+// 项目管理 - 获取项目webhook日志
+export const getProjectWebhookLogs = (id: string, params?: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.PROJECT_WEBHOOK_LOGS(id)),
     method: 'get',
     params
   })
 }
 
-// 项目管理 - 获取项目统计数据
-export const getProjectStats = (id: string) => {
+// 项目管理 - 获取项目审查历史
+export const getProjectReviewHistory = (id: string, params?: any) => {
   return request({
-    url: `/projects/${id}/stats`,
+    url: getApiUrl(API_ENDPOINTS.PROJECT_REVIEW_HISTORY(id)),
+    method: 'get',
+    params
+  })
+}
+
+// 项目管理 - 获取所有项目的统计数据
+export const getAllProjectStats = () => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.PROJECT_STATS),
+    method: 'get'
+  })
+}
+
+// Mock API - 获取审查记录
+export const getMockReviews = () => {
+  return request({
+    url: getApiUrl('/webhook/projects/mock/reviews/'),
+    method: 'get'
+  })
+}
+
+// Mock API - 获取日志记录
+export const getMockLogs = () => {
+  return request({
+    url: getApiUrl('/webhook/projects/mock/logs/'),
     method: 'get'
   })
 }

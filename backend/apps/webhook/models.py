@@ -1,12 +1,13 @@
-from djongo import models
+from django.db import models
 from django.utils import timezone
+import json
 
 
 class Project(models.Model):
     """
     Model to store GitLab project information
     """
-    _id = models.ObjectIdField()
+    id = models.AutoField(primary_key=True)
     project_id = models.IntegerField(unique=True, db_index=True)
     project_name = models.CharField(max_length=255)
     project_path = models.CharField(max_length=500)
@@ -17,12 +18,12 @@ class Project(models.Model):
     review_enabled = models.BooleanField(default=False, db_index=True)
     auto_review_on_mr = models.BooleanField(default=True)
 
-    # Additional settings
-    exclude_file_types = models.JSONField(default=list, blank=True)
-    ignore_file_patterns = models.JSONField(default=list, blank=True)
+    # Additional settings - SQLite兼容的JSON字段
+    exclude_file_types = models.TextField(default='[]', blank=True)
+    ignore_file_patterns = models.TextField(default='[]', blank=True)
 
-    # Metadata
-    gitlab_data = models.JSONField(default=dict, blank=True)
+    # Metadata - SQLite兼容的JSON字段
+    gitlab_data = models.TextField(default='{}', blank=True)
 
     # Timestamps
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
@@ -40,12 +41,46 @@ class Project(models.Model):
     def __str__(self):
         return f"{self.project_name} (ID: {self.project_id}) - Review: {'ON' if self.review_enabled else 'OFF'}"
 
+    # JSON字段的getter和setter方法
+    @property
+    def exclude_file_types_list(self):
+        try:
+            return json.loads(self.exclude_file_types)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    @exclude_file_types_list.setter
+    def exclude_file_types_list(self, value):
+        self.exclude_file_types = json.dumps(value)
+
+    @property
+    def ignore_file_patterns_list(self):
+        try:
+            return json.loads(self.ignore_file_patterns)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    @ignore_file_patterns_list.setter
+    def ignore_file_patterns_list(self, value):
+        self.ignore_file_patterns = json.dumps(value)
+
+    @property
+    def gitlab_data_dict(self):
+        try:
+            return json.loads(self.gitlab_data)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
+    @gitlab_data_dict.setter
+    def gitlab_data_dict(self, value):
+        self.gitlab_data = json.dumps(value)
+
 
 class WebhookLog(models.Model):
     """
     Model to store webhook event logs
     """
-    _id = models.ObjectIdField()
+    id = models.AutoField(primary_key=True)
     event_type = models.CharField(max_length=100, db_index=True)
     project_id = models.IntegerField(db_index=True)
     project_name = models.CharField(max_length=255)
@@ -54,7 +89,17 @@ class WebhookLog(models.Model):
     user_email = models.EmailField()
     source_branch = models.CharField(max_length=255)
     target_branch = models.CharField(max_length=255)
-    payload = models.JSONField()
+
+    # SQLite兼容的JSON字段
+    payload = models.TextField(default='{}')
+
+    # HTTP请求元数据
+    request_headers = models.TextField(default='{}')  # JSON格式存储请求头
+    request_body_raw = models.TextField(default='')   # 原始请求体
+    remote_addr = models.GenericIPAddressField(null=True, blank=True)  # 客户端IP
+    user_agent = models.TextField(null=True, blank=True)  # User-Agent
+    request_id = models.CharField(max_length=100, null=True, blank=True, db_index=True)  # 请求追踪ID
+
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
     processed = models.BooleanField(default=False)
     processed_at = models.DateTimeField(null=True, blank=True)
@@ -66,17 +111,42 @@ class WebhookLog(models.Model):
         indexes = [
             models.Index(fields=['event_type', 'created_at']),
             models.Index(fields=['project_id', 'merge_request_iid']),
+            models.Index(fields=['request_id']),
+            models.Index(fields=['remote_addr']),
         ]
 
     def __str__(self):
         return f"{self.event_type} - {self.project_name} - MR#{self.merge_request_iid}"
+
+    # JSON字段的getter和setter方法
+    @property
+    def payload_dict(self):
+        try:
+            return json.loads(self.payload)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
+    @payload_dict.setter
+    def payload_dict(self, value):
+        self.payload = json.dumps(value)
+
+    @property
+    def request_headers_dict(self):
+        try:
+            return json.loads(self.request_headers)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
+    @request_headers_dict.setter
+    def request_headers_dict(self, value):
+        self.request_headers = json.dumps(value)
 
 
 class MergeRequestReview(models.Model):
     """
     Model to store merge request review results
     """
-    _id = models.ObjectIdField()
+    id = models.AutoField(primary_key=True)
     project_id = models.IntegerField(db_index=True)
     project_name = models.CharField(max_length=255)
     merge_request_iid = models.IntegerField(db_index=True)
@@ -89,7 +159,7 @@ class MergeRequestReview(models.Model):
     # Review results
     review_content = models.TextField()
     review_score = models.IntegerField(null=True, blank=True)
-    files_reviewed = models.JSONField(default=list)
+    files_reviewed = models.TextField(default='[]', blank=True)  # SQLite兼容的JSON字段
     total_files = models.IntegerField(default=0)
 
     # Status tracking
@@ -128,3 +198,15 @@ class MergeRequestReview(models.Model):
 
     def __str__(self):
         return f"{self.project_name} - MR#{self.merge_request_iid} - {self.status}"
+
+    # JSON字段的getter和setter方法
+    @property
+    def files_reviewed_list(self):
+        try:
+            return json.loads(self.files_reviewed)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    @files_reviewed_list.setter
+    def files_reviewed_list(self, value):
+        self.files_reviewed = json.dumps(value)

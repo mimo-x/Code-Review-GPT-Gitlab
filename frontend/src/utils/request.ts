@@ -1,13 +1,11 @@
 import axios from 'axios'
 import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
-import { ElMessage } from 'element-plus'
+import { API_CONFIG } from '@/config/api'
 
 const service: AxiosInstance = axios.create({
-  baseURL: '/api',
-  timeout: 30000,
-  headers: {
-    'Content-Type': 'application/json'
-  }
+  baseURL: API_CONFIG.BASE_URL,
+  timeout: API_CONFIG.TIMEOUT,
+  headers: API_CONFIG.HEADERS
 })
 
 // 请求拦截器
@@ -31,7 +29,7 @@ service.interceptors.response.use(
       return data
     }
 
-    ElMessage.error(data.message || '请求失败')
+    alert(data.message || '请求失败')
     return Promise.reject(new Error(data.message || 'Error'))
   },
   (error) => {
@@ -41,22 +39,22 @@ service.interceptors.response.use(
       const { status } = error.response
       switch (status) {
         case 401:
-          ElMessage.error('未授权，请重新登录')
+          alert('未授权，请重新登录')
           break
         case 403:
-          ElMessage.error('拒绝访问')
+          alert('拒绝访问')
           break
         case 404:
-          ElMessage.error('请求地址不存在')
+          alert('请求地址不存在')
           break
         case 500:
-          ElMessage.error('服务器内部错误')
+          alert('服务器内部错误')
           break
         default:
-          ElMessage.error(error.response.data?.message || '请求失败')
+          alert(error.response.data?.message || '请求失败')
       }
     } else {
-      ElMessage.error('网络连接失败')
+      alert('网络连接失败')
     }
 
     return Promise.reject(error)

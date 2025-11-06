@@ -64,21 +64,32 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'core.wsgi.application'
 
-# Database - MongoDB configuration
+# Database - SQLite configuration
 DATABASES = {
     'default': {
-        'ENGINE': 'djongo',
-        'NAME': os.environ.get('MONGODB_NAME', 'code_review_gpt'),
-        'CLIENT': {
-            'host': os.environ.get('MONGODB_HOST', 'localhost'),
-            'port': int(os.environ.get('MONGODB_PORT', 27017)),
-            'username': os.environ.get('MONGODB_USER', ''),
-            'password': os.environ.get('MONGODB_PASSWORD', ''),
-            'authSource': os.environ.get('MONGODB_AUTH_SOURCE', 'admin'),
-            'authMechanism': 'SCRAM-SHA-1'
-        }
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
     }
 }
+
+# 可选：如果需要同时支持MongoDB（通过环境变量切换）
+USE_MONGODB = os.environ.get('USE_MONGODB', 'False').lower() == 'true'
+
+if USE_MONGODB:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'djongo',
+            'NAME': os.environ.get('MONGODB_NAME', 'code_review_gpt'),
+            'CLIENT': {
+                'host': os.environ.get('MONGODB_HOST', 'localhost'),
+                'port': int(os.environ.get('MONGODB_PORT', 27017)),
+                'username': os.environ.get('MONGODB_USER', ''),
+                'password': os.environ.get('MONGODB_PASSWORD', ''),
+                'authSource': os.environ.get('MONGODB_AUTH_SOURCE', 'admin'),
+                'authMechanism': 'SCRAM-SHA-1'
+            }
+        }
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -123,8 +134,35 @@ REST_FRAMEWORK = {
 }
 
 # CORS settings
+# 开发环境允许所有源，生产环境需要配置具体的允许源
 CORS_ALLOW_ALL_ORIGINS = DEBUG
-CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if not DEBUG else []
+CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:5173,http://localhost:5175,http://127.0.0.1:5175').split(',') if not DEBUG else []
+
+# 更详细的CORS配置
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'x-gitlab-token'
+]
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT'
+]
+
+# 设置CORS预检请求缓存时间
+CORS_PREFLIGHT_MAX_AGE = 86400
 
 # Logging
 LOGGING = {

@@ -42,7 +42,15 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200">
-            <tr v-for="review in filteredReviews" :key="review.id" class="hover:bg-gray-50">
+            <tr v-if="loading">
+              <td colspan="10" class="px-6 py-12 text-center text-gray-500">
+                <div class="flex items-center justify-center">
+                  <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                  <span class="ml-2">加载中...</span>
+                </div>
+              </td>
+            </tr>
+            <tr v-else v-for="review in filteredReviews" :key="review.id" class="hover:bg-gray-50">
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ review.id }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm">
                 <span class="badge-info">!{{ review.mrId }}</span>
@@ -51,7 +59,7 @@
               <td class="px-6 py-4 text-sm text-gray-800 max-w-xs truncate">{{ review.title }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ review.author }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm">
-                <span :class="getStatusBadge(review.status)">{{ review.status }}</span>
+                <span :class="getStatusBadge(review.status)">{{ review.statusText }}</span>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ review.llmModel }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-center">
@@ -62,11 +70,9 @@
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ review.createdAt }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-end text-sm font-medium">
-                <button @click="viewDetail(review.id)" class="text-blue-600 hover:text-blue-800 mr-3">
-                  查看详情
-                </button>
-                <button @click="openGitlab(review.mrUrl)" class="text-gray-600 hover:text-gray-800">
-                  <ExternalLink class="w-4 h-4 inline" />
+                <button @click="openGitlab(review.mrUrl)" class="btn-primary inline-flex items-center gap-2">
+                  <ExternalLink class="w-4 h-4" />
+                  查看 MR
                 </button>
               </td>
             </tr>
@@ -92,77 +98,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
 import { Search, ExternalLink } from 'lucide-vue-next'
-
-const router = useRouter()
+import { getReviews } from '@/api/index'
 
 const searchText = ref('')
-const totalReviews = ref(100)
-
-const reviewsList = ref([
-  {
-    id: 1,
-    mrId: 123,
-    project: 'Code-Review-GPT-Gitlab',
-    title: 'feat: 添加前端管理界面',
-    author: 'developer',
-    status: '已完成',
-    llmModel: 'GPT-4',
-    issuesCount: 3,
-    createdAt: '2025-01-15 10:30',
-    mrUrl: 'https://gitlab.com/project/merge_requests/123'
-  },
-  {
-    id: 2,
-    mrId: 122,
-    project: 'Code-Review-GPT-Gitlab',
-    title: 'fix: 修复webhook处理bug',
-    author: 'admin',
-    status: '进行中',
-    llmModel: 'DeepSeek',
-    issuesCount: 0,
-    createdAt: '2025-01-15 09:15',
-    mrUrl: 'https://gitlab.com/project/merge_requests/122'
-  },
-  {
-    id: 3,
-    mrId: 121,
-    project: 'Code-Review-GPT-Gitlab',
-    title: 'refactor: 重构LLM调用逻辑',
-    author: 'developer',
-    status: '已完成',
-    llmModel: 'Claude',
-    issuesCount: 5,
-    createdAt: '2025-01-14 16:45',
-    mrUrl: 'https://gitlab.com/project/merge_requests/121'
-  },
-  {
-    id: 4,
-    mrId: 120,
-    project: 'Code-Review-GPT-Gitlab',
-    title: 'docs: 更新README文档',
-    author: 'admin',
-    status: '已完成',
-    llmModel: 'GPT-4',
-    issuesCount: 0,
-    createdAt: '2025-01-14 14:20',
-    mrUrl: 'https://gitlab.com/project/merge_requests/120'
-  },
-  {
-    id: 5,
-    mrId: 119,
-    project: 'Code-Review-GPT-Gitlab',
-    title: 'feat: 添加多智能体支持',
-    author: 'developer',
-    status: '失败',
-    llmModel: 'Gemini',
-    issuesCount: 12,
-    createdAt: '2025-01-14 11:05',
-    mrUrl: 'https://gitlab.com/project/merge_requests/119'
-  }
-])
+const loading = ref(false)
+const totalReviews = ref(0)
+const reviewsList = ref([])
 
 const filteredReviews = computed(() => {
   if (!searchText.value) return reviewsList.value
@@ -172,8 +115,32 @@ const filteredReviews = computed(() => {
   )
 })
 
+// 获取审核记录
+const fetchReviews = async () => {
+  loading.value = true
+  try {
+    const response = await getReviews()
+    if (response.data.status === 'success') {
+      reviewsList.value = response.data.results || []
+      totalReviews.value = response.data.total || response.data.count || 0
+    }
+  } catch (error) {
+    console.error('获取审核记录失败:', error)
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  fetchReviews()
+})
+
 const getStatusBadge = (status: string) => {
   const badgeMap: Record<string, string> = {
+    'completed': 'badge-success',
+    'processing': 'badge-info',
+    'failed': 'badge-danger',
+    'pending': 'badge-warning',
     '已完成': 'badge-success',
     '进行中': 'badge-info',
     '失败': 'badge-danger',
@@ -184,10 +151,6 @@ const getStatusBadge = (status: string) => {
 
 const handleSearch = () => {
   // Search logic
-}
-
-const viewDetail = (id: number) => {
-  router.push(`/reviews/${id}`)
 }
 
 const openGitlab = (url: string) => {
