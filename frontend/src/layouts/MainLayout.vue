@@ -164,14 +164,6 @@ import {
 const route = useRoute()
 const router = useRouter()
 
-const iconMap: Record<string, any> = {
-  'FileText': FileText,
-  'Settings': Settings,
-  'ScrollText': ScrollText,
-  'Info': Info,
-  'FolderKanban': FolderKanban
-}
-
 // Kept for future dynamic menu if needed
 // const menuRoutes = computed(() => {
 //   const routes = router.getRoutes()
@@ -183,13 +175,13 @@ const iconMap: Record<string, any> = {
 //       ...r,
 //       meta: {
 //         ...r.meta,
-//         icon: iconMap[r.meta?.icon as string] || LayoutDashboard
+//         icon: iconMap[r.meta?.icon as string] || FolderKanban
 //       }
 //     }))
 // })
 
 const currentTitle = computed(() => {
-  return route.meta.title || '首页'
+  return route.meta.title || '项目管理'
 })
 
 const isActiveRoute = (path: string) => {
