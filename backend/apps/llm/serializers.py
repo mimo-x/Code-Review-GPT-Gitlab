@@ -26,9 +26,13 @@ class GitLabConfigSerializer(serializers.ModelSerializer):
         model = GitLabConfig
         fields = ['id', 'server_url', 'private_token', 'max_files', 'context_lines', 'is_active', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
-        extra_kwargs = {
-            'private_token': {'write_only': True}
-        }
+
+    def to_representation(self, instance):
+        """自定义输出格式，返回完整的 private_token"""
+        data = super().to_representation(instance)
+        # 返回完整的 token，用于前端编辑
+        data['private_token'] = instance.private_token or ''
+        return data
 
     def create(self, validated_data):
         # 如果创建新的激活配置，先禁用其他配置

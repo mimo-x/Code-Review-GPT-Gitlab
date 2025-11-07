@@ -73,7 +73,33 @@
 
           <div class="md:col-span-2 config-field-group">
             <label class="config-label">API Key</label>
-            <input v-model="config.llm.apiKey" type="password" class="input-field" placeholder="请输入 API Key" />
+            <div class="relative">
+              <input
+                v-model="config.llm.apiKey"
+                :type="showLlmApiKey ? 'text' : 'password'"
+                class="input-field pr-20"
+                placeholder="请输入 API Key"
+              />
+              <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                <button
+                  type="button"
+                  @click="toggleVisibility('llmApiKey')"
+                  class="p-1.5 text-apple-500 hover:text-apple-700 hover:bg-apple-50 rounded transition-colors"
+                  :title="showLlmApiKey ? '隐藏' : '显示'"
+                >
+                  <Eye v-if="!showLlmApiKey" class="w-4 h-4" />
+                  <EyeOff v-else class="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  @click="copyToClipboard(config.llm.apiKey, 'API Key')"
+                  class="p-1.5 text-apple-500 hover:text-apple-700 hover:bg-apple-50 rounded transition-colors"
+                  title="复制"
+                >
+                  <Copy class="w-4 h-4" />
+                </button>
+              </div>
+            </div>
           </div>
 
           <div class="md:col-span-2 config-field-group">
@@ -100,7 +126,33 @@
 
           <div class="md:col-span-2 config-field-group">
             <label class="config-label">Access Token</label>
-            <input v-model="config.gitlab.privateToken" type="password" class="input-field" placeholder="GitLab Access Token" />
+            <div class="relative">
+              <input
+                v-model="config.gitlab.privateToken"
+                :type="showGitlabToken ? 'text' : 'password'"
+                class="input-field pr-20"
+                placeholder="GitLab Access Token"
+              />
+              <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                <button
+                  type="button"
+                  @click="toggleVisibility('gitlabToken')"
+                  class="p-1.5 text-apple-500 hover:text-apple-700 hover:bg-apple-50 rounded transition-colors"
+                  :title="showGitlabToken ? '隐藏' : '显示'"
+                >
+                  <Eye v-if="!showGitlabToken" class="w-4 h-4" />
+                  <EyeOff v-else class="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  @click="copyToClipboard(config.gitlab.privateToken, 'Access Token')"
+                  class="p-1.5 text-apple-500 hover:text-apple-700 hover:bg-apple-50 rounded transition-colors"
+                  title="复制"
+                >
+                  <Copy class="w-4 h-4" />
+                </button>
+              </div>
+            </div>
           </div>
 
           <div class="config-field-group">
@@ -219,7 +271,33 @@
               v-if="['dingtalk', 'feishu'].includes(channelForm.notification_type)"
             >
               <label class="config-label">Secret</label>
-              <input v-model="channelForm.secret" type="text" class="input-field" placeholder="可选：签名密钥" />
+              <div class="relative">
+                <input
+                  v-model="channelForm.secret"
+                  :type="showChannelSecret ? 'text' : 'password'"
+                  class="input-field pr-20"
+                  placeholder="可选：签名密钥"
+                />
+                <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  <button
+                    type="button"
+                    @click="toggleVisibility('channelSecret')"
+                    class="p-1.5 text-apple-500 hover:text-apple-700 hover:bg-apple-50 rounded transition-colors"
+                    :title="showChannelSecret ? '隐藏' : '显示'"
+                  >
+                    <Eye v-if="!showChannelSecret" class="w-4 h-4" />
+                    <EyeOff v-else class="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    @click="copyToClipboard(channelForm.secret, 'Secret')"
+                    class="p-1.5 text-apple-500 hover:text-apple-700 hover:bg-apple-50 rounded transition-colors"
+                    title="复制"
+                  >
+                    <Copy class="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             </div>
             <div class="flex items-center gap-4 md:col-span-2">
               <label class="flex items-center gap-2 text-xs text-apple-600">
@@ -250,7 +328,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
-import { Save, RotateCcw, CheckCircle, XCircle, PlusCircle, Pencil, Trash2 } from 'lucide-vue-next'
+import { Save, RotateCcw, CheckCircle, XCircle, PlusCircle, Pencil, Trash2, Eye, EyeOff, Copy } from 'lucide-vue-next'
 import {
   getConfigSummary,
   batchUpdateConfig,
@@ -265,6 +343,11 @@ const activeTab = ref('llm')
 const saving = ref(false)
 const message = ref('')
 const messageType = ref<'success' | 'error'>('success')
+
+// 密码字段显示/隐藏状态
+const showLlmApiKey = ref(false)
+const showGitlabToken = ref(false)
+const showChannelSecret = ref(false)
 
 const tabs = [
   { key: 'llm', label: 'LLM 配置' },
@@ -345,6 +428,37 @@ const showMessage = (text: string, type: 'success' | 'error' = 'success') => {
   setTimeout(() => {
     message.value = ''
   }, 3000)
+}
+
+// 切换密码显示/隐藏
+const toggleVisibility = (field: string) => {
+  switch (field) {
+    case 'llmApiKey':
+      showLlmApiKey.value = !showLlmApiKey.value
+      break
+    case 'gitlabToken':
+      showGitlabToken.value = !showGitlabToken.value
+      break
+    case 'channelSecret':
+      showChannelSecret.value = !showChannelSecret.value
+      break
+  }
+}
+
+// 复制到剪贴板
+const copyToClipboard = async (text: string, label: string) => {
+  if (!text) {
+    showMessage(`${label} 为空，无法复制`, 'error')
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(text)
+    showMessage(`${label} 已复制到剪贴板`)
+  } catch (error) {
+    console.error('Failed to copy:', error)
+    showMessage(`复制 ${label} 失败`, 'error')
+  }
 }
 
 const normalizeChannelList = (data: any) => {
