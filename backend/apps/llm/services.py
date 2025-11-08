@@ -105,86 +105,261 @@ class LLMService:
         except Exception as e:
             logger.error(f"[{self.request_id}] 设置环境变量失败: {e}", exc_info=True)
 
-    def review_code(self, code_context, mr_info=None):
+    def review_code(self, code_context, mr_info=None, repo_path=None, commit_range=None):
         """
-        Review code using LLM
+        Review code using Claude CLI (新版本)
+
+        Args:
+            code_context: 代码上下文（已弃用，保留用于向后兼容）
+            mr_info: MR 信息字典
+            repo_path: 本地仓库路径（使用 Claude CLI 时必需）
+            commit_range: Git 提交范围
+
+        Returns:
+            解析后的审查结果字典或错误消息字符串
         """
         import time
         start_time = time.time()
 
-        logger.info(f"[{self.request_id}] 开始代码审查 - 提供商:{self.provider}, 模型:{self.model}")
-        
-        # Validate API key
-        if not self.api_key:
-            error_msg = f"API密钥未配置，请检查配置（配置来源:{self.config_source}）"
+        logger.info(f"[{self.request_id}] 开始代码审查 - 使用 Claude CLI")
+        logger.info(f"[{self.request_id}] 仓库路径: {repo_path}")
+        logger.info(f"[{self.request_id}] 提交范围: {commit_range}")
+
+        # 检查是否提供了仓库路径
+        if not repo_path:
+            error_msg = "代码审查失败：未提供仓库路径，Claude CLI 需要本地仓库"
             logger.error(f"[{self.request_id}] {error_msg}")
-            return f"代码审查失败: {error_msg}"
-        
-        logger.info(f"[{self.request_id}] API密钥状态: {'已配置' if self.api_key else '未配置'} (长度:{len(self.api_key) if self.api_key else 0})")
+            return error_msg
 
         try:
-            # Import litellm for multiple provider support
-            import litellm
+            from apps.review.claude_cli_service import ClaudeCliService
+            from apps.review.review_result_parser import ReviewResultParser
 
-            # Build the prompt
-            prompt = self._build_prompt(code_context)
-            logger.debug(f"[{self.request_id}] Prompt长度: {len(prompt)} 字符")
+            # 初始化 Claude CLI 服务
+            cli_service = ClaudeCliService(request_id=self.request_id)
 
-            # 记录环境变量状态（不显示敏感信息）
-            env_status = []
-            if self.provider.lower() == 'openai':
-                env_status.append(f"OPENAI_API_KEY={'已设置' if os.environ.get('OPENAI_API_KEY') else '未设置'}")
-                if os.environ.get('OPENAI_API_BASE'):
-                    env_status.append(f"OPENAI_API_BASE={os.environ.get('OPENAI_API_BASE')}")
-            elif self.provider.lower() == 'deepseek':
-                env_status.append(f"DEEPSEEK_API_KEY={'已设置' if os.environ.get('DEEPSEEK_API_KEY') else '未设置'}")
-            elif self.provider.lower() == 'claude':
-                env_status.append(f"ANTHROPIC_API_KEY={'已设置' if os.environ.get('ANTHROPIC_API_KEY') else '未设置'}")
-            elif self.provider.lower() == 'gemini':
-                env_status.append(f"GOOGLE_API_KEY={'已设置' if os.environ.get('GOOGLE_API_KEY') else '未设置'}")
+            # 验证 Claude CLI 安装
+            is_valid, validation_error = cli_service.validate_cli_installation()
+            if not is_valid:
+                error_msg = f"代码审查失败：{validation_error}"
+                logger.error(f"[{self.request_id}] {error_msg}")
+                return error_msg
 
-            logger.info(f"[{self.request_id}] 使用环境变量初始化LLM客户端 - 提供商:{self.provider}, 模型:{self.model}, 环境变量:{', '.join(env_status)}")
+            # 构建自定义提示（如果提供了 MR 信息）
+            custom_prompt = None
+            if mr_info:
+                custom_prompt = self._build_claude_cli_prompt(mr_info)
 
-            messages = [
-                {"role": "system", "content": "你是一位资深的代码审查专家,擅长发现代码中的问题并提供建设性的改进建议。"},
-                {"role": "user", "content": prompt}
-            ]
-
-            logger.info(f"[{self.request_id}] 开始调用LLM API")
-            # 使用 litellm 进行调用
-            response = litellm.completion(
-                model=self.model,
-                messages=messages,
-                timeout=60
+            # 执行代码审查
+            success, result_data, error = cli_service.review_code(
+                repo_path=repo_path,
+                custom_prompt=custom_prompt,
+                commit_range=commit_range
             )
 
             elapsed_time = time.time() - start_time
 
-            if response and hasattr(response, 'choices') and len(response.choices) > 0:
-                review_content = response.choices[0].message.content
-                logger.info(f"[{self.request_id}] 代码审查完成 - 耗时:{elapsed_time:.2f}秒, 响应长度:{len(review_content)}字符")
-                return review_content
-            else:
-                logger.error(f"[{self.request_id}] LLM返回无效响应 - 耗时:{elapsed_time:.2f}秒")
-                return "代码审查失败：LLM返回无效响应"
+            if not success:
+                error_msg = f"代码审查失败: {error}"
+                logger.error(f"[{self.request_id}] {error_msg}")
+                return error_msg
 
-        except ImportError:
-            logger.error(f"[{self.request_id}] LiteLLM未安装，请安装: pip install litellm")
-            return "代码审查失败：LiteLLM库未安装，请安装 pip install litellm"
+            # 解析审查结果
+            parser = ReviewResultParser(request_id=self.request_id)
+            parsed_result = parser.parse(result_data)
+
+            logger.info(f"[{self.request_id}] 代码审查完成 - 耗时:{elapsed_time:.2f}秒")
+            logger.info(f"[{self.request_id}] 评分:{parsed_result['score']}, 问题数:{len(parsed_result['issues'])}")
+
+            return parsed_result
+
+        except ImportError as e:
+            logger.error(f"[{self.request_id}] 导入模块失败: {e}")
+            return f"代码审查失败：缺少必要的模块\n错误详情: {str(e)}"
         except Exception as e:
             elapsed_time = time.time() - start_time
             logger.error(f"[{self.request_id}] 代码审查异常 - 耗时:{elapsed_time:.2f}秒, 错误:{e}", exc_info=True)
+            return f"代码审查失败: {str(e)}"
 
-            # 提供更详细的错误信息
-            error_msg = str(e)
-            if "AuthenticationError" in error_msg or "api_key" in error_msg.lower():
-                logger.error(f"[{self.request_id}] 认证错误，请检查API密钥配置")
-                return "代码审查失败：API密钥认证失败，请检查配置"
-            elif "timeout" in error_msg.lower():
-                logger.error(f"[{self.request_id}] 请求超时")
-                return "代码审查失败：请求超时"
-            else:
-                return f"代码审查失败: {error_msg}"
+    def _build_claude_cli_prompt(self, mr_info):
+        """
+        构建 Claude CLI 的审查提示
+
+        Args:
+            mr_info: MR 信息字典
+
+        Returns:
+            格式化的提示文本
+        """
+        prompt_parts = [
+            f"请对这个 Merge Request 进行详细的代码审查：",
+            f"",
+            f"**MR 信息**",
+            f"- 标题: {mr_info.get('title', '未知')}",
+            f"- 作者: {mr_info.get('author', '未知')}",
+            f"- 源分支: {mr_info.get('source_branch', '未知')}",
+            f"- 目标分支: {mr_info.get('target_branch', '未知')}",
+        ]
+
+        if mr_info.get('description'):
+            prompt_parts.append(f"- 描述: {mr_info['description']}")
+
+        prompt_parts.extend([
+            f"",
+            f"**审查要求**",
+            f"请对本次代码变更进行全面、深入的分析，提供一份详细、有条理、结构清晰的审查报告。",
+            f"报告需要具有专业性和实用性，不仅要指出问题，还要提供具体的改进方案。",
+            f"",
+            f"## 📋 审查维度",
+            f"",
+            f"### 1. **安全风险评估** 🔒",
+            f"- **认证与授权**：权限校验、身份验证、会话管理",
+            f"- **输入验证**：参数校验、类型检查、边界条件处理",
+            f"- **数据安全**：SQL 注入、XSS、CSRF、路径遍历等漏洞",
+            f"- **敏感信息**：硬编码密钥、密码泄露、调试信息暴露",
+            f"- **API 安全**：接口权限、数据传输安全、错误信息泄露",
+            f"",
+            f"### 2. **代码质量评估** 💎",
+            f"- **架构设计**：模块划分、依赖关系、设计模式使用",
+            f"- **代码规范**：命名约定、代码格式、注释质量",
+            f"- **可读性**：逻辑清晰度、变量命名、函数设计",
+            f"- **一致性**：代码风格统一、接口设计一致",
+            f"- **复杂度**：圈复杂度、嵌套层级、函数长度",
+            f"",
+            f"### 3. **性能分析与优化** ⚡",
+            f"- **算法效率**：时间复杂度、空间复杂度优化",
+            f"- **数据库性能**：查询优化、索引使用、N+1 问题",
+            f"- **资源管理**：内存使用、文件操作、网络请求",
+            f"- **并发处理**：线程安全、异步处理、锁机制",
+            f"- **缓存策略**：缓存设计、失效机制、缓存命中率",
+            f"",
+            f"### 4. **可维护性与扩展性** 🔧",
+            f"- **模块化程度**：单一职责、接口抽象、依赖注入",
+            f"- **错误处理**：异常处理机制、错误恢复、日志记录",
+            f"- **配置管理**：配置分离、环境管理、配置验证",
+            f"- **测试友好**：单元测试、集成测试、Mock 设计",
+            f"- **文档完整性**：API 文档、注释质量、架构文档",
+            f"",
+            f"### 5. **业务逻辑审查** 🎯",
+            f"- **功能完整性**：需求覆盖、边界条件、异常场景",
+            f"- **数据一致性**：事务处理、数据校验、状态管理",
+            f"- **用户体验**：响应时间、错误提示、操作流程",
+            f"- **业务规则**：逻辑正确性、规则完整性、约束检查",
+            f"",
+            f"## 📝 报告输出格式要求",
+            f"",
+            f"请严格按照以下结构输出报告：",
+            f"",
+            f"```markdown",
+            f"# 📊 代码审查报告",
+            f"",
+            f"## 📋 审查概述",
+            f"- **MR 标题**：[填写 MR 标题]",
+            f"- **审查范围**：[列出主要变更文件]",
+            f"- **变更类型**：[新功能/修复/重构/优化]",
+            f"- **风险等级**：[高/中/低/无]",
+            f"- **总体评分**：[0-100 分]",
+            f"",
+            f"## 🎯 关键发现",
+            f"",
+            f"### 🟢 优秀实践",
+            f"- 列出本次变更中的亮点和良好实践",
+            f"",
+            f"### 🔴 关键问题",
+            f"- 列出必须修复的严重问题",
+            f"- 每个问题包含：问题描述、影响、修复建议",
+            f"",
+            f"## 🔍 详细分析",
+            f"",
+            f"### 🔒 安全问题分析",
+            f"- [问题 1] 🔴/🟠/🟡/🟢 标题",
+            f"  - **文件**：`文件名:行号`",
+            f"  - **问题描述**：详细说明问题",
+            f"  - **风险评估**：潜在影响和安全风险",
+            f"  - **修复建议**：具体解决方案",
+            f"  - **代码示例**：修复前后对比",
+            f"",
+            f"### 💎 代码质量问题",
+            f"- [问题 1] 🔴/🟠/🟡/🟢 标题",
+            f"  - **文件**：`文件名:行号`",
+            f"  - **问题描述**：详细说明问题",
+            f"  - **影响分析**：对可维护性、可读性的影响",
+            f"  - **改进建议**：具体的重构建议",
+            f"  - **代码示例**：改进方案",
+            f"",
+            f"### ⚡ 性能问题分析",
+            f"- [问题 1] 🔴/🟠/🟡/🟢 标题",
+            f"  - **文件**：`文件名:行号`",
+            f"  - **问题描述**：性能瓶颈详细说明",
+            f"  - **性能影响**：对系统性能的具体影响",
+            f"  - **优化方案**：详细的优化策略",
+            f"  - **预期收益**：性能提升预估",
+            f"",
+            f"### 🔧 架构与设计问题",
+            f"- [问题 1] 🔴/🟠/🟡/🟢 标题",
+            f"  - **文件**：`文件名:行号`",
+            f"  - **设计问题**：架构层面的问题",
+            f"  - **影响分析**：对系统架构的影响",
+            f"  - **重构建议**：设计改进方案",
+            f"",
+            f"### 🎯 业务逻辑问题",
+            f"- [问题 1] 🔴/🟠/🟡/🟢 标题",
+            f"  - **文件**：`文件名:行号`",
+            f"  - **逻辑问题**：业务逻辑的缺陷",
+            f"  - **业务影响**：对业务功能的影响",
+            f"  - **修复方案**：逻辑修正建议",
+            f"",
+            f"## 📈 评分详情",
+            f"",
+            f"| 维度 | 评分 | 说明 |",
+            f"|------|------|------|",
+            f"| 安全性 | [0-25] | 安全问题严重程度 |",
+            f"| 代码质量 | [0-25] | 代码规范和质量问题 |",
+            f"| 性能表现 | [0-25] | 性能问题和优化空间 |",
+            f"| 可维护性 | [0-25] | 架构设计和维护成本 |",
+            f"| **总分** | **[0-100]** | **综合评价** |",
+            f"",
+            f"## 🚀 行动建议",
+            f"",
+            f"### 📋 必须修复（立即处理）",
+            f"- [ ] [严重问题 1] - 修复优先级：P0",
+            f"- [ ] [严重问题 2] - 修复优先级：P0",
+            f"",
+            f"### ⚠️ 建议修复（尽快处理）",
+            f"- [ ] [重要问题 1] - 修复优先级：P1",
+            f"- [ ] [重要问题 2] - 修复优先级：P1",
+            f"",
+            f"### 💡 优化建议（后续处理）",
+            f"- [ ] [优化项 1] - 修复优先级：P2",
+            f"- [ ] [优化项 2] - 修复优先级：P2",
+            f"",
+            f"## 📚 学习资源",
+            f"- 针对本次发现的问题，提供相关的最佳实践和学习资料",
+            f"",
+            f"## ✅ 审查结论",
+            f"",
+            f"**综合评价**：[对本次变更的整体评价]",
+            f"",
+            f"**风险提示**：[主要风险点提醒]",
+            f"",
+            f"**合并建议**：[建议：立即合并/修复后合并/不建议合并]",
+            f"",
+            f"---",
+            f"*审查完成时间：[当前时间]*",
+            f"*审查工具：Claude AI*",
+            f"```",
+            f"",
+            f"## ⚠️ 重要说明",
+            f"",
+            f"1. **必须包含具体文件路径和行号**，如：`backend/apps/models.py:45`",
+            f"2. **每个问题都要提供具体的代码示例**，展示修复前后的对比",
+            f"3. **严格按照模板格式输出**，确保报告的完整性和可读性",
+            f"4. **评分要客观公正**，基于实际代码质量进行评估",
+            f"5. **建议要具体可行**，避免模糊的描述",
+            f"6. **风险等级标记**：🔴严重（必须修复）、🟠高危（建议尽快修复）、🟡中危（可稍后修复）、🟢低危（优化建议）"
+        ])
+
+        return '\n'.join(prompt_parts)
 
     def _review_with_openai(self, code_context, start_time):
         """

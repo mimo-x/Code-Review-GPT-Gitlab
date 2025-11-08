@@ -471,39 +471,128 @@ def process_merge_request_review(project_id, merge_request_iid, review_id, paylo
                 success=True
             )
         else:
-            # 真实LLM模式
+            # 真实 Claude CLI 模式
             from apps.llm.services import LLMService
             from apps.review.report_generator import ReportGenerator
+            from apps.review.repository_manager import RepositoryManager
 
-            # 构建代码上下文
-            code_context = build_code_context(changes)
+            # 初始化仓库管理器
+            repo_manager = RepositoryManager(request_id=request_id)
 
-            # 调用LLM进行代码审查
+            # 获取项目 URL 和访问令牌
+            project_url = project_data.get('git_http_url') or project_data.get('http_url')
+
+            # 从 GitLab 配置获取访问令牌（使用已导入的 GitlabService）
+            # GitlabService 已经在文件顶部从 apps.review.services 导入
+            # 它的 _load_config 方法会从 GitLabConfig 数据库表加载配置
+            gitlab_svc = GitlabService(request_id=request_id)
+            access_token = gitlab_svc.private_token  # 使用 private_token 属性
+
+            structured_logger.info(f"准备克隆项目: {project_url}")
+
+            # 克隆或更新仓库
+            with TimerContext(structured_logger, "clone_or_update_repository"):
+                success, repo_path, clone_error = repo_manager.get_or_clone_repository(
+                    project_url=project_url,
+                    project_id=project_id,
+                    access_token=access_token
+                )
+
+            if not success:
+                structured_logger.error(f"仓库克隆失败: {clone_error}")
+                review.status = 'failed'
+                review.error_message = f'仓库克隆失败: {clone_error}'
+                review.save()
+                return
+
+            structured_logger.info(f"仓库路径: {repo_path}")
+
+            # 切换到 MR 分支
+            source_branch = mr_data.get('source_branch', '')
+            target_branch = mr_data.get('target_branch', 'main')
+
+            with TimerContext(structured_logger, "checkout_merge_request"):
+                success, checkout_error = repo_manager.checkout_merge_request(
+                    repo_path=repo_path,
+                    mr_iid=merge_request_iid,
+                    source_branch=source_branch,
+                    target_branch=target_branch
+                )
+
+            if not success:
+                structured_logger.error(f"分支切换失败: {checkout_error}")
+                review.status = 'failed'
+                review.error_message = f'分支切换失败: {checkout_error}'
+                review.save()
+                return
+
+            # 获取提交范围
+            success, commit_range, range_error = repo_manager.get_commit_range(
+                repo_path=repo_path,
+                target_branch=target_branch
+            )
+
+            if not success:
+                structured_logger.warning(f"获取提交范围失败: {range_error}，使用默认范围")
+                commit_range = "HEAD~1..HEAD"
+
+            structured_logger.info(f"提交范围: {commit_range}")
+
+            # 更新 MR 信息
+            mr_info.update({
+                'source_branch': source_branch,
+                'target_branch': target_branch,
+            })
+
+            # 调用 LLM 进行代码审查（使用 Claude CLI）
             llm_service = LLMService(request_id=request_id)
             llm_start_time = time.time()
-            llm_result = llm_service.review_code(code_context, mr_info)
+
+            llm_result = llm_service.review_code(
+                code_context=None,  # 不再需要
+                mr_info=mr_info,
+                repo_path=repo_path,
+                commit_range=commit_range
+            )
+
             llm_duration = time.time() - llm_start_time
 
-            # 生成报告
-            with TimerContext(structured_logger, "generate_real_report"):
-                report_generator = ReportGenerator(request_id=request_id)
-                report_data = report_generator.generate(llm_result, mr_info, llm_service.model)
+            # 检查审查结果
+            if isinstance(llm_result, str):
+                # 错误消息
+                structured_logger.error(f"代码审查失败: {llm_result}")
+                review.status = 'failed'
+                review.error_message = llm_result
+                review.save()
+                return
 
-            llm_provider = llm_service.provider
-            llm_model = llm_service.model
+            # 成功获取审查结果（字典格式）
+            llm_provider = 'claude-cli'
+            llm_model = 'claude-sonnet-4-5'  # Claude CLI 使用的模型
+
+            # 提取审查内容和元数据
+            review_content = llm_result.get('content', '')
+            review_score = llm_result.get('score', 0)
+            # duration_ms 和 token_usage 保存在 metadata 中，这里不需要单独提取
 
             structured_logger.log_llm_call(
                 provider=llm_provider,
                 model=llm_model,
-                success=bool(llm_result) and "代码审查失败" not in llm_result,
+                success=True,
                 duration=llm_duration,
-                prompt_length=len(code_context),
-                response_length=len(llm_result) if llm_result else 0
+                prompt_length=0,  # Claude CLI 不返回 prompt 长度
+                response_length=len(review_content)
             )
+
+            # 构建报告数据（兼容现有格式）
+            report_data = {
+                'content': review_content,
+                'metadata': llm_result.get('metadata', {}),
+            }
 
             structured_logger.log_report_generation(
                 is_mock=False,
-                score=report_data['metadata'].get('score'),
+                score=review_score,
                 file_count=file_count,
                 success=True
             )
