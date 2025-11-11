@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import LLMConfig, GitLabConfig, NotificationConfig, NotificationChannel
+from .models import LLMConfig, GitLabConfig, NotificationConfig, NotificationChannel, WebhookEventRule
 
 
 class LLMConfigSerializer(serializers.ModelSerializer):
@@ -193,7 +193,12 @@ class NotificationChannelSerializer(serializers.ModelSerializer):
             config_data['webhook_url'] = data.get('webhook_url') or data.get('webhook', '')
 
         if notification_type in {'dingtalk', 'feishu'}:
-            config_data['secret'] = data.get('secret', '')
+            # Secret是可选的，如果为None或空字符串则不保存
+            secret = data.get('secret')
+            if secret and secret.strip():
+                config_data['secret'] = secret.strip()
+            else:
+                config_data['secret'] = ''
         elif notification_type == 'email':
             config_data = {
                 'smtp_host': data.get('smtp_host', ''),
@@ -212,9 +217,49 @@ class NotificationChannelSerializer(serializers.ModelSerializer):
         return super().to_internal_value(clean_data)
 
 
+class WebhookEventRuleSerializer(serializers.ModelSerializer):
+    """Webhook事件规则序列化器"""
+    match_rules = serializers.JSONField(
+        help_text="事件匹配规则，JSON格式",
+        required=True
+    )
+
+    class Meta:
+        model = WebhookEventRule
+        fields = [
+            'id',
+            'name',
+            'event_type',
+            'description',
+            'match_rules',
+            'is_active',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def validate_match_rules(self, value):
+        """验证匹配规则是否为有效的JSON格式"""
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("匹配规则必须是一个有效的JSON对象")
+
+        if not value:
+            raise serializers.ValidationError("匹配规则不能为空")
+
+        return value
+
+    def to_representation(self, instance):
+        """自定义输出格式"""
+        data = super().to_representation(instance)
+        # 使用模型的 match_rules_dict 属性确保返回正确的字典格式
+        data['match_rules'] = instance.match_rules_dict
+        return data
+
+
 class ConfigSummarySerializer(serializers.Serializer):
     """配置摘要序列化器，用于返回所有配置的概览"""
     llm = LLMConfigSerializer(source='active_llm_config', read_only=True)
     gitlab = GitLabConfigSerializer(source='active_gitlab_config', read_only=True)
     notifications = NotificationConfigSerializer(many=True, read_only=True)
     channels = NotificationChannelSerializer(many=True, read_only=True)
+    webhook_events = WebhookEventRuleSerializer(many=True, read_only=True)

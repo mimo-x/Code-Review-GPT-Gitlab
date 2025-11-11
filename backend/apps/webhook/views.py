@@ -98,23 +98,10 @@ def gitlab_webhook(request):
                 )
                 # 继续处理，不因为项目创建失败而停止
 
-            # Handle different event types
+            # 使用统一的事件处理函数
             try:
-                with TimerContext(structured_logger, f"handle_{event_type}"):
-                    if event_type == 'merge_request':
-                        return handle_merge_request(payload, webhook_log)
-                    elif event_type == 'push':
-                        return handle_push(payload, webhook_log)
-                    elif event_type == 'issue':
-                        return handle_issue(payload, webhook_log)
-                    elif event_type == 'note':
-                        return handle_note(payload, webhook_log)
-                    elif event_type == 'pipeline':
-                        return handle_pipeline(payload, webhook_log)
-                    elif event_type == 'tag_push':
-                        return handle_tag_push(payload, webhook_log)
-                    else:
-                        return handle_other(payload, webhook_log, event_type)
+                with TimerContext(structured_logger, f"handle_webhook_event"):
+                    return handle_webhook_event(payload, webhook_log, project_id)
             except Exception as handler_error:
                 structured_logger.log_error_with_context(
                     handler_error,
@@ -272,30 +259,39 @@ def create_webhook_log(payload, event_type):
         return None
 
 
-def handle_merge_request(payload, webhook_log):
+def handle_webhook_event(payload, webhook_log, project_id):
     """
-    Handle merge request events
+    统一的 webhook 事件处理函数
+
+    处理流程：
+    1. 检查项目是否存在且启用了审查
+    2. 获取项目启用的事件规则
+    3. 匹配 payload 与规则
+    4. 如果匹配，启动审查
+    5. 否则跳过并记录原因
+
+    Args:
+        payload: GitLab webhook payload
+        webhook_log: WebhookLog 实例
+        project_id: 项目ID
+
+    Returns:
+        Response: DRF Response 对象
     """
+    from apps.llm.models import WebhookEventRule
+
     try:
-        object_attributes = payload.get('object_attributes', {})
-        action = object_attributes.get('action')
+        # 提取项目数据
+        project_data = payload.get('project', {})
+        project_name = project_data.get('name', '')
+        event_type = payload.get('object_kind', 'unknown')
 
-        # Only process 'open' and 'reopen' actions
-        if action not in ['open', 'reopen']:
-            logger.info(f"Ignoring merge request action: {action}")
-            return Response({'status': 'ignored', 'message': f'Action {action} is not processed'})
+        logger.info(f"Processing webhook event: type={event_type}, project_id={project_id}")
 
-        project = payload.get('project', {})
-        project_id = project.get('id')
-        merge_request_iid = object_attributes.get('iid')
-
-        logger.info(f"Processing merge request: Project {project_id}, MR #{merge_request_iid}")
-
-        # Check if review is enabled for this project
+        # 1. 检查项目是否启用审查
         if not ProjectService.is_review_enabled(project_id):
-            logger.info(f"⏸️  Review is disabled for project {project_id}. Skipping code review.")
+            logger.info(f"⏸️  Review is disabled for project {project_id}. Skipping.")
 
-            # Mark webhook as processed
             if webhook_log:
                 webhook_log.processed = True
                 webhook_log.processed_at = timezone.now()
@@ -304,14 +300,122 @@ def handle_merge_request(payload, webhook_log):
 
             return Response({
                 'status': 'skipped',
-                'message': 'Code review is disabled for this project. Enable it in project settings to start reviewing.'
+                'message': 'Code review is disabled for this project. Enable it in project settings.'
             })
 
-        # Create a new MergeRequestReview record for this merge request event
+        # 2. 获取项目及其启用的事件规则
+        try:
+            project = Project.objects.get(project_id=project_id)
+            enabled_event_ids = project.enabled_webhook_events_list
+
+            if not enabled_event_ids:
+                logger.info(f"⚠️  Project {project_id} has no enabled webhook event rules. Skipping.")
+
+                if webhook_log:
+                    webhook_log.processed = True
+                    webhook_log.processed_at = timezone.now()
+                    webhook_log.error_message = "No webhook event rules enabled for this project"
+                    webhook_log.save()
+
+                return Response({
+                    'status': 'skipped',
+                    'message': 'Project has no webhook event rules enabled. Configure event rules in project settings.'
+                })
+
+            # 3. 匹配事件规则
+            enabled_rules = WebhookEventRule.objects.filter(
+                id__in=enabled_event_ids,
+                is_active=True
+            )
+
+            matched_rule = None
+            for rule in enabled_rules:
+                if rule.matches_payload(payload):
+                    matched_rule = rule
+                    logger.info(f"✅ Webhook payload matched rule: {rule.name} (ID: {rule.id}) for project {project_id}")
+                    break
+
+            if not matched_rule:
+                logger.info(f"⏸️  Webhook payload did not match any enabled rules for project {project_id}. Skipping.")
+
+                if webhook_log:
+                    webhook_log.processed = True
+                    webhook_log.processed_at = timezone.now()
+                    webhook_log.error_message = "No matching webhook event rule found"
+                    webhook_log.save()
+
+                return Response({
+                    'status': 'skipped',
+                    'message': 'Webhook event does not match any of the project\'s enabled event rules.'
+                })
+
+            logger.info(f"🎯 Webhook event matched rule: {matched_rule.name} (type: {matched_rule.event_type})")
+
+            # 4. 启动代码审查（目前只支持 merge_request 类型）
+            if event_type == 'merge_request':
+                return _start_merge_request_review(payload, webhook_log, project_id, project_name, matched_rule)
+            else:
+                # 其他事件类型暂时不支持
+                logger.info(f"⚠️  Event type '{event_type}' matched rule but review is not yet implemented.")
+
+                if webhook_log:
+                    webhook_log.processed = True
+                    webhook_log.processed_at = timezone.now()
+                    webhook_log.error_message = f"Review not implemented for event type: {event_type}"
+                    webhook_log.save()
+
+                return Response({
+                    'status': 'skipped',
+                    'message': f'Review not yet implemented for event type: {event_type}'
+                })
+
+        except Project.DoesNotExist:
+            logger.error(f"Project {project_id} not found")
+            return Response(
+                {'status': 'error', 'message': f'Project {project_id} not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    except Exception as e:
+        logger.error(f"Error handling webhook event: {str(e)}", exc_info=True)
+
+        if webhook_log:
+            webhook_log.processed = True
+            webhook_log.processed_at = timezone.now()
+            webhook_log.error_message = str(e)
+            webhook_log.save()
+
+        return Response(
+            {'status': 'error', 'message': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+def _start_merge_request_review(payload, webhook_log, project_id, project_name, matched_rule):
+    """
+    启动 Merge Request 代码审查
+
+    Args:
+        payload: GitLab webhook payload
+        webhook_log: WebhookLog 实例
+        project_id: 项目ID
+        project_name: 项目名称
+        matched_rule: 匹配的事件规则
+
+    Returns:
+        Response: DRF Response 对象
+    """
+    try:
+        object_attributes = payload.get('object_attributes', {})
+        merge_request_iid = object_attributes.get('iid')
+
+        logger.info(f"Starting MR review: Project {project_id}, MR #{merge_request_iid}, Rule: {matched_rule.name}")
+
+        # 创建审查记录
         request_id = webhook_log.request_id if webhook_log else str(uuid.uuid4())
         review = MergeRequestReview.objects.create(
             project_id=project_id,
-            project_name=project.get('name', ''),
+            project_name=project_name,
             merge_request_iid=merge_request_iid,
             merge_request_title=object_attributes.get('title', ''),
             source_branch=object_attributes.get('source_branch', ''),
@@ -320,21 +424,21 @@ def handle_merge_request(payload, webhook_log):
             author_email=object_attributes.get('last_commit', {}).get('author', {}).get('email', ''),
             status='pending',
             request_id=request_id,
-            review_content=''  # 初始占位，稍后填充真实审查内容
+            review_content=''
         )
 
-        # Start review process after the transaction commits to avoid racing the DB write
+        # 启动审查线程（传递 matched_rule）
         def launch_review_thread():
             thread = threading.Thread(
                 target=process_merge_request_review,
-                args=(project_id, merge_request_iid, review.pk, payload)
+                args=(project_id, merge_request_iid, review.pk, payload, matched_rule)
             )
             thread.daemon = True
             thread.start()
 
         transaction.on_commit(launch_review_thread)
 
-        # Mark webhook as processed
+        # 标记 webhook 日志为已处理
         if webhook_log:
             webhook_log.processed = True
             webhook_log.processed_at = timezone.now()
@@ -343,44 +447,32 @@ def handle_merge_request(payload, webhook_log):
         return Response({'status': 'success', 'message': 'Review process started'})
 
     except Exception as e:
-        logger.error(f"Error handling merge request: {str(e)}", exc_info=True)
+        logger.error(f"Error starting MR review: {str(e)}", exc_info=True)
+
         if webhook_log:
             webhook_log.error_message = str(e)
             webhook_log.save()
+
         return Response(
             {'status': 'error', 'message': str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 
-def handle_push(payload, webhook_log):
-    """
-    Handle push events
-    """
-    logger.info("Push event received but not processed yet")
-    if webhook_log:
-        webhook_log.processed = True
-        webhook_log.processed_at = timezone.now()
-        webhook_log.save()
-    return Response({'status': 'success', 'message': 'Push event received'})
 
 
-def handle_other(payload, webhook_log, event_type):
-    """
-    Handle other event types
-    """
-    logger.info(f"Unhandled event type: {event_type}")
-    if webhook_log:
-        webhook_log.processed = True
-        webhook_log.processed_at = timezone.now()
-        webhook_log.save()
-    return Response({'status': 'ignored', 'message': f'Event type {event_type} is not processed'})
 
-
-def process_merge_request_review(project_id, merge_request_iid, review_id, payload):
+def process_merge_request_review(project_id, merge_request_iid, review_id, payload, matched_rule=None):
     """
     Process merge request review in a separate thread
     新版本：整合报告生成器和多渠道通知分发器，使用结构化日志
+
+    Args:
+        project_id: 项目ID
+        merge_request_iid: MR IID
+        review_id: 审查记录ID
+        payload: Webhook payload
+        matched_rule: 匹配的 WebhookEventRule 实例（用于获取自定义 prompt）
     """
     import time
     from django.conf import settings
@@ -544,6 +636,26 @@ def process_merge_request_review(project_id, merge_request_iid, review_id, paylo
                 'target_branch': target_branch,
             })
 
+            # 获取项目自定义 Prompt（如果配置了）
+            custom_prompt = None
+            if matched_rule:
+                try:
+                    from .models import ProjectWebhookEventPrompt
+                    prompt_config = ProjectWebhookEventPrompt.objects.filter(
+                        project__project_id=project_id,
+                        event_rule=matched_rule,
+                        use_custom=True
+                    ).select_related('event_rule').first()
+
+                    if prompt_config and prompt_config.custom_prompt:
+                        # 渲染 prompt 模板，替换占位符
+                        custom_prompt = prompt_config.render_prompt(mr_info)
+                        structured_logger.info(f"使用项目自定义 Prompt (Event: {matched_rule.name}, 长度: {len(custom_prompt)})")
+                    else:
+                        structured_logger.info("使用系统默认 Prompt")
+                except Exception as e:
+                    structured_logger.warning(f"获取自定义 Prompt 失败: {e}，使用系统默认")
+
             # 调用 LLM 进行代码审查（使用 Claude CLI）
             llm_service = LLMService(request_id=request_id)
             llm_start_time = time.time()
@@ -552,7 +664,8 @@ def process_merge_request_review(project_id, merge_request_iid, review_id, paylo
                 code_context=None,  # 不再需要
                 mr_info=mr_info,
                 repo_path=repo_path,
-                commit_range=commit_range
+                commit_range=commit_range,
+                custom_prompt=custom_prompt  # 传递自定义 prompt
             )
 
             llm_duration = time.time() - llm_start_time
@@ -908,6 +1021,226 @@ def update_project_notifications(request, project_id):
         )
 
 
+@api_view(['GET'])
+def get_project_webhook_events(request, project_id):
+    """获取项目启用的webhook事件规则ID列表"""
+    try:
+        from apps.llm.models import WebhookEventRule
+
+        project = Project.objects.get(project_id=project_id)
+
+        # 获取项目配置的事件ID列表
+        enabled_event_ids = project.enabled_webhook_events_list
+
+        # 过滤掉已被删除的事件规则
+        if enabled_event_ids:
+            valid_event_ids = list(WebhookEventRule.objects.filter(
+                id__in=enabled_event_ids
+            ).values_list('id', flat=True))
+
+            # 如果有无效的ID，自动清理并保存
+            if set(valid_event_ids) != set(enabled_event_ids):
+                project.enabled_webhook_events_list = valid_event_ids
+                project.save(update_fields=['enabled_webhook_events'])
+                logger.info(f"Cleaned up invalid event IDs for project {project_id}: "
+                           f"removed {set(enabled_event_ids) - set(valid_event_ids)}")
+
+            enabled_event_ids = valid_event_ids
+
+        return Response({
+            'status': 'success',
+            'enabled_event_ids': enabled_event_ids
+        })
+
+    except Project.DoesNotExist:
+        return Response(
+            {'status': 'error', 'message': f'Project {project_id} not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Error getting project webhook events: {str(e)}", exc_info=True)
+        return Response(
+            {'status': 'error', 'message': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+def update_project_webhook_events(request, project_id):
+    """更新项目启用的webhook事件规则"""
+    try:
+        from .serializers import ProjectWebhookEventsUpdateSerializer
+
+        project = Project.objects.get(project_id=project_id)
+
+        serializer = ProjectWebhookEventsUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated = serializer.validated_data
+
+        event_ids = validated.get('event_ids', [])
+        project.enabled_webhook_events_list = event_ids
+        project.save(update_fields=['enabled_webhook_events', 'updated_at'])
+
+        return Response({
+            'status': 'success',
+            'message': 'Webhook事件配置已更新',
+            'enabled_event_ids': project.enabled_webhook_events_list
+        })
+
+    except Project.DoesNotExist:
+        return Response(
+            {'status': 'error', 'message': f'Project {project_id} not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Error updating project webhook events: {str(e)}", exc_info=True)
+        return Response(
+            {'status': 'error', 'message': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+def get_project_webhook_event_prompts(request, project_id):
+    """
+    获取项目的所有 Webhook 事件 Prompt 配置
+
+    GET /api/webhook/projects/{project_id}/webhook-event-prompts/
+
+    返回格式:
+    {
+        "status": "success",
+        "prompts": [
+            {
+                "id": 1,
+                "event_rule": 1,
+                "event_rule_name": "MR 创建",
+                "event_rule_type": "mr_open",
+                "custom_prompt": "请详细审查...",
+                "use_custom": true
+            }
+        ]
+    }
+    """
+    try:
+        from .serializers import ProjectWebhookEventPromptSerializer
+        from .models import ProjectWebhookEventPrompt
+
+        project = Project.objects.get(project_id=project_id)
+
+        # 获取项目启用的事件规则
+        enabled_event_ids = project.enabled_webhook_events_list
+
+        # 查询现有的 prompt 配置
+        prompts = ProjectWebhookEventPrompt.objects.filter(
+            project=project,
+            event_rule_id__in=enabled_event_ids
+        ).select_related('event_rule')
+
+        # 为启用但没有 prompt 配置的事件创建空配置
+        existing_event_ids = set(prompts.values_list('event_rule_id', flat=True))
+        missing_event_ids = set(enabled_event_ids) - existing_event_ids
+
+        if missing_event_ids:
+            from apps.llm.models import WebhookEventRule
+            for event_id in missing_event_ids:
+                try:
+                    event_rule = WebhookEventRule.objects.get(id=event_id)
+                    ProjectWebhookEventPrompt.objects.create(
+                        project=project,
+                        event_rule=event_rule,
+                        custom_prompt='',
+                        use_custom=False
+                    )
+                except WebhookEventRule.DoesNotExist:
+                    logger.warning(f"Event rule {event_id} not found when creating prompt config")
+                    continue
+
+            # 重新查询以包含新创建的配置
+            prompts = ProjectWebhookEventPrompt.objects.filter(
+                project=project,
+                event_rule_id__in=enabled_event_ids
+            ).select_related('event_rule')
+
+        serializer = ProjectWebhookEventPromptSerializer(prompts, many=True)
+
+        return Response({
+            'status': 'success',
+            'prompts': serializer.data
+        })
+
+    except Project.DoesNotExist:
+        return Response(
+            {'status': 'error', 'message': f'Project {project_id} not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Error getting project webhook event prompts: {str(e)}", exc_info=True)
+        return Response(
+            {'status': 'error', 'message': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+def update_project_webhook_event_prompt(request, project_id):
+    """
+    更新项目的单个 Webhook 事件 Prompt 配置
+
+    POST /api/webhook/projects/{project_id}/webhook-event-prompts/update/
+
+    请求体:
+    {
+        "event_rule_id": 1,
+        "custom_prompt": "请详细审查该 MR...",
+        "use_custom": true
+    }
+    """
+    try:
+        from .serializers import ProjectWebhookEventPromptUpdateSerializer, ProjectWebhookEventPromptSerializer
+        from .models import ProjectWebhookEventPrompt
+
+        project = Project.objects.get(project_id=project_id)
+
+        serializer = ProjectWebhookEventPromptUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated = serializer.validated_data
+
+        event_rule_id = validated['event_rule_id']
+        custom_prompt = validated.get('custom_prompt', '')
+        use_custom = validated.get('use_custom', False)
+
+        # 获取或创建配置
+        prompt_config, created = ProjectWebhookEventPrompt.objects.update_or_create(
+            project=project,
+            event_rule_id=event_rule_id,
+            defaults={
+                'custom_prompt': custom_prompt,
+                'use_custom': use_custom
+            }
+        )
+
+        result_serializer = ProjectWebhookEventPromptSerializer(prompt_config)
+
+        return Response({
+            'status': 'success',
+            'message': 'Prompt 配置已更新',
+            'prompt': result_serializer.data
+        })
+
+    except Project.DoesNotExist:
+        return Response(
+            {'status': 'error', 'message': f'Project {project_id} not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Error updating project webhook event prompt: {str(e)}", exc_info=True)
+        return Response(
+            {'status': 'error', 'message': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
 @api_view(['POST'])
 def enable_project_review(request, project_id):
     """
@@ -1060,166 +1393,9 @@ def project_review_history(request, project_id):
 
 # ==================== Enhanced Event Handlers ====================
 
-def handle_issue(payload, webhook_log):
-    """
-    Handle issue events
-    """
-    try:
-        object_attributes = payload.get('object_attributes', {})
-        action = object_attributes.get('action')
-
-        logger.info(f"Issue event: {action} - Issue #{object_attributes.get('iid')}")
-
-        # Mark webhook as processed
-        if webhook_log:
-            webhook_log.processed = True
-            webhook_log.processed_at = timezone.now()
-            webhook_log.save()
-
-        return Response({
-            'status': 'success',
-            'message': f'Issue {action} event processed'
-        })
-
-    except Exception as e:
-        logger.error(f"Error handling issue: {str(e)}", exc_info=True)
-        if webhook_log:
-            webhook_log.error_message = str(e)
-            webhook_log.save()
-        return Response(
-            {'status': 'error', 'message': str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
 
 
-def handle_note(payload, webhook_log):
-    """
-    Handle note/comment events (comments on MRs, issues, commits)
-    """
-    try:
-        object_attributes = payload.get('object_attributes', {})
-        noteable_type = object_attributes.get('noteable_type')
-        action = object_attributes.get('action')
 
-        logger.info(f"Note event: {action} on {noteable_type}")
-
-        # Only process MR comments for potential review triggers
-        if noteable_type == 'MergeRequest' and action == 'create':
-            # Check if this comment might trigger a review
-            comment = object_attributes.get('note', '')
-            if 'review' in comment.lower() or 'check' in comment.lower():
-                logger.info(f"Potential review trigger comment: {comment[:100]}...")
-                # Could trigger a review process here if needed
-
-        # Mark webhook as processed
-        if webhook_log:
-            webhook_log.processed = True
-            webhook_log.processed_at = timezone.now()
-            webhook_log.save()
-
-        return Response({
-            'status': 'success',
-            'message': f'Note {action} event processed'
-        })
-
-    except Exception as e:
-        logger.error(f"Error handling note: {str(e)}", exc_info=True)
-        if webhook_log:
-            webhook_log.error_message = str(e)
-            webhook_log.save()
-        return Response(
-            {'status': 'error', 'message': str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
-
-def handle_pipeline(payload, webhook_log):
-    """
-    Handle CI/CD pipeline events
-    """
-    try:
-        object_attributes = payload.get('object_attributes', {})
-        status = object_attributes.get('status')
-        source = object_attributes.get('source')
-
-        logger.info(f"Pipeline event: {status} from {source}")
-
-        # Update project activity timestamp
-        project_data = payload.get('project', {})
-        project_id = project_data.get('id')
-        if project_id:
-            try:
-                project = Project.objects.get(project_id=project_id)
-                project.last_webhook_at = timezone.now()
-                project.save(update_fields=['last_webhook_at', 'updated_at'])
-            except Project.DoesNotExist:
-                pass
-
-        # Mark webhook as processed
-        if webhook_log:
-            webhook_log.processed = True
-            webhook_log.processed_at = timezone.now()
-            webhook_log.save()
-
-        return Response({
-            'status': 'success',
-            'message': f'Pipeline {status} event processed'
-        })
-
-    except Exception as e:
-        logger.error(f"Error handling pipeline: {str(e)}", exc_info=True)
-        if webhook_log:
-            webhook_log.error_message = str(e)
-            webhook_log.save()
-        return Response(
-            {'status': 'error', 'message': str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
-
-def handle_tag_push(payload, webhook_log):
-    """
-    Handle tag push events
-    """
-    try:
-        ref = payload.get('ref', '')
-        project_data = payload.get('project', {})
-
-        logger.info(f"Tag push event: {ref}")
-
-        # Update project activity timestamp
-        project_id = project_data.get('id')
-        if project_id:
-            try:
-                project = Project.objects.get(project_id=project_id)
-                project.last_webhook_at = timezone.now()
-                project.save(update_fields=['last_webhook_at', 'updated_at'])
-            except Project.DoesNotExist:
-                pass
-
-        # Mark webhook as processed
-        if webhook_log:
-            webhook_log.processed = True
-            webhook_log.processed_at = timezone.now()
-            webhook_log.save()
-
-        return Response({
-            'status': 'success',
-            'message': 'Tag push event processed'
-        })
-
-    except Exception as e:
-        logger.error(f"Error handling tag push: {str(e)}", exc_info=True)
-        if webhook_log:
-            webhook_log.error_message = str(e)
-            webhook_log.save()
-        return Response(
-            {'status': 'error', 'message': str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
-
-# ==================== Reviews and Logs APIs ====================
 
 @api_view(['GET'])
 def list_reviews(request):

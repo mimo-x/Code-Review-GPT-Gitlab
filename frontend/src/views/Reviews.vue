@@ -31,15 +31,13 @@
               <th class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">标题</th>
               <th class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">作者</th>
               <th class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">状态</th>
-              <th class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">LLM</th>
-              <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">问题数</th>
               <th class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">时间</th>
               <th class="px-6 py-3 text-end text-xs font-medium text-gray-500 uppercase">操作</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200">
             <tr v-if="loading">
-              <td colspan="10" class="px-6 py-12 text-center text-gray-500">
+              <td colspan="8" class="px-6 py-12 text-center text-gray-500">
                 <div class="flex items-center justify-center">
                   <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                   <span class="ml-2">加载中...</span>
@@ -57,13 +55,6 @@
               <td class="px-6 py-4 whitespace-nowrap text-sm">
                 <span :class="getStatusBadge(review.status)">{{ review.statusText }}</span>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ review.llmModel }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-center">
-                <span v-if="review.issuesCount > 0" class="badge-warning">
-                  {{ review.issuesCount }}
-                </span>
-                <span v-else class="text-green-600 font-medium">0</span>
-              </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ review.createdAt }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-end text-sm font-medium">
                 <button @click="openGitlab(review.mrUrl)" class="btn-primary inline-flex items-center gap-2">
@@ -80,12 +71,31 @@
       <div class="px-6 py-4 border-t border-gray-200">
         <div class="flex items-center justify-between">
           <div class="text-sm text-gray-700">
-            显示 <span class="font-medium">1</span> 到 <span class="font-medium">{{ filteredReviews.length }}</span> 条，
+            显示 <span class="font-medium">{{ startIndex }}</span> 到 <span class="font-medium">{{ endIndex }}</span> 条，
             共 <span class="font-medium">{{ totalReviews }}</span> 条
+            <span class="text-gray-500 ml-2">(第 {{ currentPage }} / {{ totalPages }} 页)</span>
           </div>
           <div class="flex gap-2">
-            <button class="btn-secondary">上一页</button>
-            <button class="btn-secondary">下一页</button>
+            <button
+              @click="prevPage"
+              :disabled="isPrevDisabled"
+              :class="[
+                'btn-secondary',
+                isPrevDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100'
+              ]"
+            >
+              上一页
+            </button>
+            <button
+              @click="nextPage"
+              :disabled="isNextDisabled"
+              :class="[
+                'btn-secondary',
+                isNextDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100'
+              ]"
+            >
+              下一页
+            </button>
           </div>
         </div>
       </div>
@@ -103,19 +113,34 @@ const loading = ref(false)
 const totalReviews = ref(0)
 const reviewsList = ref([])
 
-const filteredReviews = computed(() => {
-  if (!searchText.value) return reviewsList.value
-  return reviewsList.value.filter(review =>
-    review.project.toLowerCase().includes(searchText.value.toLowerCase()) ||
-    review.mrId.toString().includes(searchText.value)
-  )
-})
+// 分页相关
+const currentPage = ref(1)
+const pageSize = ref(20)
+const totalPages = computed(() => Math.ceil(totalReviews.value / pageSize.value))
+
+// 计算当前页的起始和结束索引
+const startIndex = computed(() => (currentPage.value - 1) * pageSize.value + 1)
+const endIndex = computed(() => Math.min(currentPage.value * pageSize.value, totalReviews.value))
+
+// 分页按钮禁用状态
+const isPrevDisabled = computed(() => currentPage.value <= 1)
+const isNextDisabled = computed(() => currentPage.value >= totalPages.value)
+
+// 直接显示从后端获取的数据（已经在后端进行了搜索和分页）
+const filteredReviews = computed(() => reviewsList.value)
 
 // 获取审核记录
 const fetchReviews = async () => {
   loading.value = true
   try {
-    const response = await getReviews()
+    const offset = (currentPage.value - 1) * pageSize.value
+    const params = {
+      limit: pageSize.value,
+      offset: offset,
+      search: searchText.value || undefined
+    }
+
+    const response = await getReviews(params)
     console.log('Reviews response:', response)
     if (response.status === 'success') {
       reviewsList.value = response.results || []
@@ -125,6 +150,22 @@ const fetchReviews = async () => {
     console.error('获取审核记录失败:', error)
   } finally {
     loading.value = false
+  }
+}
+
+// 上一页
+const prevPage = () => {
+  if (currentPage.value > 1) {
+    currentPage.value--
+    fetchReviews()
+  }
+}
+
+// 下一页
+const nextPage = () => {
+  if (currentPage.value < totalPages.value) {
+    currentPage.value++
+    fetchReviews()
   }
 }
 
@@ -147,7 +188,9 @@ const getStatusBadge = (status: string) => {
 }
 
 const handleSearch = () => {
-  // Search logic
+  // 搜索时重置到第一页
+  currentPage.value = 1
+  fetchReviews()
 }
 
 const openGitlab = (url: string) => {

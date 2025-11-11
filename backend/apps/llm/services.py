@@ -105,7 +105,7 @@ class LLMService:
         except Exception as e:
             logger.error(f"[{self.request_id}] 设置环境变量失败: {e}", exc_info=True)
 
-    def review_code(self, code_context, mr_info=None, repo_path=None, commit_range=None):
+    def review_code(self, code_context, mr_info=None, repo_path=None, commit_range=None, custom_prompt=None):
         """
         Review code using Claude CLI (新版本)
 
@@ -114,6 +114,7 @@ class LLMService:
             mr_info: MR 信息字典
             repo_path: 本地仓库路径（使用 Claude CLI 时必需）
             commit_range: Git 提交范围
+            custom_prompt: 外部传入的自定义 prompt（优先级最高，来自项目配置）
 
         Returns:
             解析后的审查结果字典或错误消息字符串
@@ -145,15 +146,24 @@ class LLMService:
                 logger.error(f"[{self.request_id}] {error_msg}")
                 return error_msg
 
-            # 构建自定义提示（如果提供了 MR 信息）
-            custom_prompt = None
-            if mr_info:
-                custom_prompt = self._build_claude_cli_prompt(mr_info)
+            # 构建最终使用的 prompt
+            # 优先级：外部传入的 custom_prompt > 基于 mr_info 构建的默认 prompt
+            final_prompt = None
+            if custom_prompt:
+                # 如果外部提供了自定义 prompt，直接使用
+                logger.info(f"[{self.request_id}] 使用外部传入的自定义 Prompt (长度: {len(custom_prompt)})")
+                final_prompt = custom_prompt
+            elif mr_info:
+                # 否则使用系统默认构建逻辑
+                logger.info(f"[{self.request_id}] 使用系统默认 Prompt 构建逻辑")
+                final_prompt = self._build_claude_cli_prompt(mr_info)
+            else:
+                logger.info(f"[{self.request_id}] 未提供任何 Prompt，使用 Claude CLI 默认行为")
 
             # 执行代码审查
             success, result_data, error = cli_service.review_code(
                 repo_path=repo_path,
-                custom_prompt=custom_prompt,
+                custom_prompt=final_prompt,
                 commit_range=commit_range
             )
 

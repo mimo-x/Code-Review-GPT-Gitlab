@@ -112,6 +112,105 @@ class NotificationConfig(models.Model):
         self.config_dict = config
 
 
+class WebhookEventRule(models.Model):
+    """
+    GitLab Webhook 事件识别规则配置
+    用于定义如何识别特定的 webhook 事件类型
+    """
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=255, help_text="事件规则的名称，用于展示和选择")
+    event_type = models.CharField(max_length=100, help_text="GitLab事件类型，如：Merge Request Hook, Push Hook")
+    description = models.TextField(blank=True, help_text="事件规则的详细描述")
+
+    # 事件识别规则，JSON格式存储需要匹配的字段和值
+    # 示例：{"object_kind": "merge_request", "object_attributes": {"action": "open"}}
+    match_rules = models.TextField(help_text="JSON格式的事件匹配规则")
+
+    # 是否启用此规则
+    is_active = models.BooleanField(default=True)
+
+    # 时间戳
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'webhook_event_rules'
+        ordering = ['name']
+        indexes = [
+            models.Index(fields=['event_type']),
+            models.Index(fields=['is_active']),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.event_type})"
+
+    @property
+    def match_rules_dict(self):
+        """获取匹配规则的字典格式"""
+        if not self.match_rules:
+            return {}
+        try:
+            # 首先尝试 JSON 解析
+            return json.loads(self.match_rules)
+        except (json.JSONDecodeError, TypeError):
+            try:
+                # 如果失败，尝试使用 ast.literal_eval 解析 Python repr 格式
+                import ast
+                result = ast.literal_eval(self.match_rules)
+                if isinstance(result, dict):
+                    return result
+                return {}
+            except (ValueError, SyntaxError):
+                return {}
+
+    @match_rules_dict.setter
+    def match_rules_dict(self, value):
+        """设置匹配规则的字典格式"""
+        self.match_rules = json.dumps(value, ensure_ascii=False)
+
+    def matches_payload(self, payload: dict) -> bool:
+        """
+        检查给定的 webhook payload 是否匹配此规则
+
+        Args:
+            payload: GitLab webhook payload 字典
+
+        Returns:
+            bool: 是否匹配规则
+        """
+        if not self.is_active or not payload:
+            return False
+
+        rules = self.match_rules_dict
+        if not rules:
+            return False
+
+        return self._deep_match(rules, payload)
+
+    def _deep_match(self, rules: dict, data: dict) -> bool:
+        """
+        深度匹配规则和数据
+
+        Args:
+            rules: 匹配规则
+            data: 要匹配的数据
+
+        Returns:
+            bool: 是否匹配
+        """
+        for key, value in rules.items():
+            if key not in data:
+                return False
+
+            if isinstance(value, dict) and isinstance(data[key], dict):
+                if not self._deep_match(value, data[key]):
+                    return False
+            elif data[key] != value:
+                return False
+
+        return True
+
+
 class NotificationChannel(models.Model):
     """面向项目的通知渠道配置，支持同一类型多条记录"""
 
@@ -137,9 +236,15 @@ class NotificationChannel(models.Model):
     @property
     def config_dict(self):
         try:
+            # 首先尝试直接解析 JSON
             return json.loads(self.config_data)
         except (json.JSONDecodeError, TypeError):
-            return {}
+            try:
+                # 如果 JSON 解析失败，尝试解析 Python 字面量格式
+                import ast
+                return ast.literal_eval(self.config_data) if self.config_data else {}
+            except (ValueError, SyntaxError):
+                return {}
 
     @config_dict.setter
     def config_dict(self, value):

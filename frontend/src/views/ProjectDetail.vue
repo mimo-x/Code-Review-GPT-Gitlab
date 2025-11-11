@@ -126,6 +126,198 @@
           </div>
         </div>
 
+        <!-- Webhook Events Tab -->
+        <div v-show="activeTab === 'webhook-events'" class="config-section">
+          <div class="p-6 space-y-6">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-2 h-2 bg-purple-500 rounded-full"></div>
+                <h3 class="text-lg font-semibold text-apple-900">Webhook 事件配置</h3>
+              </div>
+              <button
+                class="btn-primary"
+                :disabled="webhookEventSaving"
+                @click="saveProjectWebhookEvents"
+              >
+                <Save class="w-4 h-4" />
+                {{ webhookEventSaving ? '保存中...' : '保存' }}
+              </button>
+            </div>
+
+            <div class="bg-apple-50/50 border border-apple-200/40 rounded-xl p-4 text-sm text-apple-600">
+              选择触发代码审查的 Webhook 事件。只有选中的事件类型才会触发自动代码审查。
+            </div>
+
+            <div v-if="webhookEventRules.length === 0" class="p-6 bg-apple-50 border border-dashed border-apple-200 text-center rounded-xl text-sm text-apple-500">
+              暂无可用的 Webhook 事件规则，请在配置管理中创建。
+            </div>
+
+            <div v-else class="space-y-3">
+              <label
+                v-for="rule in webhookEventRules"
+                :key="rule.id"
+                class="flex items-start gap-3 p-4 rounded-xl transition-all duration-200"
+                :class="[
+                  selectedEventIds.includes(Number(rule.id))
+                    ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-500 shadow-md hover:shadow-lg cursor-pointer'
+                    : 'bg-white border border-apple-200/60 hover:border-apple-300 cursor-pointer',
+                  !rule.is_active && 'opacity-60 cursor-not-allowed'
+                ]"
+              >
+                <input
+                  type="checkbox"
+                  class="mt-1 w-4 h-4 accent-green-600"
+                  :value="Number(rule.id)"
+                  v-model="selectedEventIds"
+                  :disabled="!rule.is_active"
+                />
+                <div class="flex-1">
+                  <div class="flex items-center gap-2 mb-1">
+                    <div
+                      class="text-sm font-semibold"
+                      :class="selectedEventIds.includes(Number(rule.id)) ? 'text-green-900' : 'text-apple-900'"
+                    >
+                      {{ rule.name }}
+                    </div>
+                    <span
+                      v-if="selectedEventIds.includes(Number(rule.id))"
+                      class="badge badge-success flex items-center gap-1"
+                    >
+                      <CheckCircle2 class="w-3 h-3" />
+                      已启用
+                    </span>
+                    <span v-else-if="!rule.is_active" class="badge bg-apple-200 text-apple-700">停用</span>
+                    <span
+                      class="text-xs px-2 py-0.5 rounded-full"
+                      :class="selectedEventIds.includes(Number(rule.id)) ? 'bg-green-100 text-green-700' : 'bg-apple-100 text-apple-600'"
+                    >
+                      {{ rule.event_type }}
+                    </span>
+                  </div>
+                  <div
+                    class="text-xs mb-2"
+                    :class="selectedEventIds.includes(Number(rule.id)) ? 'text-green-700' : 'text-apple-600'"
+                  >
+                    {{ rule.description || '暂无描述' }}
+                  </div>
+                  <div
+                    class="text-xs font-mono p-2 rounded"
+                    :class="selectedEventIds.includes(Number(rule.id)) ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-apple-50 text-apple-500'"
+                  >
+                    {{ JSON.stringify(rule.match_rules) }}
+                  </div>
+                </div>
+              </label>
+            </div>
+
+            <div v-if="selectedEventIds.length > 0" class="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-400 rounded-xl p-4 shadow-sm">
+              <div class="flex items-center gap-2 mb-2">
+                <CheckCircle2 class="w-5 h-5 text-green-600" />
+                <div class="text-sm font-semibold text-green-900">已选择 {{ selectedEventIds.length }} 个事件</div>
+              </div>
+              <div class="text-xs text-green-700">这些事件将触发自动代码审查</div>
+            </div>
+            <div v-else class="bg-orange-50 border border-orange-200 rounded-xl p-4">
+              <div class="flex items-center gap-2 mb-2">
+                <AlertCircle class="w-5 h-5 text-orange-600" />
+                <div class="text-sm font-medium text-orange-900">未选择任何事件</div>
+              </div>
+              <div class="text-xs text-orange-700">请至少选择一个事件以启用自动代码审查</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Event Prompts Tab -->
+        <div v-show="activeTab === 'event-prompts'" class="config-section">
+          <div class="p-6 space-y-6">
+            <div class="flex items-center gap-3">
+              <div class="w-2 h-2 bg-indigo-500 rounded-full"></div>
+              <h3 class="text-lg font-semibold text-apple-900">审查提示词配置</h3>
+            </div>
+
+            <div class="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200/60 rounded-xl p-4 text-sm text-indigo-700">
+              <div class="font-medium mb-2">💡 为每个 Webhook 事件类型自定义代码审查的提示词</div>
+              <div class="text-xs space-y-1">
+                <div>• 让 AI 更符合项目特点进行审查</div>
+                <div>• 支持变量占位符：{project_name}, {author}, {title}, {source_branch} 等</div>
+                <div>• 留空则使用系统默认提示词</div>
+              </div>
+            </div>
+
+            <div v-if="eventPrompts.length === 0" class="p-6 bg-apple-50 border border-dashed border-apple-200 text-center rounded-xl text-sm text-apple-500">
+              暂无配置，请先在 Webhook 事件页面启用事件。
+            </div>
+
+            <div v-else class="space-y-4">
+              <div
+                v-for="promptConfig in eventPrompts"
+                :key="promptConfig.event_rule"
+                class="bg-white border border-apple-200/60 rounded-xl p-5 hover:shadow-md transition-shadow duration-200"
+              >
+                <div class="flex items-start justify-between mb-4">
+                  <div class="flex-1">
+                    <div class="flex items-center gap-2 mb-1">
+                      <div class="text-base font-semibold text-apple-900">
+                        {{ promptConfig.event_rule_name }}
+                      </div>
+                      <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                        {{ promptConfig.event_rule_type }}
+                      </span>
+                    </div>
+                    <div class="text-xs text-apple-500">
+                      {{ promptConfig.event_rule_description || '暂无描述' }}
+                    </div>
+                  </div>
+                  <label class="config-toggle flex-shrink-0">
+                    <input
+                      type="checkbox"
+                      class="config-toggle-input"
+                      v-model="promptConfig.use_custom"
+                      @change="savePromptConfig(promptConfig)"
+                    />
+                    <div class="config-toggle-slider"></div>
+                  </label>
+                </div>
+
+                <div v-if="promptConfig.use_custom" class="space-y-2">
+                  <textarea
+                    v-model="promptConfig.custom_prompt"
+                    class="w-full min-h-[240px] p-3 text-sm border border-apple-200 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 resize-vertical font-mono"
+                    placeholder="请输入自定义的审查提示词，支持 Markdown 格式和变量占位符...
+
+示例：
+请对项目 {project_name} 的 MR #{mr_iid} 进行代码审查。
+作者：{author}
+标题：{title}
+分支：{source_branch} -> {target_branch}
+
+请重点关注：
+1. 代码安全性
+2. 性能优化
+3. 最佳实践"
+                  ></textarea>
+                  <div class="flex items-center justify-between">
+                    <div class="text-xs text-apple-500">
+                      支持的占位符：{project_name}, {author}, {title}, {description}, {source_branch}, {target_branch}, {mr_iid}, {file_count}, {changes_count}
+                    </div>
+                    <button
+                      class="btn-primary text-sm"
+                      :disabled="promptSaving"
+                      @click="savePromptConfig(promptConfig)"
+                    >
+                      <Save class="w-4 h-4" />
+                      {{ promptSaving ? '保存中...' : '保存' }}
+                    </button>
+                  </div>
+                </div>
+                <div v-else class="text-xs text-apple-400 italic py-2">
+                  当前使用系统默认提示词
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Notification Settings Tab -->
         <div v-show="activeTab === 'notifications'" class="config-section">
           <div class="p-6 space-y-6">
@@ -391,7 +583,12 @@ import {
   disableProjectReview,
   getNotificationChannels,
   getProjectNotifications,
-  updateProjectNotifications
+  updateProjectNotifications,
+  getWebhookEventRules,
+  getProjectWebhookEvents,
+  updateProjectWebhookEvents,
+  getProjectWebhookEventPrompts,
+  updateProjectWebhookEventPrompt
 } from '@/api'
 
 const route = useRoute()
@@ -402,6 +599,8 @@ const activeTab = ref('info')
 const tabs = [
   { key: 'info', label: '项目信息' },
   { key: 'stats', label: '统计图表' },
+  { key: 'webhook-events', label: 'Webhook事件' },
+  { key: 'event-prompts', label: '审查提示词' },
   { key: 'notifications', label: '通知设置' },
   { key: 'events', label: '最近事件' }
 ]
@@ -427,6 +626,15 @@ const channelTypeLabels: Record<string, string> = {
 const selectedChannelIds = ref<number[]>([])
 const gitlabCommentEnabled = ref(true)
 const notificationSaving = ref(false)
+
+// Webhook 事件配置相关
+const webhookEventRules = ref<any[]>([])
+const selectedEventIds = ref<number[]>([])
+const webhookEventSaving = ref(false)
+
+// Webhook 事件 Prompt 配置相关
+const eventPrompts = ref<any[]>([])
+const promptSaving = ref(false)
 
 const computedChannelTypes = computed(() => {
   const set = new Set(notificationChannels.value.map(item => item.notification_type))
@@ -554,6 +762,101 @@ const saveProjectNotificationSettings = async () => {
     alert('保存通知设置失败')
   } finally {
     notificationSaving.value = false
+  }
+}
+
+const loadWebhookEventRules = async () => {
+  try {
+    const response = await getWebhookEventRules()
+    if (response && response.results) {
+      webhookEventRules.value = response.results
+    } else if (Array.isArray(response)) {
+      webhookEventRules.value = response
+    } else {
+      webhookEventRules.value = []
+    }
+  } catch (error) {
+    console.error('Failed to load webhook event rules:', error)
+  }
+}
+
+const loadProjectWebhookEvents = async () => {
+  try {
+    const projectId = route.params.id as string
+    const response = await getProjectWebhookEvents(projectId)
+
+    if (response && response.status === 'success') {
+      const enabledIds = Array.isArray(response.enabled_event_ids)
+        ? response.enabled_event_ids.map((id: any) => Number(id)).filter(Boolean)
+        : []
+
+      // 过滤掉前端没有对应规则的事件ID（双重保险）
+      const validIds = enabledIds.filter(id =>
+        webhookEventRules.value.some(rule => Number(rule.id) === id)
+      )
+
+      if (validIds.length !== enabledIds.length) {
+        console.warn('Some event IDs were filtered out as they no longer exist:',
+          enabledIds.filter(id => !validIds.includes(id))
+        )
+      }
+
+      selectedEventIds.value = validIds
+    }
+  } catch (error) {
+    console.error('Failed to load project webhook events:', error)
+  }
+}
+
+const saveProjectWebhookEvents = async () => {
+  webhookEventSaving.value = true
+  try {
+    const projectId = route.params.id as string
+    const normalizedIds = Array.from(new Set(selectedEventIds.value.map(id => Number(id)))).filter(id => !Number.isNaN(id))
+    await updateProjectWebhookEvents(projectId, {
+      event_ids: normalizedIds
+    })
+    alert('Webhook事件配置已更新')
+    await loadProjectWebhookEvents()
+    // 事件更新后重新加载 prompt 配置
+    await loadProjectWebhookEventPrompts()
+  } catch (error) {
+    console.error('Failed to save project webhook events:', error)
+    alert('保存Webhook事件配置失败')
+  } finally {
+    webhookEventSaving.value = false
+  }
+}
+
+const loadProjectWebhookEventPrompts = async () => {
+  try {
+    const projectId = route.params.id as string
+    const response = await getProjectWebhookEventPrompts(projectId)
+
+    if (response && response.prompts) {
+      eventPrompts.value = response.prompts
+    }
+  } catch (error) {
+    console.error('Failed to load project webhook event prompts:', error)
+  }
+}
+
+const savePromptConfig = async (promptConfig: any) => {
+  promptSaving.value = true
+  try {
+    const projectId = route.params.id as string
+    await updateProjectWebhookEventPrompt(projectId, {
+      event_rule_id: promptConfig.event_rule,
+      custom_prompt: promptConfig.custom_prompt,
+      use_custom: promptConfig.use_custom
+    })
+    alert('提示词配置已保存')
+    await loadProjectWebhookEventPrompts()
+  } catch (error) {
+    console.error('Failed to save prompt config:', error)
+    alert('保存失败，请重试')
+  } finally {
+    promptSaving.value = false
   }
 }
 
@@ -815,6 +1118,11 @@ const refreshData = async () => {
   ])
   await loadNotificationChannelList()
   await loadProjectNotificationSettings()
+  // 先加载所有事件规则，再加载项目的事件配置（确保可以正确过滤无效ID）
+  await loadWebhookEventRules()
+  await loadProjectWebhookEvents()
+  // 加载 webhook 事件 prompt 配置
+  await loadProjectWebhookEventPrompts()
 }
 
 const initializeCharts = () => {

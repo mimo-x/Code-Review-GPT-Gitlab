@@ -168,6 +168,177 @@
       </div>
     </div>
 
+    <!-- Webhook Events Config -->
+    <div v-show="activeTab === 'webhook-events'" class="config-section">
+      <div class="p-6 space-y-6">
+        <div class="flex items-center gap-3">
+          <div class="w-2 h-2 bg-purple-500 rounded-full"></div>
+          <h3 class="text-lg font-semibold text-apple-900">Webhook 事件规则</h3>
+        </div>
+
+        <div class="bg-apple-50/50 border border-apple-200/40 rounded-xl p-4 text-sm text-apple-600">
+          管理全局 Webhook 事件识别规则。当前仅支持 Merge Request 相关事件，包括创建和更新两种场景。
+        </div>
+
+        <div class="flex items-center justify-between">
+          <h4 class="text-sm font-semibold text-apple-900">事件规则列表</h4>
+          <button @click="initializeDefaultRules" :disabled="initializing" class="btn-secondary">
+            {{ initializing ? '初始化中...' : '初始化默认规则' }}
+          </button>
+        </div>
+
+        <div v-if="filteredEventRules.length === 0" class="p-6 bg-apple-50 border border-dashed border-apple-200 text-center rounded-xl text-sm text-apple-500">
+          暂无事件规则，请点击「初始化默认规则」开始配置。
+        </div>
+
+        <div v-else class="space-y-4">
+          <div
+            v-for="rule in filteredEventRules"
+            :key="rule.id"
+            class="p-4 border border-apple-200/60 rounded-xl bg-white shadow-sm space-y-3"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex-1">
+                <div class="flex items-center gap-2 mb-2">
+                  <div class="text-sm font-semibold text-apple-900">{{ rule.name }}</div>
+                  <span v-if="!rule.is_active" class="badge bg-apple-200 text-apple-700">停用</span>
+                </div>
+                <div class="text-xs text-apple-500 mb-2">{{ rule.description || '暂无描述' }}</div>
+                <div class="text-xs text-apple-400 space-y-1">
+                  <div>事件类型：{{ rule.event_type }}</div>
+                  <div class="font-mono bg-apple-50 p-2 rounded text-xs">
+                    匹配规则：{{ JSON.stringify(rule.match_rules, null, 2) }}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center gap-3 pt-2">
+              <button class="btn-secondary" @click="editEventRule(rule)">
+                <Pencil class="w-4 h-4" />
+                编辑
+              </button>
+              <button class="btn-secondary" @click="testEventRule(rule)">
+                <Play class="w-4 h-4" />
+                测试
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 规则编辑弹窗 -->
+        <div v-if="ruleEditorVisible" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div class="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-auto">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-semibold">编辑事件规则</h3>
+              <button @click="ruleEditorVisible = false" class="text-apple-500 hover:text-apple-700">
+                <X class="w-5 h-5" />
+              </button>
+            </div>
+            <div class="space-y-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium mb-2">规则名称</label>
+                  <input
+                    v-model="editingRule.name"
+                    type="text"
+                    class="w-full p-3 border border-apple-200 rounded-lg"
+                    placeholder="输入规则名称"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-2">事件类型</label>
+                  <select
+                    v-model="editingRule.event_type"
+                    class="w-full p-3 border border-apple-200 rounded-lg"
+                    :disabled="true"
+                  >
+                    <option value="mr_open">MR 创建</option>
+                    <option value="mr_update">MR 更新</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium mb-2">描述</label>
+                <textarea
+                  v-model="editingRule.description"
+                  class="w-full p-3 border border-apple-200 rounded-lg"
+                  rows="3"
+                  placeholder="输入规则描述"
+                ></textarea>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium mb-2">匹配规则 (JSON格式)</label>
+                <textarea
+                  v-model="editingRule.matchRulesText"
+                  class="w-full p-3 border border-apple-200 rounded-lg font-mono text-xs"
+                  rows="6"
+                  placeholder="输入匹配规则，JSON格式"
+                ></textarea>
+              </div>
+
+              <div class="flex items-center gap-4">
+                <label class="flex items-center gap-2 text-sm">
+                  <input
+                    v-model="editingRule.is_active"
+                    type="checkbox"
+                  />
+                  启用此规则
+                </label>
+              </div>
+
+              <div class="flex justify-end gap-3">
+                <button @click="ruleEditorVisible = false" class="btn-secondary">取消</button>
+                <button @click="saveEventRule" class="btn-primary" :disabled="ruleSaving">
+                  {{ ruleSaving ? '保存中...' : '保存规则' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 规则测试弹窗 -->
+        <div v-if="testDialogVisible" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div class="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-auto">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-semibold">测试事件规则</h3>
+              <button @click="testDialogVisible = false" class="text-apple-500 hover:text-apple-700">
+                <X class="w-5 h-5" />
+              </button>
+            </div>
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium mb-2">测试 Payload (JSON格式)</label>
+                <textarea
+                  v-model="testPayload"
+                  class="w-full p-3 border border-apple-200 rounded-lg font-mono text-xs"
+                  rows="10"
+                  placeholder="粘贴要测试的 GitLab Webhook Payload"
+                ></textarea>
+              </div>
+              <div v-if="testResult" class="p-4 rounded-lg" :class="testResult.is_match ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'">
+                <div class="font-medium mb-2">
+                  {{ testResult.is_match ? '✅ 匹配成功' : '❌ 匹配失败' }}
+                </div>
+                <div class="text-sm">
+                  <div>规则：{{ testResult.rule_name }}</div>
+                  <div v-if="testResult.is_match" class="text-green-600">该 payload 匹配当前规则</div>
+                  <div v-else class="text-red-600">该 payload 不匹配当前规则</div>
+                </div>
+              </div>
+              <div class="flex justify-end gap-3">
+                <button @click="testDialogVisible = false" class="btn-secondary">关闭</button>
+                <button @click="executeTest" class="btn-primary" :disabled="!testPayload.trim()">
+                  开始测试
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Notification Config -->
     <div v-show="activeTab === 'notification'" class="config-section">
       <div class="p-6 space-y-6">
@@ -182,7 +353,7 @@
 
         <div class="flex items-center justify-between">
           <h4 class="text-sm font-semibold text-apple-900">通道列表</h4>
-          <button @click="openChannelForm()" class="btn-primary">
+          <button @click="openChannelDialog()" class="btn-primary">
             <PlusCircle class="w-4 h-4" />
             新建通道
           </button>
@@ -196,7 +367,7 @@
           <div v-for="type in channelTypes" :key="type.value" class="space-y-3">
             <div class="flex items-center justify-between">
               <div class="text-sm font-medium text-apple-900">{{ type.label }}</div>
-              <button @click="openChannelForm(type.value)" class="text-xs text-apple-blue-600 hover:text-apple-blue-500 flex items-center gap-1">
+              <button @click="openChannelDialog(type.value)" class="text-xs text-apple-blue-600 hover:text-apple-blue-500 flex items-center gap-1">
                 <PlusCircle class="w-3 h-3" />
                 新增
               </button>
@@ -227,6 +398,10 @@
                     <Pencil class="w-4 h-4" />
                     编辑
                   </button>
+                  <button class="btn-secondary" @click="testChannel(channel)" :disabled="testingChannelId === channel.id">
+                    <Play class="w-4 h-4" />
+                    {{ testingChannelId === channel.id ? '发送中...' : '测试' }}
+                  </button>
                   <button class="btn-ghost text-red-500 hover:text-red-600" @click="removeChannel(channel)">
                     <Trash2 class="w-4 h-4" />
                     删除
@@ -237,13 +412,19 @@
             <div v-else class="text-xs text-apple-500 bg-apple-50 rounded-lg px-3 py-2">暂无 {{ type.label }} 通道</div>
           </div>
         </div>
+      </div>
+    </div>
 
-        <div v-if="channelEditorVisible" id="channel-editor" class="border-t border-apple-200/60 pt-6 space-y-4">
-          <div class="flex items-center justify-between">
-            <h4 class="text-sm font-semibold text-apple-900">{{ channelForm.id ? '编辑通道' : '新建通道' }}</h4>
-            <button class="text-xs text-apple-500 hover:text-apple-700" @click="cancelChannelEdit">取消</button>
-          </div>
-
+    <!-- 通道编辑弹窗 -->
+    <div v-if="channelDialogVisible" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-auto">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold">{{ channelForm.id ? '编辑通知通道' : '新建通知通道' }}</h3>
+          <button @click="closeChannelDialog" class="text-apple-500 hover:text-apple-700">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+        <div class="space-y-4">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="config-field-group">
               <label class="config-label">通道名称</label>
@@ -270,13 +451,13 @@
               class="config-field-group md:col-span-2"
               v-if="['dingtalk', 'feishu'].includes(channelForm.notification_type)"
             >
-              <label class="config-label">Secret</label>
+              <label class="config-label">Secret <span class="text-sm text-gray-400">(可选)</span></label>
               <div class="relative">
                 <input
                   v-model="channelForm.secret"
                   :type="showChannelSecret ? 'text' : 'password'"
                   class="input-field pr-20"
-                  placeholder="可选：签名密钥"
+                  placeholder="签名密钥（不填则不使用签名验证）"
                 />
                 <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                   <button
@@ -316,7 +497,7 @@
               <Save class="w-4 h-4" />
               {{ channelSaving ? '保存中...' : '保存通道' }}
             </button>
-            <button @click="cancelChannelEdit" class="btn-secondary" :disabled="channelSaving">
+            <button @click="closeChannelDialog" class="btn-secondary" :disabled="channelSaving">
               取消
             </button>
           </div>
@@ -328,18 +509,26 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
-import { Save, RotateCcw, CheckCircle, XCircle, PlusCircle, Pencil, Trash2, Eye, EyeOff, Copy } from 'lucide-vue-next'
+import { Save, RotateCcw, CheckCircle, XCircle, PlusCircle, Pencil, Trash2, Eye, EyeOff, Copy, Play, X } from 'lucide-vue-next'
 import {
   getConfigSummary,
   batchUpdateConfig,
   getNotificationChannels,
   createNotificationChannel,
   updateNotificationChannel,
-  deleteNotificationChannel
+  deleteNotificationChannel,
+  testNotificationChannel,
+  getWebhookEventRules,
+  createWebhookEventRule,
+  updateWebhookEventRule,
+  deleteWebhookEventRule,
+  testWebhookEventRule,
+  validateWebhookPayload,
+  initializeDefaultWebhookEventRules
 } from '@/api/index'
 
 // 响应式数据
-const activeTab = ref('llm')
+const activeTab = ref('gitlab')
 const saving = ref(false)
 const message = ref('')
 const messageType = ref<'success' | 'error'>('success')
@@ -350,8 +539,8 @@ const showGitlabToken = ref(false)
 const showChannelSecret = ref(false)
 
 const tabs = [
-  { key: 'llm', label: 'LLM 配置' },
   { key: 'gitlab', label: 'GitLab 配置' },
+  { key: 'webhook-events', label: 'Webhook 事件' },
   { key: 'notification', label: '通知配置' }
 ]
 
@@ -371,6 +560,7 @@ const config = ref({
 })
 
 const channels = ref<any[]>([])
+const webhookEventRules = ref<any[]>([])
 const baseChannelTypes: Record<string, string> = {
   dingtalk: '钉钉通知',
   feishu: '飞书通知',
@@ -380,8 +570,12 @@ const baseChannelTypes: Record<string, string> = {
   email: '邮件通知'
 }
 
-const channelEditorVisible = ref(false)
+// 支持的事件类型（仅支持 MR 创建和更新）
+const supportedEventTypeValues = new Set(['mr_open', 'mr_update'])
+
+const channelDialogVisible = ref(false)
 const channelSaving = ref(false)
+const testingChannelId = ref<number | null>(null)
 const channelForm = ref({
   id: null as number | null,
   name: '',
@@ -417,6 +611,35 @@ const groupedChannels = computed(() => {
 })
 
 const totalChannelCount = computed(() => channels.value.length)
+const totalEventRuleCount = computed(() => webhookEventRules.value.length)
+
+// 过滤只显示支持的事件规则
+const filteredEventRules = computed(() => {
+  return webhookEventRules.value.filter(rule =>
+    supportedEventTypeValues.has(rule.event_type)
+  )
+})
+
+// Webhook事件规则相关
+const initializing = ref(false)
+
+// 测试相关
+const testDialogVisible = ref(false)
+const testPayload = ref('')
+const testResult = ref<any>(null)
+const currentTestRule = ref<any>(null)
+
+// 规则编辑相关
+const ruleEditorVisible = ref(false)
+const ruleSaving = ref(false)
+const editingRule = ref({
+  id: null as number | null,
+  name: '',
+  event_type: 'mr_open',
+  description: '',
+  matchRulesText: '',
+  is_active: true
+})
 
 // 原始配置，用于重置
 const originalConfig = ref({})
@@ -526,6 +749,13 @@ const loadConfig = async () => {
       await refreshChannels()
     }
 
+    // 更新webhook事件规则列表
+    if (data.webhook_events) {
+      webhookEventRules.value = Array.isArray(data.webhook_events) ? data.webhook_events : []
+    } else {
+      await refreshWebhookEventRules()
+    }
+
     // 保存原始配置
     originalConfig.value = JSON.parse(JSON.stringify(config.value))
 
@@ -571,15 +801,9 @@ const handleSave = async () => {
   }
 }
 
-const openChannelForm = (notificationType?: string) => {
+const openChannelDialog = (notificationType?: string) => {
   resetChannelForm(notificationType)
-  channelEditorVisible.value = true
-  nextTick(() => {
-    const el = document.getElementById('channel-editor')
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-  })
+  channelDialogVisible.value = true
 }
 
 const editChannel = (channel: any) => {
@@ -593,11 +817,11 @@ const editChannel = (channel: any) => {
     is_active: channel.is_active !== false,
     is_default: channel.is_default || false
   }
-  channelEditorVisible.value = true
+  channelDialogVisible.value = true
 }
 
-const cancelChannelEdit = () => {
-  channelEditorVisible.value = false
+const closeChannelDialog = () => {
+  channelDialogVisible.value = false
   resetChannelForm()
 }
 
@@ -617,7 +841,8 @@ const submitChannelForm = async () => {
     }
 
     if (['dingtalk', 'feishu'].includes(channelForm.value.notification_type)) {
-      payload.secret = channelForm.value.secret
+      // Secret是可选的，如果为空则不发送
+      payload.secret = channelForm.value.secret?.trim() || null
     }
 
     if (channelForm.value.id) {
@@ -628,7 +853,7 @@ const submitChannelForm = async () => {
       showMessage('通知通道创建成功')
     }
 
-    channelEditorVisible.value = false
+    channelDialogVisible.value = false
     resetChannelForm()
     await refreshChannels()
 
@@ -653,6 +878,172 @@ const removeChannel = async (channel: any) => {
   } catch (error) {
     console.error('Failed to delete notification channel:', error)
     showMessage('删除通知通道失败', 'error')
+  }
+}
+
+// 测试通知渠道
+const testChannel = async (channel: any) => {
+  if (!channel?.id) return
+
+  testingChannelId.value = channel.id
+  try {
+    await testNotificationChannel(channel.id)
+    showMessage(`${channel.name} 测试消息发送成功`)
+  } catch (error: any) {
+    console.error('Failed to test notification channel:', error)
+    const errorMessage = error?.response?.data?.message || error?.message || '测试消息发送失败'
+    showMessage(`${channel.name} 测试失败: ${errorMessage}`, 'error')
+  } finally {
+    testingChannelId.value = null
+  }
+}
+
+// Webhook事件规则管理方法
+const refreshWebhookEventRules = async () => {
+  try {
+    const response = await getWebhookEventRules()
+    // 处理分页响应
+    if (response && response.results) {
+      webhookEventRules.value = response.results
+    } else if (Array.isArray(response)) {
+      webhookEventRules.value = response
+    } else {
+      webhookEventRules.value = []
+    }
+  } catch (error) {
+    console.error('Failed to load webhook event rules:', error)
+    showMessage('加载webhook事件规则失败', 'error')
+  }
+}
+
+const initializeDefaultRules = async () => {
+  const confirmed = window.confirm('确认初始化默认事件规则吗？\n\n系统将创建 2 条 Merge Request 事件规则：\n1. MR 创建 - 当新的 Merge Request 被创建时\n2. MR 更新 - 当 Merge Request 被更新时（如推送新提交）\n\n这是系统内置的规则，不支持自定义修改。')
+  if (!confirmed) return
+
+  initializing.value = true
+  try {
+    const response = await initializeDefaultWebhookEventRules()
+
+    const created = response.created_count || 0
+    const skipped = response.skipped_count || 0
+
+    if (created > 0 && skipped > 0) {
+      showMessage(`初始化完成：新建 ${created} 条规则，跳过 ${skipped} 条已存在的规则`)
+    } else if (created > 0) {
+      showMessage(`初始化成功：已创建 ${created} 条默认规则`)
+    } else if (skipped > 0) {
+      showMessage(`所有默认规则已存在（${skipped} 条），无需重复创建`)
+    } else {
+      showMessage('初始化完成')
+    }
+
+    await refreshWebhookEventRules()
+  } catch (error) {
+    console.error('Failed to initialize default rules:', error)
+    showMessage('初始化默认规则失败', 'error')
+  } finally {
+    initializing.value = false
+  }
+}
+
+const testEventRule = (rule: any) => {
+  currentTestRule.value = rule
+  testResult.value = null
+  testPayload.value = JSON.stringify({
+    "object_kind": "merge_request",
+    "object_attributes": {
+      "action": "open",
+      "iid": 1,
+      "title": "Test MR"
+    },
+    "project": {
+      "id": 123,
+      "name": "test-project"
+    }
+  }, null, 2)
+  testDialogVisible.value = true
+}
+
+
+const executeTest = async () => {
+  if (!testPayload.value.trim()) {
+    showMessage('请输入测试payload', 'error')
+    return
+  }
+
+  let payload: any
+  try {
+    payload = JSON.parse(testPayload.value)
+  } catch {
+    showMessage('Payload格式不正确，请输入有效的JSON', 'error')
+    return
+  }
+
+  try {
+    if (currentTestRule.value) {
+      // 测试特定规则
+      const result = await testWebhookEventRule(currentTestRule.value.id, payload)
+      const responseData = result.data || result
+      testResult.value = {
+        rule_name: currentTestRule.value.name,
+        is_match: responseData.is_match,
+        payload: responseData.payload,
+        match_rules: responseData.match_rules
+      }
+    }
+  } catch (error) {
+    console.error('Failed to test rule:', error)
+    showMessage('测试失败', 'error')
+  }
+}
+
+// 编辑事件规则
+const editEventRule = (rule: any) => {
+  editingRule.value = {
+    id: rule.id,
+    name: rule.name,
+    event_type: rule.event_type,
+    description: rule.description || '',
+    matchRulesText: JSON.stringify(rule.match_rules, null, 2),
+    is_active: rule.is_active !== false
+  }
+  ruleEditorVisible.value = true
+}
+
+// 保存事件规则
+const saveEventRule = async () => {
+  if (!editingRule.value.name.trim()) {
+    showMessage('请输入规则名称', 'error')
+    return
+  }
+
+  let matchRules
+  try {
+    matchRules = JSON.parse(editingRule.value.matchRulesText)
+  } catch {
+    showMessage('匹配规则格式不正确，请输入有效的JSON', 'error')
+    return
+  }
+
+  ruleSaving.value = true
+  try {
+    const payload = {
+      name: editingRule.value.name,
+      event_type: editingRule.value.event_type,
+      description: editingRule.value.description,
+      match_rules: matchRules,
+      is_active: editingRule.value.is_active
+    }
+
+    await updateWebhookEventRule(editingRule.value.id!, payload)
+    showMessage('事件规则更新成功')
+    ruleEditorVisible.value = false
+    await refreshWebhookEventRules()
+  } catch (error) {
+    console.error('Failed to save event rule:', error)
+    showMessage('保存事件规则失败', 'error')
+  } finally {
+    ruleSaving.value = false
   }
 }
 

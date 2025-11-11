@@ -78,6 +78,7 @@ class DingTalkService:
                 timestamp = str(round(time.time() * 1000))
                 sign = self._generate_signature(timestamp)
                 url = f"{self.webhook_url}&timestamp={timestamp}&sign={sign}"
+                logger.debug(f"[{self.request_id}] 钉钉签名生成完成 - timestamp:{timestamp}, sign:{sign}")
 
             # Build message payload
             payload = {
@@ -88,9 +89,15 @@ class DingTalkService:
                 }
             }
 
+            logger.info(f"[{self.request_id}] 开始发送钉钉消息 - URL:{url[:100]}...")
+            logger.debug(f"[{self.request_id}] 钉钉消息内容: {payload}")
+
             # Send request
             response = requests.post(url, json=payload, timeout=30)
             elapsed_time = time.time() - start_time
+
+            # 记录详细的响应信息
+            logger.info(f"[{self.request_id}] 钉钉API响应 - 状态码:{response.status_code}, 耗时:{elapsed_time:.2f}秒, 响应内容:{response.text}")
 
             result = response.json()
             if result.get('errcode') == 0:
@@ -99,23 +106,25 @@ class DingTalkService:
                     'success': True,
                     'message': 'DingTalk消息发送成功',
                     'response_time': elapsed_time,
-                    'details': {'errcode': result.get('errcode')}
+                    'details': {'errcode': result.get('errcode'), 'response': result}
                 }
             else:
-                logger.error(f"[{self.request_id}] DingTalk API错误: {result}")
+                logger.error(f"[{self.request_id}] DingTalk API错误 - 错误码:{result.get('errcode')}, 错误信息:{result.get('errmsg')}, 完整响应:{result}")
                 return {
                     'success': False,
-                    'message': f'DingTalk API错误: {result.get("errmsg", "未知错误")}',
+                    'message': f'DingTalk API错误: {result.get("errmsg", "未知错误")} (错误码: {result.get("errcode")})',
                     'response_time': elapsed_time,
-                    'details': result
+                    'details': {'response': result, 'http_status': response.status_code}
                 }
 
         except Exception as e:
-            logger.error(f"[{self.request_id}] DingTalk消息发送异常: {e}", exc_info=True)
+            elapsed_time = time.time() - start_time if 'start_time' in locals() else 0
+            logger.error(f"[{self.request_id}] DingTalk消息发送异常 - {str(e)}", exc_info=True)
             return {
                 'success': False,
                 'message': f'DingTalk消息发送异常: {str(e)}',
-                'response_time': time.time() - start_time if 'start_time' in locals() else 0
+                'response_time': elapsed_time,
+                'details': {'exception': str(e)}
             }
 
     def _generate_signature(self, timestamp):
@@ -268,9 +277,9 @@ class FeishuService:
             self.webhook_url = getattr(settings, 'FEISHU_WEBHOOK_URL', None)
             self.secret = getattr(settings, 'FEISHU_SECRET', None)
 
-    def send_card(self, card_content):
+    def send_text(self, text):
         """
-        Send interactive card to Feishu
+        Send simple text message to Feishu (不使用签名)
         """
         if not self.webhook_url:
             logger.warning(f"[{self.request_id}] Feishu webhook URL not configured")
@@ -282,22 +291,19 @@ class FeishuService:
         try:
             start_time = time.time()
 
-            # 如果配置了签名，需要添加签名参数
-            url = self.webhook_url
-            if self.secret:
-                timestamp = str(int(time.time()))
-                string_to_sign = f'{timestamp}\n{self.secret}'
-                hmac_code = hashlib.sha256(string_to_sign.encode('utf-8')).digest()
-                sign = urllib.parse.quote_plus(base64.b64encode(hmac_code))
-                url = f"{self.webhook_url}&timestamp={timestamp}&sign={sign}"
-
+            # 简单的文本消息，不使用签名
             payload = {
-                "msg_type": "interactive",
-                "card": card_content
+                "msg_type": "text",
+                "content": {
+                    "text": text
+                }
             }
 
-            response = requests.post(url, json=payload, timeout=30)
+            logger.debug(f"[{self.request_id}] 飞书请求payload: {payload}")
+            response = requests.post(self.webhook_url, json=payload, timeout=30)
             elapsed_time = time.time() - start_time
+
+            logger.info(f"[{self.request_id}] 飞书API响应 - 状态码:{response.status_code}, 响应内容:{response.text}")
 
             if response.status_code == 200:
                 result = response.json()
@@ -310,10 +316,10 @@ class FeishuService:
                         'details': {'code': result.get('code')}
                     }
                 else:
-                    logger.error(f"[{self.request_id}] 飞书发送失败 - 错误码:{result.get("code")}, 消息:{result.get("msg")}")
+                    logger.error(f"[{self.request_id}] 飞书发送失败 - 错误码:{result.get('code')}, 消息:{result.get('msg')}, 完整响应:{result}")
                     return {
                         'success': False,
-                        'message': f'飞书发送失败 - {result.get("msg", "未知错误")}',
+                        'message': f'飞书API错误: {result.get("msg", "未知错误")}',
                         'response_time': elapsed_time,
                         'details': result
                     }
@@ -333,6 +339,14 @@ class FeishuService:
                 'message': f'飞书消息发送异常: {str(e)}',
                 'response_time': time.time() - start_time if 'start_time' in locals() else 0
             }
+
+    # 保持向后兼容
+    def send_card(self, card_content):
+        """
+        向后兼容方法，转为发送文本消息
+        """
+        text = str(card_content)
+        return self.send_text(text)
 
 
 class WechatWorkService:
@@ -371,9 +385,9 @@ class WechatWorkService:
             logger.warning(f"[{self.request_id}] 企业微信配置加载失败，使用环境变量: {e}")
             self.webhook_url = getattr(settings, 'WECHAT_WORK_WEBHOOK_URL', None)
 
-    def send_markdown(self, content):
+    def send_text(self, content):
         """
-        Send markdown message to WeChat Work
+        Send simple text message to WeChat Work
         """
         if not self.webhook_url:
             logger.warning(f"[{self.request_id}] WeChat Work webhook URL not configured")
@@ -386,8 +400,8 @@ class WechatWorkService:
             start_time = time.time()
 
             payload = {
-                "msgtype": "markdown",
-                "markdown": {
+                "msgtype": "text",
+                "text": {
                     "content": content
                 }
             }
@@ -420,6 +434,13 @@ class WechatWorkService:
                 'message': f'企业微信消息发送异常: {str(e)}',
                 'response_time': time.time() - start_time if 'start_time' in locals() else 0
             }
+
+    # 向后兼容方法
+    def send_markdown(self, content):
+        """
+        向后兼容方法，转为发送文本消息
+        """
+        return self.send_text(content)
 
 
 class EmailService:

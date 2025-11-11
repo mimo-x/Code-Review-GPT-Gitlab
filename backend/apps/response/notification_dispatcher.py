@@ -57,9 +57,10 @@ class NotificationDispatcher:
                     })
 
                     if result.get('success', False):
-                        logger.info(f"[{self.request_id}] 渠道 {channel_type} ({channel.name}) 发送成功")
+                        logger.info(f"[{self.request_id}] 渠道 {channel_type} ({channel.name}) 发送成功 - 耗时:{result.get('response_time', 0):.2f}秒")
                     else:
-                        logger.error(f"[{self.request_id}] 渠道 {channel_type} ({channel.name}) 发送失败: {result.get('message', '')}")
+                        error_details = result.get('details', {})
+                        logger.error(f"[{self.request_id}] 渠道 {channel_type} ({channel.name}) 发送失败 - 错误信息:{result.get('message', '')}, 响应时间:{result.get('response_time', 0):.2f}秒, 详细信息:{error_details}")
                         failed_channels.append(f"{channel_type}:{channel.id}")
 
                 except Exception as e:
@@ -223,11 +224,16 @@ class NotificationDispatcher:
             webhook_url = config_dict.get('webhook_url') or config_dict.get('webhook')
             secret = config_dict.get('secret')
 
+            logger.info(f"[{self.request_id}] 开始配置钉钉服务 - 通道:{channel.name}, webhook_url配置:{bool(webhook_url)}, secret配置:{bool(secret)}")
+
             if not webhook_url:
+                error_msg = '钉钉webhook_url未配置'
+                logger.error(f"[{self.request_id}] {error_msg} - 通道:{channel.name}, config_dict:{config_dict}")
                 return {
                     'success': False,
-                    'message': '钉钉webhook_url未配置',
-                    'response_time': time.time() - start_time
+                    'message': error_msg,
+                    'response_time': time.time() - start_time,
+                    'details': {'channel_config': config_dict, 'webhook_url_exists': bool(webhook_url), 'secret_exists': bool(secret)}
                 }
 
             # 构建钉钉消息
@@ -428,18 +434,13 @@ class NotificationDispatcher:
 
     def _send_to_feishu(self, channel, report_data: Dict[str, Any], mr_info: Dict[str, Any], start_time: float) -> Dict[str, Any]:
         """
-        发送到飞书
+        发送到飞书（使用简单文本格式，不使用签名）
         """
         try:
             import requests
-            import hashlib
-            import base64
-            import urllib.parse
-            import time
 
             config_dict = channel.config_dict
             webhook_url = config_dict.get('webhook_url') or config_dict.get('webhook')
-            secret = config_dict.get('secret')
 
             if not webhook_url:
                 return {
@@ -447,14 +448,6 @@ class NotificationDispatcher:
                     'message': '飞书webhook_url未配置',
                     'response_time': time.time() - start_time
                 }
-
-            # 如果配置了签名，需要添加签名参数
-            if secret:
-                timestamp = str(int(time.time()))
-                string_to_sign = f'{timestamp}\n{secret}'
-                hmac_code = hashlib.sha256(string_to_sign.encode('utf-8')).digest()
-                sign = urllib.parse.quote_plus(base64.b64encode(hmac_code))
-                webhook_url = f"{webhook_url}&timestamp={timestamp}&sign={sign}"
 
             # 构建飞书消息
             content = report_data['content']
@@ -465,37 +458,21 @@ class NotificationDispatcher:
             if len(content) > 1500:
                 content = content[:1500] + "\n\n...(内容过长已截断)"
 
+            # 构建简单的文本消息（不使用签名）
+            message_text = f"🤖 AI代码审查报告\n\n项目: {project_name}\nMR: {mr_title}\n时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n{content}"
+
             payload = {
-                "msg_type": "interactive",
-                "card": {
-                    "elements": [
-                        {
-                            "tag": "div",
-                            "text": {
-                                "content": f"**项目**: {project_name}\n**MR**: {mr_title}\n**时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-                                "tag": "lark_md"
-                            }
-                        },
-                        {
-                            "tag": "div",
-                            "text": {
-                                "content": content,
-                                "tag": "lark_md"
-                            }
-                        }
-                    ],
-                    "header": {
-                        "title": {
-                            "content": "🤖 AI代码审查报告",
-                            "tag": "plain_text"
-                        },
-                        "template": "blue"
-                    }
+                "msg_type": "text",
+                "content": {
+                    "text": message_text
                 }
             }
 
+            logger.debug(f"[{self.request_id}] 飞书请求payload: {payload}")
             response = requests.post(webhook_url, json=payload, timeout=30)
             elapsed_time = time.time() - start_time
+
+            logger.info(f"[{self.request_id}] 飞书API响应 - 状态码:{response.status_code}, 响应内容:{response.text}")
 
             if response.status_code == 200:
                 result = response.json()
@@ -508,10 +485,10 @@ class NotificationDispatcher:
                         'details': {'code': result.get('code')}
                     }
                 else:
-                    logger.error(f"[{self.request_id}] 飞书发送失败 - 错误码:" + str(result.get("code")) + ", 消息:" + str(result.get("msg")))
+                    logger.error(f"[{self.request_id}] 飞书发送失败 - 错误码:" + str(result.get("code")) + ", 消息:" + str(result.get("msg")) + ", 完整响应:" + str(result))
                     return {
                         'success': False,
-                        'message': "飞书发送失败 - " + str(result.get('msg', '未知错误')),
+                        'message': "飞书API错误: " + str(result.get('msg', '未知错误')),
                         'response_time': elapsed_time,
                         'details': result
                     }
@@ -550,7 +527,7 @@ class NotificationDispatcher:
                     'response_time': time.time() - start_time
                 }
 
-            # 构建企业微信消息
+            # 构建企业微信消息（简单文本格式）
             content = report_data['content']
             mr_title = mr_info.get('title', '代码审查')
             project_name = mr_info.get('project_name', '未知项目')
@@ -559,18 +536,18 @@ class NotificationDispatcher:
             if len(content) > 1500:
                 content = content[:1500] + "\n\n...(内容过长已截断)"
 
-            message_content = f"""## 🤖 AI代码审查报告
+            message_content = f"""🤖 AI代码审查报告
 
-**项目**: {project_name}
-**MR**: {mr_title}
-**时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+项目: {project_name}
+MR: {mr_title}
+时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 {content}
 """
 
             payload = {
-                "msgtype": "markdown",
-                "markdown": {
+                "msgtype": "text",
+                "text": {
                     "content": message_content
                 }
             }

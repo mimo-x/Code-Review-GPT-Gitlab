@@ -3,8 +3,8 @@ from datetime import timedelta
 from django.conf import settings
 from django.utils import timezone
 import pytz
-from .models import WebhookLog, MergeRequestReview, Project, ProjectNotificationSetting
-from apps.llm.models import NotificationChannel
+from .models import WebhookLog, MergeRequestReview, Project, ProjectNotificationSetting, ProjectWebhookEventPrompt
+from apps.llm.models import NotificationChannel, WebhookEventRule
 
 
 class LocalDateTimeField(serializers.DateTimeField):
@@ -14,9 +14,9 @@ class LocalDateTimeField(serializers.DateTimeField):
     def to_representation(self, value):
         if value is None:
             return None
-        
+
         local_tz = pytz.timezone(getattr(settings, 'TIME_ZONE', 'Asia/Shanghai'))
-        
+
         # 如果是 naive datetime，将其视为本地时间；否则转换到本地时区
         if timezone.is_naive(value):
             value = local_tz.localize(value)
@@ -25,8 +25,8 @@ class LocalDateTimeField(serializers.DateTimeField):
 
         local_time = value.replace(microsecond=0)
 
-        # 返回包含时区信息的 ISO 格式，避免前端解析误差
-        return local_time.isoformat()
+        # 返回简单的日期时间格式：年月日时分秒
+        return local_time.strftime('%Y-%m-%d %H:%M:%S')
 
 
 class ProjectSerializer(serializers.ModelSerializer):
@@ -190,6 +190,31 @@ class ProjectNotificationUpdateSerializer(serializers.Serializer):
         return list(valid_ids)
 
 
+class ProjectWebhookEventsSerializer(serializers.Serializer):
+    """获取项目的webhook事件配置"""
+    enabled_event_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        read_only=True
+    )
+
+
+class ProjectWebhookEventsUpdateSerializer(serializers.Serializer):
+    """更新项目的webhook事件配置"""
+    event_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        allow_empty=True,
+        required=True
+    )
+
+    def validate_event_ids(self, value):
+        from apps.llm.models import WebhookEventRule
+        valid_ids = set(WebhookEventRule.objects.filter(id__in=value).values_list('id', flat=True))
+        missing = set(value) - valid_ids
+        if missing:
+            raise serializers.ValidationError(f"事件规则不存在: {sorted(missing)}")
+        return list(valid_ids)
+
+
 class WebhookLogSerializer(serializers.ModelSerializer):
     # 使用本地时区字段
     created_at = LocalDateTimeField(read_only=True)
@@ -206,8 +231,49 @@ class MergeRequestReviewSerializer(serializers.ModelSerializer):
     created_at = LocalDateTimeField(read_only=True)
     updated_at = LocalDateTimeField(read_only=True)
     completed_at = LocalDateTimeField(read_only=True)
-    
+
     class Meta:
         model = MergeRequestReview
         fields = '__all__'
         read_only_fields = ['_id', 'created_at', 'updated_at', 'completed_at']
+
+
+class ProjectWebhookEventPromptSerializer(serializers.ModelSerializer):
+    """项目 Webhook 事件自定义 Prompt 序列化器"""
+
+    event_rule_name = serializers.CharField(source='event_rule.name', read_only=True)
+    event_rule_type = serializers.CharField(source='event_rule.event_type', read_only=True)
+    event_rule_description = serializers.CharField(source='event_rule.description', read_only=True)
+
+    # 使用本地时区字段
+    created_at = LocalDateTimeField(read_only=True)
+    updated_at = LocalDateTimeField(read_only=True)
+
+    class Meta:
+        model = ProjectWebhookEventPrompt
+        fields = [
+            'id',
+            'project',
+            'event_rule',
+            'event_rule_name',
+            'event_rule_type',
+            'event_rule_description',
+            'custom_prompt',
+            'use_custom',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class ProjectWebhookEventPromptUpdateSerializer(serializers.Serializer):
+    """更新项目 Webhook 事件 Prompt 配置"""
+    event_rule_id = serializers.IntegerField(required=True)
+    custom_prompt = serializers.CharField(allow_blank=True, required=False, default='')
+    use_custom = serializers.BooleanField(required=False, default=False)
+
+    def validate_event_rule_id(self, value):
+        """验证事件规则是否存在"""
+        if not WebhookEventRule.objects.filter(id=value).exists():
+            raise serializers.ValidationError(f"事件规则 ID {value} 不存在")
+        return value

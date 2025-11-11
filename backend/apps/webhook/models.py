@@ -19,6 +19,10 @@ class Project(models.Model):
     auto_review_on_mr = models.BooleanField(default=True)
     gitlab_comment_notifications_enabled = models.BooleanField(default=True)
 
+    # Webhook事件触发配置 - SQLite兼容的JSON字段
+    # 存储此项目启用的WebhookEventRule ID列表
+    enabled_webhook_events = models.TextField(default='[]', blank=True, help_text="启用的webhook事件规则ID列表")
+
     # Additional settings - SQLite兼容的JSON字段
     exclude_file_types = models.TextField(default='[]', blank=True)
     ignore_file_patterns = models.TextField(default='[]', blank=True)
@@ -75,6 +79,37 @@ class Project(models.Model):
     @gitlab_data_dict.setter
     def gitlab_data_dict(self, value):
         self.gitlab_data = json.dumps(value)
+
+    @property
+    def enabled_webhook_events_list(self):
+        """获取启用的webhook事件规则ID列表"""
+        try:
+            return json.loads(self.enabled_webhook_events)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    @enabled_webhook_events_list.setter
+    def enabled_webhook_events_list(self, value):
+        """设置启用的webhook事件规则ID列表"""
+        self.enabled_webhook_events = json.dumps(value if isinstance(value, list) else list(value))
+
+    def is_webhook_event_enabled(self, event_rule_id: int) -> bool:
+        """检查指定的webhook事件规则是否在此项目中启用"""
+        return event_rule_id in self.enabled_webhook_events_list
+
+    def enable_webhook_event(self, event_rule_id: int):
+        """启用指定的webhook事件规则"""
+        events = self.enabled_webhook_events_list
+        if event_rule_id not in events:
+            events.append(event_rule_id)
+            self.enabled_webhook_events_list = events
+
+    def disable_webhook_event(self, event_rule_id: int):
+        """禁用指定的webhook事件规则"""
+        events = self.enabled_webhook_events_list
+        if event_rule_id in events:
+            events.remove(event_rule_id)
+            self.enabled_webhook_events_list = events
 
 
 class WebhookLog(models.Model):
@@ -253,3 +288,98 @@ class ProjectNotificationSetting(models.Model):
 
     def __str__(self):
         return f"Project {self.project.project_id} -> Channel {self.channel_id}"
+
+
+class ProjectWebhookEventPrompt(models.Model):
+    """
+    项目的 Webhook 事件自定义审查 Prompt 配置
+    每个项目可以为不同的 webhook 事件类型配置不同的代码审查提示词
+    """
+    id = models.AutoField(primary_key=True)
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name='webhook_event_prompts',
+        help_text="关联的项目"
+    )
+    event_rule = models.ForeignKey(
+        'llm.WebhookEventRule',
+        on_delete=models.CASCADE,
+        related_name='project_prompts',
+        help_text="关联的 Webhook 事件规则"
+    )
+
+    # 自定义的 Prompt 内容
+    custom_prompt = models.TextField(
+        blank=True,
+        default='',
+        help_text="自定义的代码审查提示词，支持占位符变量，留空则使用系统默认 Prompt"
+    )
+
+    # 是否启用自定义 Prompt
+    use_custom = models.BooleanField(
+        default=False,
+        help_text="是否使用自定义 Prompt，false 则使用系统默认"
+    )
+
+    # 时间戳
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'project_webhook_event_prompts'
+        unique_together = ['project', 'event_rule']
+        ordering = ['project', 'event_rule']
+        indexes = [
+            models.Index(fields=['project', 'event_rule']),
+            models.Index(fields=['use_custom']),
+        ]
+
+    def __str__(self):
+        return f"Project {self.project.project_id} - Event {self.event_rule.name} - Custom: {self.use_custom}"
+
+    def render_prompt(self, context: dict) -> str:
+        """
+        渲染 prompt 模板，替换占位符变量
+
+        支持的占位符：
+        - {project_name}: 项目名称
+        - {project_id}: 项目ID
+        - {author}: MR 作者
+        - {title}: MR 标题
+        - {description}: MR 描述
+        - {source_branch}: 源分支
+        - {target_branch}: 目标分支
+        - {mr_iid}: MR IID
+        - {file_count}: 文件变更数
+        - {changes_count}: 代码行变更数
+
+        Args:
+            context: 包含变量值的字典
+
+        Returns:
+            渲染后的 prompt 文本
+        """
+        if not self.custom_prompt:
+            return ''
+
+        prompt = self.custom_prompt
+
+        # 替换所有支持的占位符
+        replacements = {
+            '{project_name}': str(context.get('project_name', '')),
+            '{project_id}': str(context.get('project_id', '')),
+            '{author}': str(context.get('author', '')),
+            '{title}': str(context.get('title', '')),
+            '{description}': str(context.get('description', '')),
+            '{source_branch}': str(context.get('source_branch', '')),
+            '{target_branch}': str(context.get('target_branch', '')),
+            '{mr_iid}': str(context.get('mr_iid', '')),
+            '{file_count}': str(context.get('file_count', '')),
+            '{changes_count}': str(context.get('changes_count', '')),
+        }
+
+        for placeholder, value in replacements.items():
+            prompt = prompt.replace(placeholder, value)
+
+        return prompt

@@ -9,6 +9,7 @@ router.register(r'gitlab-configs', views.GitLabConfigViewSet, basename='gitlab-c
 router.register(r'notification-configs', views.NotificationConfigViewSet, basename='notification-config')
 router.register(r'configs', views.ConfigViewSet, basename='config')
 router.register(r'notification-channels', views.NotificationChannelViewSet, basename='notification-channel')
+router.register(r'webhook-event-rules', views.WebhookEventRuleViewSet, basename='webhook-event-rule')
 
 # API URL配置
 urlpatterns = [

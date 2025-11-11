@@ -95,6 +95,14 @@ export const deleteNotificationChannel = (id: string | number) => {
   })
 }
 
+// 测试通知渠道
+export const testNotificationChannel = (id: string | number) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.NOTIFICATION_CHANNEL_DETAIL(id) + 'test/'),
+    method: 'post'
+  })
+}
+
 // 日志列表
 export const getLogs = (params?: any) => {
   return request({
@@ -198,6 +206,40 @@ export const updateProjectNotifications = (id: string | number, data: any) => {
   })
 }
 
+// 项目 Webhook 事件 - 获取
+export const getProjectWebhookEvents = (id: string | number) => {
+  return request({
+    url: getApiUrl(`/webhook/projects/${id}/webhook-events/`),
+    method: 'get'
+  })
+}
+
+// 项目 Webhook 事件 - 更新
+export const updateProjectWebhookEvents = (id: string | number, data: any) => {
+  return request({
+    url: getApiUrl(`/webhook/projects/${id}/webhook-events/update/`),
+    method: 'post',
+    data
+  })
+}
+
+// 项目 Webhook 事件 Prompt - 获取
+export const getProjectWebhookEventPrompts = (id: string | number) => {
+  return request({
+    url: getApiUrl(`/webhook/projects/${id}/webhook-event-prompts/`),
+    method: 'get'
+  })
+}
+
+// 项目 Webhook 事件 Prompt - 更新
+export const updateProjectWebhookEventPrompt = (id: string | number, data: any) => {
+  return request({
+    url: getApiUrl(`/webhook/projects/${id}/webhook-event-prompts/update/`),
+    method: 'post',
+    data
+  })
+}
+
 // 项目管理 - 获取所有项目的统计数据
 export const getAllProjectStats = () => {
   return request({
@@ -219,5 +261,74 @@ export const getMockLogs = () => {
   return request({
     url: getApiUrl('/webhook/projects/mock/logs/'),
     method: 'get'
+  })
+}
+
+// Webhook事件规则 - 获取列表
+export const getWebhookEventRules = (params?: any) => {
+  return request({
+    url: getApiUrl('/webhook-event-rules/'),
+    method: 'get',
+    params
+  })
+}
+
+// Webhook事件规则 - 获取详情
+export const getWebhookEventRule = (id: string | number) => {
+  return request({
+    url: getApiUrl(`/webhook-event-rules/${id}/`),
+    method: 'get'
+  })
+}
+
+// Webhook事件规则 - 创建
+export const createWebhookEventRule = (data: any) => {
+  return request({
+    url: getApiUrl('/webhook-event-rules/'),
+    method: 'post',
+    data
+  })
+}
+
+// Webhook事件规则 - 更新
+export const updateWebhookEventRule = (id: string | number, data: any) => {
+  return request({
+    url: getApiUrl(`/webhook-event-rules/${id}/`),
+    method: 'patch',
+    data
+  })
+}
+
+// Webhook事件规则 - 删除
+export const deleteWebhookEventRule = (id: string | number) => {
+  return request({
+    url: getApiUrl(`/webhook-event-rules/${id}/`),
+    method: 'delete'
+  })
+}
+
+// Webhook事件规则 - 测试规则
+export const testWebhookEventRule = (id: string | number, payload: any) => {
+  return request({
+    url: getApiUrl(`/webhook-event-rules/${id}/test_rule/`),
+    method: 'post',
+    data: { payload }
+  })
+}
+
+// Webhook事件规则 - 验证payload
+export const validateWebhookPayload = (payload: any) => {
+  return request({
+    url: getApiUrl('/webhook-event-rules/validate_payload/'),
+    method: 'post',
+    data: { payload }
+  })
+}
+
+// Webhook事件规则 - 初始化默认规则
+export const initializeDefaultWebhookEventRules = () => {
+  return request({
+    url: getApiUrl('/webhook-event-rules/initialize_defaults/'),
+    method: 'post'
   })
 }

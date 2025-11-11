@@ -25,7 +25,8 @@ service.interceptors.response.use(
   (response: AxiosResponse) => {
     const { data, status } = response
 
-    if (status === 200) {
+    // 2xx 状态码都认为是成功
+    if (status >= 200 && status < 300) {
       return data
     }
 
