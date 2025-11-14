@@ -155,14 +155,43 @@
             </div>
           </div>
 
-          <div class="config-field-group">
-            <label class="config-label">最大审查文件数</label>
-            <input v-model.number="config.gitlab.maxFiles" type="number" class="input-field" min="1" max="200" />
+        </div>
+
+        <!-- Webhook URL Section -->
+        <div class="border-t border-apple-200/50 pt-6 space-y-4">
+          <div class="flex items-center gap-3">
+            <div class="w-2 h-2 bg-purple-500 rounded-full"></div>
+            <h3 class="text-lg font-semibold text-apple-900">Webhook 配置</h3>
           </div>
 
-          <div class="config-field-group">
-            <label class="config-label">上下文行数</label>
-            <input v-model.number="config.gitlab.contextLines" type="number" class="input-field" min="0" max="20" />
+          <div class="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200/60 rounded-xl p-4 text-sm text-purple-700">
+            <div class="font-medium mb-2">📌 配置 GitLab Webhook</div>
+            <div class="text-xs space-y-1 text-purple-600">
+              <div>1. 在 GitLab 项目中进入 Settings → Webhooks</div>
+              <div>2. 将下方地址复制到 URL 字段</div>
+              <div>3. 选择触发事件：Merge request events</div>
+              <div>4. 点击 Add webhook 完成配置</div>
+            </div>
+          </div>
+
+          <!-- Primary Webhook URL -->
+          <div class="space-y-2">
+            <div class="flex items-center gap-2 bg-gradient-to-r from-apple-blue-50 to-indigo-50 border-2 border-apple-blue-300 rounded-lg px-3 py-2.5">
+              <div class="flex items-center gap-2 flex-1 min-w-0">
+                <Link class="w-4 h-4 text-apple-blue-600 flex-shrink-0" />
+                <span class="text-xs text-apple-blue-700 font-semibold">Webhook 地址:</span>
+                <code class="text-xs text-apple-blue-700 bg-white px-2 py-1 rounded border border-apple-blue-200 truncate flex-1 font-mono">
+                  {{ webhookUrl }}
+                </code>
+              </div>
+              <button
+                @click="copyWebhookUrl(webhookUrl)"
+                class="flex-shrink-0 p-1.5 text-apple-blue-600 hover:text-apple-blue-700 hover:bg-white/50 rounded-lg transition-colors"
+                title="复制地址"
+              >
+                <Copy class="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -509,7 +538,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
-import { Save, RotateCcw, CheckCircle, XCircle, PlusCircle, Pencil, Trash2, Eye, EyeOff, Copy, Play, X } from 'lucide-vue-next'
+import { Save, RotateCcw, CheckCircle, XCircle, PlusCircle, Pencil, Trash2, Eye, EyeOff, Copy, Play, X, Link } from 'lucide-vue-next'
 import {
   getConfigSummary,
   batchUpdateConfig,
@@ -553,9 +582,7 @@ const config = ref({
   },
   gitlab: {
     serverUrl: 'https://gitlab.com',
-    privateToken: '',
-    maxFiles: 50,
-    contextLines: 5
+    privateToken: ''
   }
 })
 
@@ -618,6 +645,14 @@ const filteredEventRules = computed(() => {
   return webhookEventRules.value.filter(rule =>
     supportedEventTypeValues.has(rule.event_type)
   )
+})
+
+// Webhook URL 计算属性
+const webhookUrl = computed(() => {
+  // 从浏览器的当前地址构建 webhook URL
+  const protocol = window.location.protocol // http: 或 https:
+  const host = window.location.host // hostname:port
+  return `${protocol}//${host}/api/webhook/gitlab/`
 })
 
 // Webhook事件规则相关
@@ -736,9 +771,7 @@ const loadConfig = async () => {
     if (data.gitlab) {
       config.value.gitlab = {
         serverUrl: data.gitlab.server_url || 'https://gitlab.com',
-        privateToken: data.gitlab.private_token || '',
-        maxFiles: data.gitlab.max_files || 50,
-        contextLines: data.gitlab.context_lines || 5
+        privateToken: data.gitlab.private_token || ''
       }
     }
 
@@ -781,8 +814,6 @@ const handleSave = async () => {
       gitlab: {
         server_url: config.value.gitlab.serverUrl,
         private_token: config.value.gitlab.privateToken,
-        max_files: config.value.gitlab.maxFiles,
-        context_lines: config.value.gitlab.contextLines,
         is_active: true
       }
     }

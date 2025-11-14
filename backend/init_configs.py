@@ -77,8 +77,6 @@ def init_gitlab_configs():
         server_url='https://gitlab.com',
         defaults={
             'private_token': '',
-            'max_files': 50,
-            'context_lines': 5,
             'is_active': True
         }
     )

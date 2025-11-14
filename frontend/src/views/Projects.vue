@@ -198,6 +198,7 @@ import {
   enableProjectReview,
   disableProjectReview
 } from '@/api'
+import { toast } from '@/utils/toast'
 
 const router = useRouter()
 const searchQuery = ref('')
@@ -232,7 +233,7 @@ const loadProjects = async () => {
     }
   } catch (error) {
     console.error('Failed to load projects:', error)
-    alert('加载项目列表失败')
+    toast.error('加载项目列表失败')
   } finally {
     loading.value = false
   }
@@ -265,11 +266,11 @@ const toggleProjectReview = async (projectId: number) => {
     try {
       if (project.review_enabled) {
         await enableProjectReview(projectId.toString())
-        alert('已启用代码审查')
+        toast.success('已启用代码审查')
         stats.value.activeProjects++
       } else {
         await disableProjectReview(projectId.toString())
-        alert('已禁用代码审查')
+        toast.success('已禁用代码审查')
         stats.value.activeProjects--
       }
     } catch (apiError) {
@@ -279,7 +280,7 @@ const toggleProjectReview = async (projectId: number) => {
     }
   } catch (error) {
     console.error('Failed to toggle project review:', error)
-    alert('操作失败，请重试')
+    toast.error('操作失败，请重试')
   }
 }
 

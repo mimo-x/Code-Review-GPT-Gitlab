@@ -42,8 +42,6 @@ class GitLabConfig(models.Model):
     id = models.AutoField(primary_key=True)
     server_url = models.URLField(max_length=500, default='https://gitlab.com')
     private_token = models.CharField(max_length=500, blank=True)
-    max_files = models.IntegerField(default=50)
-    context_lines = models.IntegerField(default=5)
 
     # 状态和时间戳
     is_active = models.BooleanField(default=True)

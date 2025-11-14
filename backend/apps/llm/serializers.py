@@ -24,7 +24,7 @@ class LLMConfigSerializer(serializers.ModelSerializer):
 class GitLabConfigSerializer(serializers.ModelSerializer):
     class Meta:
         model = GitLabConfig
-        fields = ['id', 'server_url', 'private_token', 'max_files', 'context_lines', 'is_active', 'created_at', 'updated_at']
+        fields = ['id', 'server_url', 'private_token', 'is_active', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def to_representation(self, instance):

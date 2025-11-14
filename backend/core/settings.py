@@ -205,7 +205,6 @@ LOGGING = {
 # GitLab Configuration
 GITLAB_SERVER_URL = os.environ.get('GITLAB_SERVER_URL', 'https://gitlab.com')
 GITLAB_PRIVATE_TOKEN = os.environ.get('GITLAB_PRIVATE_TOKEN', '')
-GITLAB_MAX_FILES = int(os.environ.get('GITLAB_MAX_FILES', 50))
 
 # DingTalk Configuration
 DINGDING_BOT_WEBHOOK = os.environ.get('DINGDING_BOT_WEBHOOK', '')
@@ -214,7 +213,6 @@ DINGDING_SECRET = os.environ.get('DINGDING_SECRET', '')
 # Code Review Settings
 EXCLUDE_FILE_TYPES = os.environ.get('EXCLUDE_FILE_TYPES', '.py,.java,.class,.vue,.go,.c,.cpp').split(',')
 IGNORE_FILE_TYPES = os.environ.get('IGNORE_FILE_TYPES', 'mod.go').split(',')
-CONTEXT_LINES_NUM = int(os.environ.get('CONTEXT_LINES_NUM', 5))
 
 # LLM Configuration
 LLM_PROVIDER = os.environ.get('LLM_PROVIDER', 'deepseek')

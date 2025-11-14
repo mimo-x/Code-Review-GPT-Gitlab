@@ -332,3 +332,11 @@ export const initializeDefaultWebhookEventRules = () => {
     method: 'post'
   })
 }
+
+// 获取 Webhook URL
+export const getWebhookUrl = () => {
+  return request({
+    url: getApiUrl('/webhook/webhook-url/'),
+    method: 'get'
+  })
+}

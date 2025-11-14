@@ -62,11 +62,11 @@
                   <div class="text-sm text-apple-900">{{ project?.namespace }}</div>
                 </div>
                 <div>
-                  <div class="text-xs font-medium text-apple-600 mb-1 uppercase tracking-wide">Webhook URL</div>
+                  <div class="text-xs font-medium text-apple-600 mb-1 uppercase tracking-wide">项目地址</div>
                   <div class="flex items-center gap-2">
-                    <span class="text-sm text-apple-blue-600 truncate">{{ project?.webhook_url }}</span>
+                    <span class="text-sm text-apple-blue-600 truncate">{{ project?.project_url }}</span>
                     <button
-                      @click="openWebhookUrl(project?.webhook_url)"
+                      @click="openProjectUrl(project?.project_url)"
                       class="flex-shrink-0 text-apple-600 hover:text-apple-blue-600 transition-colors"
                     >
                       <ExternalLink class="w-4 h-4" />
@@ -352,22 +352,25 @@
               >
                 <div class="text-xs font-semibold text-apple-600 uppercase tracking-wide">{{ type.label }}</div>
                 <div v-if="groupedNotificationChannels[type.value]?.length" class="space-y-2">
-                  <label
+                  <div
                     v-for="channel in groupedNotificationChannels[type.value]"
                     :key="channel.id"
-                    class="flex items-start gap-2 text-xs text-apple-600 bg-apple-50 rounded-lg px-3 py-2 border border-apple-200/40"
+                    class="flex items-center justify-between bg-apple-50 border border-apple-200/60 rounded-lg px-4 py-3 hover:bg-apple-100/50 transition-colors duration-200"
                   >
-                    <input
-                      type="checkbox"
-                      class="mt-0.5"
-                      :value="Number(channel.id)"
-                      v-model="selectedChannelIds"
-                    />
-                    <div class="flex-1">
+                    <div class="flex-1 mr-3">
                       <div class="text-sm text-apple-900 font-medium">{{ channel.name }}</div>
-                      <div class="text-xs text-apple-500">{{ channel.description || '暂无备注' }}</div>
+                      <div class="text-xs text-apple-500 mt-0.5">{{ channel.description || '暂无备注' }}</div>
                     </div>
-                  </label>
+                    <label class="config-toggle flex-shrink-0">
+                      <input
+                        type="checkbox"
+                        class="config-toggle-input"
+                        :value="Number(channel.id)"
+                        v-model="selectedChannelIds"
+                      />
+                      <div class="config-toggle-slider"></div>
+                    </label>
+                  </div>
                 </div>
                 <div v-else class="text-xs text-apple-400 bg-apple-50 rounded-lg px-3 py-2 border border-dashed border-apple-200">
                   该类型暂无可用通道
@@ -410,7 +413,17 @@
                       <h4 class="text-sm font-semibold text-apple-900">{{ event.title }}</h4>
                       <p class="text-xs text-apple-600 mt-0.5">{{ event.description }}</p>
                     </div>
-                    <span class="text-2xs text-apple-500 flex-shrink-0">{{ event.time }}</span>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        v-if="getGitLabEventUrl(event)"
+                        @click="openProjectUrl(getGitLabEventUrl(event))"
+                        class="text-apple-600 hover:text-apple-blue-600 transition-colors p-1 rounded-lg hover:bg-apple-200/50"
+                        title="在 GitLab 中查看"
+                      >
+                        <ExternalLink class="w-4 h-4" />
+                      </button>
+                      <span class="text-2xs text-apple-500">{{ event.time }}</span>
+                    </div>
                   </div>
                   <div class="flex items-center gap-3 mt-2">
                     <div class="flex items-center gap-1.5 text-2xs text-apple-600">
@@ -431,6 +444,46 @@
                     </span>
                   </div>
                 </div>
+              </div>
+
+              <!-- 分页组件 -->
+              <div v-if="totalPages > 1" class="flex items-center justify-center gap-2 pt-4">
+                <button
+                  @click="handlePageChange(currentPage - 1)"
+                  :disabled="currentPage === 1"
+                  class="px-3 py-2 text-sm rounded-lg border border-apple-200 hover:bg-apple-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  上一页
+                </button>
+
+                <div class="flex items-center gap-1">
+                  <button
+                    v-for="page in totalPages"
+                    :key="page"
+                    @click="handlePageChange(page)"
+                    :class="[
+                      'px-3 py-2 text-sm rounded-lg transition-colors',
+                      currentPage === page
+                        ? 'bg-apple-blue-500 text-white'
+                        : 'border border-apple-200 hover:bg-apple-50'
+                    ]"
+                  >
+                    {{ page }}
+                  </button>
+                </div>
+
+                <button
+                  @click="handlePageChange(currentPage + 1)"
+                  :disabled="currentPage === totalPages"
+                  class="px-3 py-2 text-sm rounded-lg border border-apple-200 hover:bg-apple-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  下一页
+                </button>
+              </div>
+
+              <!-- 数据为空提示 -->
+              <div v-if="recentEvents.length === 0" class="p-8 text-center">
+                <div class="text-apple-400 text-sm">暂无事件记录</div>
               </div>
             </div>
           </div>
@@ -531,7 +584,7 @@
               <span>{{ project?.review_enabled ? '关闭审查' : '开启审查' }}</span>
             </button>
             <button
-              @click="openWebhookUrl(project?.webhook_url)"
+              @click="openProjectUrl(project?.project_url)"
               class="btn-secondary w-full"
             >
               <ExternalLink class="w-4 h-4" />
@@ -590,6 +643,7 @@ import {
   getProjectWebhookEventPrompts,
   updateProjectWebhookEventPrompt
 } from '@/api'
+import { toast } from '@/utils/toast'
 
 const route = useRoute()
 const router = useRouter()
@@ -598,7 +652,6 @@ const router = useRouter()
 const activeTab = ref('info')
 const tabs = [
   { key: 'info', label: '项目信息' },
-  { key: 'stats', label: '统计图表' },
   { key: 'webhook-events', label: 'Webhook事件' },
   { key: 'event-prompts', label: '审查提示词' },
   { key: 'notifications', label: '通知设置' },
@@ -613,6 +666,11 @@ const project = ref<any>(null)
 const projectStats = ref<any>(null)
 const recentEvents = ref<any[]>([])
 const topContributors = ref<any[]>([])
+
+// 分页相关
+const currentPage = ref(1)
+const pageSize = ref(10)
+const totalEvents = ref(0)
 
 const notificationChannels = ref<any[]>([])
 const channelTypeLabels: Record<string, string> = {
@@ -666,33 +724,45 @@ const loadProjectDetail = async () => {
     const projectId = route.params.id as string
     const response = await getProjectDetail(projectId)
 
-    if (response.data && response.data.project) {
-      project.value = response.data.project
-      projectStats.value = response.data.stats
+    if (response && response.status === 'success') {
+      project.value = response.project
+      projectStats.value = response.stats
     }
   } catch (error) {
     console.error('Failed to load project detail:', error)
-    alert('加载项目详情失败')
+    toast.error('加载项目详情失败')
   } finally {
     loading.value = false
   }
 }
 
-const loadRecentEvents = async () => {
+const loadRecentEvents = async (page: number = 1) => {
   try {
     const projectId = route.params.id as string
-    const response = await getProjectWebhookLogs(projectId, { limit: 10 })
+    const response = await getProjectWebhookLogs(projectId, {
+      limit: pageSize.value,
+      offset: (page - 1) * pageSize.value
+    })
 
-    if (response.data && response.data.logs) {
-      recentEvents.value = response.data.logs.map((log: any) => ({
+    if (response && response.status === 'success' && response.logs) {
+      recentEvents.value = response.logs.map((log: any) => ({
         type: log.event_type,
         title: getEventTitle(log.event_type, log.merge_request_iid),
         description: getEventDescription(log.event_type, log.object_attributes),
-        author: log.user_name,
-        branch: log.source_branch || log.target_branch,
+        author: log.user_name || log.user_email || '未知',
+        branch: log.source_branch || log.target_branch || '未知分支',
         status: getEventStatus(log.event_type, log.processed),
-        time: formatTimeAgo(log.created_at)
+        time: formatTimeAgo(log.created_at),
+        // 添加跳转需要的字段
+        merge_request_iid: log.merge_request_iid,
+        issue_iid: log.issue_iid,
+        note_id: log.note_id,
+        source_branch: log.source_branch,
+        target_branch: log.target_branch,
+        created_at: log.created_at
       }))
+      // 更新总数
+      totalEvents.value = response.total || response.logs.length
     }
   } catch (error) {
     console.error('Failed to load recent events:', error)
@@ -704,9 +774,27 @@ const loadReviewHistory = async () => {
     const projectId = route.params.id as string
     const response = await getProjectReviewHistory(projectId, { limit: 20, days: 30 })
 
-    if (response.data && response.data.reviews) {
+    if (response && response.status === 'success' && response.reviews) {
       // Process review history to create charts data
-      processReviewData(response.data.reviews)
+      processReviewData(response.reviews)
+
+      // 提取活跃贡献者
+      const contributorsMap = new Map()
+      response.reviews.forEach((review: any) => {
+        const author = review.author || '未知'
+        if (!contributorsMap.has(author)) {
+          contributorsMap.set(author, {
+            name: author,
+            initials: author.substring(0, 2).toUpperCase(),
+            commits: 0
+          })
+        }
+        contributorsMap.get(author).commits++
+      })
+
+      topContributors.value = Array.from(contributorsMap.values())
+        .sort((a, b) => b.commits - a.commits)
+        .slice(0, 5)
     }
   } catch (error) {
     console.error('Failed to load review history:', error)
@@ -755,11 +843,11 @@ const saveProjectNotificationSettings = async () => {
       gitlab_comment_enabled: gitlabCommentEnabled.value,
       channel_ids: normalizedIds
     })
-    alert('通知设置已更新')
+    toast.success('通知设置已更新')
     await loadProjectNotificationSettings()
   } catch (error) {
     console.error('Failed to save project notifications:', error)
-    alert('保存通知设置失败')
+    toast.error('保存通知设置失败')
   } finally {
     notificationSaving.value = false
   }
@@ -816,13 +904,13 @@ const saveProjectWebhookEvents = async () => {
     await updateProjectWebhookEvents(projectId, {
       event_ids: normalizedIds
     })
-    alert('Webhook事件配置已更新')
+    toast.success('Webhook事件配置已更新')
     await loadProjectWebhookEvents()
     // 事件更新后重新加载 prompt 配置
     await loadProjectWebhookEventPrompts()
   } catch (error) {
     console.error('Failed to save project webhook events:', error)
-    alert('保存Webhook事件配置失败')
+    toast.error('保存Webhook事件配置失败')
   } finally {
     webhookEventSaving.value = false
   }
@@ -850,11 +938,11 @@ const savePromptConfig = async (promptConfig: any) => {
       custom_prompt: promptConfig.custom_prompt,
       use_custom: promptConfig.use_custom
     })
-    alert('提示词配置已保存')
+    toast.success('提示词配置已保存')
     await loadProjectWebhookEventPrompts()
   } catch (error) {
     console.error('Failed to save prompt config:', error)
-    alert('保存失败，请重试')
+    toast.error('保存失败，请重试')
   } finally {
     promptSaving.value = false
   }
@@ -868,6 +956,39 @@ const getEventTitle = (eventType: string, mrIid?: number) => {
     'note': '新增评论'
   }
   return titleMap[eventType] || '未知事件'
+}
+
+const getGitLabEventUrl = (event: any) => {
+  if (!project.value?.project_url) return null
+
+  const baseUrl = project.value.project_url.replace(/\.git$/, '')
+
+  switch (event.type) {
+    case 'merge_request':
+      if (event.merge_request_iid) {
+        return `${baseUrl}/-/merge_requests/${event.merge_request_iid}`
+      }
+      break
+    case 'push':
+      if (event.source_branch) {
+        return `${baseUrl}/-/commits/${event.source_branch}`
+      }
+      break
+    case 'note':
+      if (event.merge_request_iid && event.note_id) {
+        return `${baseUrl}/-/merge_requests/${event.merge_request_iid}#note_${event.note_id}`
+      } else if (event.issue_iid && event.note_id) {
+        return `${baseUrl}/-/issues/${event.issue_iid}#note_${event.note_id}`
+      }
+      break
+    case 'issue':
+      if (event.issue_iid) {
+        return `${baseUrl}/-/issues/${event.issue_iid}`
+      }
+      break
+  }
+
+  return baseUrl
 }
 
 const getEventDescription = (eventType: string, objectAttributes?: any) => {
@@ -1088,10 +1209,10 @@ const toggleReview = async () => {
     try {
       if (project.value.review_enabled) {
         await enableProjectReview(projectId.toString())
-        alert('已启用代码审查')
+        toast.success('已启用代码审查')
       } else {
         await disableProjectReview(projectId.toString())
-        alert('已禁用代码审查')
+        toast.success('已禁用代码审查')
       }
     } catch (apiError) {
       // Revert on API error
@@ -1100,11 +1221,11 @@ const toggleReview = async () => {
     }
   } catch (error) {
     console.error('Failed to toggle review:', error)
-    alert('操作失败，请重试')
+    toast.error('操作失败，请重试')
   }
 }
 
-const openWebhookUrl = (url?: string) => {
+const openProjectUrl = (url?: string) => {
   if (url) {
     window.open(url, '_blank')
   }
@@ -1113,7 +1234,7 @@ const openWebhookUrl = (url?: string) => {
 const refreshData = async () => {
   await Promise.all([
     loadProjectDetail(),
-    loadRecentEvents(),
+    loadRecentEvents(currentPage.value),
     loadReviewHistory()
   ])
   await loadNotificationChannelList()
@@ -1123,6 +1244,14 @@ const refreshData = async () => {
   await loadProjectWebhookEvents()
   // 加载 webhook 事件 prompt 配置
   await loadProjectWebhookEventPrompts()
+}
+
+// 分页相关计算属性和方法
+const totalPages = computed(() => Math.ceil(totalEvents.value / pageSize.value))
+
+const handlePageChange = async (page: number) => {
+  currentPage.value = page
+  await loadRecentEvents(page)
 }
 
 const initializeCharts = () => {

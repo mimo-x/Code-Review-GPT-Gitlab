@@ -1830,3 +1830,114 @@ def mock_logs(request):
             {'status': 'error', 'message': str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+@api_view(['GET'])
+def get_webhook_url(request):
+    """
+    获取系统的 Webhook URL，自动检测内网和外网地址
+
+    GET /api/webhook/webhook-url/
+
+    返回格式:
+    {
+        "status": "success",
+        "webhook_url": "http://example.com/api/webhook/gitlab/",
+        "internal_url": "http://192.168.1.100:8000/api/webhook/gitlab/",
+        "external_url": "http://1.2.3.4:8000/api/webhook/gitlab/",
+        "current_url": "http://example.com/api/webhook/gitlab/"
+    }
+    """
+    try:
+        import socket
+        import requests as req
+        from django.conf import settings
+
+        # 获取协议
+        scheme = 'https' if request.is_secure() else 'http'
+
+        # 获取端口
+        port = request.get_port()
+        port_suffix = f':{port}' if port not in ['80', '443', 80, 443] else ''
+
+        # 1. 获取内网IP
+        internal_ip = None
+        try:
+            # 创建一个UDP socket，不需要真正连接
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            internal_ip = s.getsockname()[0]
+            s.close()
+        except Exception as e:
+            logger.warning(f"获取内网IP失败: {str(e)}")
+            # 备用方法
+            try:
+                internal_ip = socket.gethostbyname(socket.gethostname())
+            except:
+                internal_ip = '127.0.0.1'
+
+        # 2. 获取外网IP
+        external_ip = None
+        try:
+            # 尝试多个公共IP查询服务
+            ip_services = [
+                'https://api.ipify.org?format=text',
+                'https://ifconfig.me/ip',
+                'https://icanhazip.com',
+                'https://ident.me',
+            ]
+            for service in ip_services:
+                try:
+                    response = req.get(service, timeout=3)
+                    if response.status_code == 200:
+                        external_ip = response.text.strip()
+                        break
+                except:
+                    continue
+        except Exception as e:
+            logger.warning(f"获取外网IP失败: {str(e)}")
+
+        # 3. 构建 URL
+        webhook_path = '/api/webhook/gitlab/'
+
+        # 内网URL
+        internal_url = f"{scheme}://{internal_ip}{port_suffix}{webhook_path}"
+
+        # 外网URL（如果获取到了外网IP）
+        external_url = None
+        if external_ip:
+            external_url = f"{scheme}://{external_ip}{port_suffix}{webhook_path}"
+
+        # 当前请求的URL
+        current_host = request.get_host()
+        current_url = f"{scheme}://{current_host}{webhook_path}"
+
+        # 配置的 BASE_URL（如果有）
+        configured_base_url = getattr(settings, 'BASE_URL', None)
+        configured_url = None
+        if configured_base_url:
+            configured_url = f"{configured_base_url}{webhook_path}"
+
+        # 优先级：配置的URL > 当前请求URL > 外网URL > 内网URL
+        primary_url = configured_url or current_url
+
+        return Response({
+            'status': 'success',
+            'webhook_url': primary_url,
+            'urls': {
+                'configured': configured_url,
+                'current': current_url,
+                'internal': internal_url,
+                'external': external_url,
+            },
+            'ips': {
+                'internal': internal_ip,
+                'external': external_ip,
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"获取 Webhook URL 失败: {str(e)}")
+        return Response(
+            {'status': 'error', 'message': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

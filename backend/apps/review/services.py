@@ -196,19 +196,6 @@ class ReviewService:
             from apps.llm.models import GitLabConfig
             from apps.webhook.models import Project
             
-            # 先加载全局GitLab配置
-            gitlab_config = GitLabConfig.objects.filter(is_active=True).first()
-            
-            if gitlab_config:
-                self.max_files = gitlab_config.max_files
-                self.context_lines = gitlab_config.context_lines
-                self.config_source = "database"
-            else:
-                # 回退到环境变量
-                self.max_files = getattr(settings, 'GITLAB_MAX_FILES', 50)
-                self.context_lines = getattr(settings, 'CONTEXT_LINES_NUM', 5)
-                self.config_source = "environment"
-            
             # 尝试加载项目级配置
             if self.project_id:
                 try:
@@ -233,25 +220,18 @@ class ReviewService:
                 # 没有项目ID，使用全局配置
                 self.exclude_file_types = getattr(settings, 'EXCLUDE_FILE_TYPES', [])
                 self.ignore_file_types = getattr(settings, 'IGNORE_FILE_TYPES', [])
-            
-            logger.info(f"[{self.request_id}] Review配置加载成功 - 来源:{self.config_source}, "
-                       f"最大文件数:{self.max_files}, 上下文行数:{self.context_lines}")
+
+            logger.info(f"[{self.request_id}] Review配置加载成功")
 
         except ImportError:
             logger.warning(f"[{self.request_id}] 无法导入配置模型，使用环境变量配置")
-            self.max_files = getattr(settings, 'GITLAB_MAX_FILES', 50)
             self.exclude_file_types = getattr(settings, 'EXCLUDE_FILE_TYPES', [])
             self.ignore_file_types = getattr(settings, 'IGNORE_FILE_TYPES', [])
-            self.context_lines = getattr(settings, 'CONTEXT_LINES_NUM', 5)
-            self.config_source = "environment"
         except Exception as e:
             logger.error(f"[{self.request_id}] Review配置加载失败: {e}", exc_info=True)
             # 使用环境变量作为最后回退
-            self.max_files = getattr(settings, 'GITLAB_MAX_FILES', 50)
             self.exclude_file_types = getattr(settings, 'EXCLUDE_FILE_TYPES', [])
             self.ignore_file_types = getattr(settings, 'IGNORE_FILE_TYPES', [])
-            self.context_lines = getattr(settings, 'CONTEXT_LINES_NUM', 5)
-            self.config_source = "environment"
 
     def review_merge_request(self, changes, payload):
         """
@@ -267,11 +247,6 @@ class ReviewService:
                     'score': None,
                     'files_reviewed': []
                 }
-
-            # Limit number of files
-            if len(filtered_changes) > self.max_files:
-                logger.warning(f"Too many files changed ({len(filtered_changes)}), limiting to {self.max_files}")
-                filtered_changes = filtered_changes[:self.max_files]
 
             # Build review context
             review_context = self._build_review_context(filtered_changes)

@@ -6,6 +6,7 @@ app_name = 'webhook'
 urlpatterns = [
     # Webhook endpoints
     path('gitlab/', views.gitlab_webhook, name='gitlab_webhook'),
+    path('webhook-url/', views.get_webhook_url, name='get_webhook_url'),
 
     # Project management endpoints
     path('projects/', views.list_projects, name='list_projects'),
