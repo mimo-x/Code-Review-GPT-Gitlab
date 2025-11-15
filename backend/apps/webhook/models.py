@@ -139,7 +139,21 @@ class WebhookLog(models.Model):
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
     processed = models.BooleanField(default=False)
     processed_at = models.DateTimeField(null=True, blank=True)
-    error_message = models.TextField(null=True, blank=True)
+
+    # 日志级别和消息
+    log_level = models.CharField(
+        max_length=10,
+        choices=[
+            ('INFO', 'Info'),
+            ('WARNING', 'Warning'),
+            ('ERROR', 'Error'),
+        ],
+        default='INFO',
+        db_index=True,
+        help_text="日志级别"
+    )
+    skip_reason = models.TextField(null=True, blank=True, help_text="跳过处理的原因(WARNING级别)")
+    error_message = models.TextField(null=True, blank=True, help_text="错误消息(ERROR级别)")
 
     class Meta:
         db_table = 'webhook_logs'

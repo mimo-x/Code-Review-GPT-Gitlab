@@ -35,3 +35,6 @@ gevent==23.9.1
 
 # Environment Variables
 python-dotenv==1.0.0
+
+# System Information
+psutil==5.9.8

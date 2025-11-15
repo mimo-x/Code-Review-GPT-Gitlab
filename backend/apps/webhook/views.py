@@ -115,8 +115,9 @@ def gitlab_webhook(request):
                 if webhook_log:
                     webhook_log.processed = True
                     webhook_log.processed_at = timezone.now()
+                    webhook_log.log_level = 'ERROR'
                     webhook_log.error_message = f"Handler error: {str(handler_error)}"
-                    webhook_log.save(update_fields=['processed', 'processed_at', 'error_message'])
+                    webhook_log.save(update_fields=['processed', 'processed_at', 'log_level', 'error_message'])
                     structured_logger.log_database_operation(
                         operation="update",
                         table="webhook_logs",
@@ -138,8 +139,9 @@ def gitlab_webhook(request):
             try:
                 webhook_log.processed = True
                 webhook_log.processed_at = timezone.now()
+                webhook_log.log_level = 'ERROR'
                 webhook_log.error_message = f"Critical processing error: {str(e)}"
-                webhook_log.save(update_fields=['processed', 'processed_at', 'error_message'])
+                webhook_log.save(update_fields=['processed', 'processed_at', 'log_level', 'error_message'])
             except Exception as save_error:
                 logger.error(f"Failed to update webhook log {request_id}: {str(save_error)}")
 
@@ -295,7 +297,8 @@ def handle_webhook_event(payload, webhook_log, project_id):
             if webhook_log:
                 webhook_log.processed = True
                 webhook_log.processed_at = timezone.now()
-                webhook_log.error_message = "Review disabled for this project"
+                webhook_log.log_level = 'WARNING'
+                webhook_log.skip_reason = "Review disabled for this project"
                 webhook_log.save()
 
             return Response({
@@ -314,7 +317,8 @@ def handle_webhook_event(payload, webhook_log, project_id):
                 if webhook_log:
                     webhook_log.processed = True
                     webhook_log.processed_at = timezone.now()
-                    webhook_log.error_message = "No webhook event rules enabled for this project"
+                    webhook_log.log_level = 'WARNING'
+                    webhook_log.skip_reason = "No webhook event rules enabled for this project"
                     webhook_log.save()
 
                 return Response({
@@ -341,7 +345,8 @@ def handle_webhook_event(payload, webhook_log, project_id):
                 if webhook_log:
                     webhook_log.processed = True
                     webhook_log.processed_at = timezone.now()
-                    webhook_log.error_message = "No matching webhook event rule found"
+                    webhook_log.log_level = 'WARNING'
+                    webhook_log.skip_reason = "No matching webhook event rule found"
                     webhook_log.save()
 
                 return Response({
@@ -361,7 +366,8 @@ def handle_webhook_event(payload, webhook_log, project_id):
                 if webhook_log:
                     webhook_log.processed = True
                     webhook_log.processed_at = timezone.now()
-                    webhook_log.error_message = f"Review not implemented for event type: {event_type}"
+                    webhook_log.log_level = 'WARNING'
+                    webhook_log.skip_reason = f"Review not implemented for event type: {event_type}"
                     webhook_log.save()
 
                 return Response({
@@ -371,6 +377,12 @@ def handle_webhook_event(payload, webhook_log, project_id):
 
         except Project.DoesNotExist:
             logger.error(f"Project {project_id} not found")
+            if webhook_log:
+                webhook_log.processed = True
+                webhook_log.processed_at = timezone.now()
+                webhook_log.log_level = 'ERROR'
+                webhook_log.error_message = f'Project {project_id} not found'
+                webhook_log.save()
             return Response(
                 {'status': 'error', 'message': f'Project {project_id} not found'},
                 status=status.HTTP_404_NOT_FOUND
@@ -382,6 +394,7 @@ def handle_webhook_event(payload, webhook_log, project_id):
         if webhook_log:
             webhook_log.processed = True
             webhook_log.processed_at = timezone.now()
+            webhook_log.log_level = 'ERROR'
             webhook_log.error_message = str(e)
             webhook_log.save()
 
@@ -1325,20 +1338,30 @@ def project_webhook_logs(request, project_id):
 
     Query parameters:
         - limit: Limit number of results (default: 20)
+        - offset: Offset for pagination (default: 0)
     """
     try:
         limit = request.query_params.get('limit', 20)
+        offset = request.query_params.get('offset', 0)
+
         try:
             limit = int(limit)
+            offset = int(offset)
         except (ValueError, TypeError):
             limit = 20
+            offset = 0
 
-        logs = ProjectService.get_recent_webhook_logs(project_id, limit)
+        # Get total count
+        total_count = WebhookLog.objects.filter(project_id=project_id).count()
+
+        # Get paginated logs
+        logs = WebhookLog.objects.filter(project_id=project_id).order_by('-created_at')[offset:offset + limit]
         serializer = WebhookLogSerializer(logs, many=True)
 
         return Response({
             'status': 'success',
             'count': len(serializer.data),
+            'total': total_count,
             'logs': serializer.data
         })
 
@@ -1538,22 +1561,9 @@ def list_logs(request):
             logs = logs.filter(event_type=event_type)
 
         if level:
-            # Level filtering based on calculated log level
+            # Level filtering using the log_level field
             level = level.upper()
-            if level == 'ERROR':
-                logs = logs.filter(error_message__isnull=False)
-            elif level == 'WARNING':
-                # Filter logs that contain warning indicators
-                logs = logs.filter(
-                    models.Q(payload__icontains='warning') |
-                    models.Q(payload__icontains='retry') |
-                    models.Q(error_message__icontains='warning')
-                )
-            elif level == 'INFO':
-                # Filter logs without error messages
-                logs = logs.filter(error_message__isnull=True)
-            # For other levels, we would need to store the level in the database
-            # For now, return empty for unsupported levels
+            logs = logs.filter(log_level=level)
 
         if search:
             logs = logs.filter(
@@ -1576,12 +1586,8 @@ def list_logs(request):
         # Format response data to match frontend expectations
         formatted_logs = []
         for log in serializer.data:
-            # Determine log level based on content
-            log_level = 'INFO'
-            if log.get('error_message'):
-                log_level = 'ERROR'
-            elif 'warning' in str(log.get('payload', '')).lower() or 'retry' in str(log.get('payload', '')).lower():
-                log_level = 'WARNING'
+            # Use the log_level field from database
+            log_level = log.get('log_level', 'INFO')
 
             # 解析请求头（使用新字段）
             request_headers = None
@@ -1600,6 +1606,29 @@ def list_logs(request):
             except (json.JSONDecodeError, TypeError):
                 payload_data = log.get('payload', {})
 
+            # 构建消息文本
+            message = f"收到 {log['event_type']} 事件 - 项目: {log['project_name']}"
+            if log.get('skip_reason'):
+                message = log.get('skip_reason')
+            elif log.get('error_message'):
+                message = log.get('error_message')
+
+            # 确定响应状态
+            has_error = log.get('error_message') is not None
+            has_skip = log.get('skip_reason') is not None
+            response_status = None
+            response_body = None
+            if log.get('processed'):
+                if has_error:
+                    response_status = 500
+                    response_body = {'status': 'error', 'message': log.get('error_message')}
+                elif has_skip:
+                    response_status = 200
+                    response_body = {'status': 'skipped', 'message': log.get('skip_reason')}
+                else:
+                    response_status = 200
+                    response_body = {'status': 'success'}
+
             formatted_log = {
                 'id': log['id'],
                 'timestamp': log['created_at'],
@@ -1611,7 +1640,7 @@ def list_logs(request):
                 'user_email': log['user_email'],
                 'source_branch': log['source_branch'],
                 'target_branch': log['target_branch'],
-                'message': f"收到 {log['event_type']} 事件 - 项目: {log['project_name']}",
+                'message': message,
                 # 使用新的HTTP元数据字段
                 'request_headers': request_headers,
                 'request_body': payload_data,
@@ -1619,9 +1648,10 @@ def list_logs(request):
                 'remote_addr': log.get('remote_addr'),
                 'user_agent': log.get('user_agent'),
                 'request_id': log.get('request_id'),
-                'response_status': 200 if log.get('processed') and not log.get('error_message') else 500 if log.get('error_message') else None,
-                'response_body': {'status': 'success' if log.get('processed') and not log.get('error_message') else 'error'} if log.get('processed') or log.get('error_message') else None,
+                'response_status': response_status,
+                'response_body': response_body,
                 'processing_details': payload_data,
+                'skip_reason': log.get('skip_reason'),
                 'error_message': log.get('error_message'),
                 'details': str(payload_data),
                 'processed': log.get('processed'),

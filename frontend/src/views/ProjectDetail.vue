@@ -301,7 +301,7 @@
                       支持的占位符：{project_name}, {author}, {title}, {description}, {source_branch}, {target_branch}, {mr_iid}, {file_count}, {changes_count}
                     </div>
                     <button
-                      class="btn-primary text-sm"
+                      class="btn-primary text-sm min-w-[100px]"
                       :disabled="promptSaving"
                       @click="savePromptConfig(promptConfig)"
                     >
@@ -350,16 +350,22 @@
                 :key="type.value"
                 class="space-y-2"
               >
-                <div class="text-xs font-semibold text-apple-600 uppercase tracking-wide">{{ type.label }}</div>
+                <div class="flex items-center gap-2 text-xs font-semibold text-apple-600 uppercase tracking-wide">
+                  <img v-if="channelIcons[type.value]" :src="channelIcons[type.value]" :alt="type.label" class="w-4 h-4 object-contain" />
+                  <span>{{ type.label }}</span>
+                </div>
                 <div v-if="groupedNotificationChannels[type.value]?.length" class="space-y-2">
                   <div
                     v-for="channel in groupedNotificationChannels[type.value]"
                     :key="channel.id"
                     class="flex items-center justify-between bg-apple-50 border border-apple-200/60 rounded-lg px-4 py-3 hover:bg-apple-100/50 transition-colors duration-200"
                   >
-                    <div class="flex-1 mr-3">
-                      <div class="text-sm text-apple-900 font-medium">{{ channel.name }}</div>
-                      <div class="text-xs text-apple-500 mt-0.5">{{ channel.description || '暂无备注' }}</div>
+                    <div class="flex items-start gap-2 flex-1 mr-3">
+                      <img v-if="channelIcons[channel.notification_type]" :src="channelIcons[channel.notification_type]" :alt="channel.notification_type" class="w-5 h-5 mt-0.5 object-contain flex-shrink-0" />
+                      <div class="flex-1">
+                        <div class="text-sm text-apple-900 font-medium">{{ channel.name }}</div>
+                        <div class="text-xs text-apple-500 mt-0.5">{{ channel.description || '暂无备注' }}</div>
+                      </div>
                     </div>
                     <label class="config-toggle flex-shrink-0">
                       <input
@@ -457,8 +463,19 @@
                 </button>
 
                 <div class="flex items-center gap-1">
+                  <!-- 第一页 -->
                   <button
-                    v-for="page in totalPages"
+                    v-if="currentPage > 3"
+                    @click="handlePageChange(1)"
+                    class="px-3 py-2 text-sm rounded-lg border border-apple-200 hover:bg-apple-50 transition-colors"
+                  >
+                    1
+                  </button>
+                  <span v-if="currentPage > 4" class="px-2 text-apple-400">...</span>
+
+                  <!-- 当前页附近的页码 -->
+                  <button
+                    v-for="page in visiblePages"
                     :key="page"
                     @click="handlePageChange(page)"
                     :class="[
@@ -469,6 +486,16 @@
                     ]"
                   >
                     {{ page }}
+                  </button>
+
+                  <!-- 最后一页 -->
+                  <span v-if="currentPage < totalPages - 3" class="px-2 text-apple-400">...</span>
+                  <button
+                    v-if="currentPage < totalPages - 2"
+                    @click="handlePageChange(totalPages)"
+                    class="px-3 py-2 text-sm rounded-lg border border-apple-200 hover:bg-apple-50 transition-colors"
+                  >
+                    {{ totalPages }}
                   </button>
                 </div>
 
@@ -681,6 +708,15 @@ const channelTypeLabels: Record<string, string> = {
   email: '邮件通知',
   gitlab: 'GitLab 评论'
 }
+
+// 通道类型图标映射
+const channelIcons: Record<string, string> = {
+  dingtalk: new URL('../assets/icons/dingtalk.png', import.meta.url).href,
+  feishu: new URL('../assets/icons/feishu.png', import.meta.url).href,
+  wechat: new URL('../assets/icons/wechat.png', import.meta.url).href,
+  gitlab: new URL('../assets/icons/gitlab.png', import.meta.url).href
+}
+
 const selectedChannelIds = ref<number[]>([])
 const gitlabCommentEnabled = ref(true)
 const notificationSaving = ref(false)
@@ -1248,6 +1284,19 @@ const refreshData = async () => {
 
 // 分页相关计算属性和方法
 const totalPages = computed(() => Math.ceil(totalEvents.value / pageSize.value))
+
+// 计算可见的页码（当前页前后各2页）
+const visiblePages = computed(() => {
+  const pages: number[] = []
+  const start = Math.max(1, currentPage.value - 2)
+  const end = Math.min(totalPages.value, currentPage.value + 2)
+
+  for (let i = start; i <= end; i++) {
+    pages.push(i)
+  }
+
+  return pages
+})
 
 const handlePageChange = async (page: number) => {
   currentPage.value = page

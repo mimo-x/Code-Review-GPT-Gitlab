@@ -8,21 +8,27 @@
         <div class="p-6">
           <div class="flex items-center justify-between mb-6">
             <h3 class="text-lg font-semibold text-gray-800">系统信息</h3>
-            <span class="badge-success">运行中</span>
+            <span :class="systemInfo.serverStatus === 'running' ? 'badge-success' : 'badge-error'">
+              {{ systemInfo.serverStatus === 'running' ? '运行中' : '离线' }}
+            </span>
           </div>
 
           <dl class="space-y-3">
             <div class="flex justify-between">
               <dt class="text-sm text-gray-600">项目名称</dt>
-              <dd class="text-sm font-medium text-gray-900">Code Review GPT</dd>
+              <dd class="text-sm font-medium text-gray-900">{{ systemInfo.projectName }}</dd>
             </div>
             <div class="flex justify-between">
               <dt class="text-sm text-gray-600">版本</dt>
-              <dd class="text-sm font-medium text-gray-900">v1.0.0</dd>
+              <dd class="text-sm font-medium text-gray-900">{{ systemInfo.projectVersion }}</dd>
             </div>
             <div class="flex justify-between">
               <dt class="text-sm text-gray-600">Python 版本</dt>
-              <dd class="text-sm font-medium text-gray-900">3.9.18</dd>
+              <dd class="text-sm font-medium text-gray-900">{{ systemInfo.pythonVersion }}</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-sm text-gray-600">Django 版本</dt>
+              <dd class="text-sm font-medium text-gray-900">{{ systemInfo.djangoVersion }}</dd>
             </div>
             <div class="flex justify-between">
               <dt class="text-sm text-gray-600">运行时间</dt>
@@ -110,15 +116,55 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { Zap, GitBranch, Bell, Settings } from 'lucide-vue-next'
+import { getSystemInfo } from '@/api'
 
 const systemInfo = ref({
-  uptime: '5天 12小时 35分钟',
-  cpu: 45,
-  memory: 62,
-  memoryUsed: '2.4 GB',
-  memoryTotal: '4 GB'
+  uptime: '加载中...',
+  cpu: 0,
+  memory: 0,
+  memoryUsed: '0 GB',
+  memoryTotal: '0 GB',
+  projectName: 'Code Review GPT',
+  projectVersion: '加载中...',
+  pythonVersion: '加载中...',
+  djangoVersion: '加载中...',
+  osInfo: '加载中...',
+  serverStatus: 'running'
+})
+
+// 获取系统信息
+const fetchSystemInfo = async () => {
+  try {
+    const response = await getSystemInfo()
+    const data = response.data || response
+    if (data.status === 'ok') {
+      systemInfo.value = {
+        uptime: data.uptime,
+        cpu: data.cpu,
+        memory: data.memory,
+        memoryUsed: data.memoryUsed,
+        memoryTotal: data.memoryTotal,
+        projectName: data.projectName,
+        projectVersion: data.projectVersion,
+        pythonVersion: data.pythonVersion,
+        djangoVersion: data.djangoVersion,
+        osInfo: data.osInfo,
+        serverStatus: data.serverStatus
+      }
+    }
+  } catch (error) {
+    console.error('获取系统信息失败:', error)
+    systemInfo.value.serverStatus = 'offline'
+  }
+}
+
+// 组件挂载时获取数据
+onMounted(() => {
+  fetchSystemInfo()
+  // 每30秒更新一次系统信息
+  setInterval(fetchSystemInfo, 30000)
 })
 
 const techStack = ref([

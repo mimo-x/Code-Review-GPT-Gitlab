@@ -33,15 +33,10 @@
     <!-- Tabs -->
     <div class="config-tabs">
       <nav class="-mb-px flex space-x-8">
-        <button
-          v-for="tab in tabs"
-          :key="tab.key"
-          @click="activeTab = tab.key"
-          :class="[
-            'config-tab',
-            activeTab === tab.key ? 'config-tab-active' : 'config-tab-inactive'
-          ]"
-        >
+        <button v-for="tab in tabs" :key="tab.key" @click="activeTab = tab.key" :class="[
+          'config-tab',
+          activeTab === tab.key ? 'config-tab-active' : 'config-tab-inactive'
+        ]">
           {{ tab.label }}
         </button>
       </nav>
@@ -74,28 +69,18 @@
           <div class="md:col-span-2 config-field-group">
             <label class="config-label">API Key</label>
             <div class="relative">
-              <input
-                v-model="config.llm.apiKey"
-                :type="showLlmApiKey ? 'text' : 'password'"
-                class="input-field pr-20"
-                placeholder="请输入 API Key"
-              />
+              <input v-model="config.llm.apiKey" :type="showLlmApiKey ? 'text' : 'password'" class="input-field pr-20"
+                placeholder="请输入 API Key" />
               <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                <button
-                  type="button"
-                  @click="toggleVisibility('llmApiKey')"
+                <button type="button" @click="toggleVisibility('llmApiKey')"
                   class="p-1.5 text-apple-500 hover:text-apple-700 hover:bg-apple-50 rounded transition-colors"
-                  :title="showLlmApiKey ? '隐藏' : '显示'"
-                >
+                  :title="showLlmApiKey ? '隐藏' : '显示'">
                   <Eye v-if="!showLlmApiKey" class="w-4 h-4" />
                   <EyeOff v-else class="w-4 h-4" />
                 </button>
-                <button
-                  type="button"
-                  @click="copyToClipboard(config.llm.apiKey, 'API Key')"
+                <button type="button" @click="copyToClipboard(config.llm.apiKey, 'API Key')"
                   class="p-1.5 text-apple-500 hover:text-apple-700 hover:bg-apple-50 rounded transition-colors"
-                  title="复制"
-                >
+                  title="复制">
                   <Copy class="w-4 h-4" />
                 </button>
               </div>
@@ -127,28 +112,18 @@
           <div class="md:col-span-2 config-field-group">
             <label class="config-label">Access Token</label>
             <div class="relative">
-              <input
-                v-model="config.gitlab.privateToken"
-                :type="showGitlabToken ? 'text' : 'password'"
-                class="input-field pr-20"
-                placeholder="GitLab Access Token"
-              />
+              <input v-model="config.gitlab.privateToken" :type="showGitlabToken ? 'text' : 'password'"
+                class="input-field pr-20" placeholder="GitLab Access Token" />
               <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                <button
-                  type="button"
-                  @click="toggleVisibility('gitlabToken')"
+                <button type="button" @click="toggleVisibility('gitlabToken')"
                   class="p-1.5 text-apple-500 hover:text-apple-700 hover:bg-apple-50 rounded transition-colors"
-                  :title="showGitlabToken ? '隐藏' : '显示'"
-                >
+                  :title="showGitlabToken ? '隐藏' : '显示'">
                   <Eye v-if="!showGitlabToken" class="w-4 h-4" />
                   <EyeOff v-else class="w-4 h-4" />
                 </button>
-                <button
-                  type="button"
-                  @click="copyToClipboard(config.gitlab.privateToken, 'Access Token')"
+                <button type="button" @click="copyToClipboard(config.gitlab.privateToken, 'Access Token')"
                   class="p-1.5 text-apple-500 hover:text-apple-700 hover:bg-apple-50 rounded transition-colors"
-                  title="复制"
-                >
+                  title="复制">
                   <Copy class="w-4 h-4" />
                 </button>
               </div>
@@ -164,31 +139,33 @@
             <h3 class="text-lg font-semibold text-apple-900">Webhook 配置</h3>
           </div>
 
-          <div class="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200/60 rounded-xl p-4 text-sm text-purple-700">
+          <div
+            class="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200/60 rounded-xl p-4 text-sm text-purple-700">
             <div class="font-medium mb-2">📌 配置 GitLab Webhook</div>
             <div class="text-xs space-y-1 text-purple-600">
               <div>1. 在 GitLab 项目中进入 Settings → Webhooks</div>
               <div>2. 将下方地址复制到 URL 字段</div>
-              <div>3. 选择触发事件：Merge request events</div>
               <div>4. 点击 Add webhook 完成配置</div>
+              <!-- 注意将 {host} 和 {port} 替换为实际的域名和端口 -->
+              <div>5. 将 {host} 和 {port} 替换为实际的域名和端口</div>
             </div>
           </div>
 
           <!-- Primary Webhook URL -->
           <div class="space-y-2">
-            <div class="flex items-center gap-2 bg-gradient-to-r from-apple-blue-50 to-indigo-50 border-2 border-apple-blue-300 rounded-lg px-3 py-2.5">
+            <div
+              class="flex items-center gap-2 bg-gradient-to-r from-apple-blue-50 to-indigo-50 border-2 border-apple-blue-300 rounded-lg px-3 py-2.5">
               <div class="flex items-center gap-2 flex-1 min-w-0">
                 <Link class="w-4 h-4 text-apple-blue-600 flex-shrink-0" />
                 <span class="text-xs text-apple-blue-700 font-semibold">Webhook 地址:</span>
-                <code class="text-xs text-apple-blue-700 bg-white px-2 py-1 rounded border border-apple-blue-200 truncate flex-1 font-mono">
+                <code
+                  class="text-xs text-apple-blue-700 bg-white px-2 py-1 rounded border border-apple-blue-200 truncate flex-1 font-mono">
                   {{ webhookUrl }}
                 </code>
               </div>
-              <button
-                @click="copyWebhookUrl(webhookUrl)"
+              <button @click="copyWebhookUrl(webhookUrl)"
                 class="flex-shrink-0 p-1.5 text-apple-blue-600 hover:text-apple-blue-700 hover:bg-white/50 rounded-lg transition-colors"
-                title="复制地址"
-              >
+                title="复制地址">
                 <Copy class="w-4 h-4" />
               </button>
             </div>
@@ -216,16 +193,14 @@
           </button>
         </div>
 
-        <div v-if="filteredEventRules.length === 0" class="p-6 bg-apple-50 border border-dashed border-apple-200 text-center rounded-xl text-sm text-apple-500">
+        <div v-if="filteredEventRules.length === 0"
+          class="p-6 bg-apple-50 border border-dashed border-apple-200 text-center rounded-xl text-sm text-apple-500">
           暂无事件规则，请点击「初始化默认规则」开始配置。
         </div>
 
         <div v-else class="space-y-4">
-          <div
-            v-for="rule in filteredEventRules"
-            :key="rule.id"
-            class="p-4 border border-apple-200/60 rounded-xl bg-white shadow-sm space-y-3"
-          >
+          <div v-for="rule in filteredEventRules" :key="rule.id"
+            class="p-4 border border-apple-200/60 rounded-xl bg-white shadow-sm space-y-3">
             <div class="flex items-start justify-between gap-3">
               <div class="flex-1">
                 <div class="flex items-center gap-2 mb-2">
@@ -255,7 +230,8 @@
         </div>
 
         <!-- 规则编辑弹窗 -->
-        <div v-if="ruleEditorVisible" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div v-if="ruleEditorVisible"
+          class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div class="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-auto">
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-lg font-semibold">编辑事件规则</h3>
@@ -267,20 +243,13 @@
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label class="block text-sm font-medium mb-2">规则名称</label>
-                  <input
-                    v-model="editingRule.name"
-                    type="text"
-                    class="w-full p-3 border border-apple-200 rounded-lg"
-                    placeholder="输入规则名称"
-                  />
+                  <input v-model="editingRule.name" type="text" class="w-full p-3 border border-apple-200 rounded-lg"
+                    placeholder="输入规则名称" />
                 </div>
                 <div>
                   <label class="block text-sm font-medium mb-2">事件类型</label>
-                  <select
-                    v-model="editingRule.event_type"
-                    class="w-full p-3 border border-apple-200 rounded-lg"
-                    :disabled="true"
-                  >
+                  <select v-model="editingRule.event_type" class="w-full p-3 border border-apple-200 rounded-lg"
+                    :disabled="true">
                     <option value="mr_open">MR 创建</option>
                     <option value="mr_update">MR 更新</option>
                   </select>
@@ -289,30 +258,20 @@
 
               <div>
                 <label class="block text-sm font-medium mb-2">描述</label>
-                <textarea
-                  v-model="editingRule.description"
-                  class="w-full p-3 border border-apple-200 rounded-lg"
-                  rows="3"
-                  placeholder="输入规则描述"
-                ></textarea>
+                <textarea v-model="editingRule.description" class="w-full p-3 border border-apple-200 rounded-lg"
+                  rows="3" placeholder="输入规则描述"></textarea>
               </div>
 
               <div>
                 <label class="block text-sm font-medium mb-2">匹配规则 (JSON格式)</label>
-                <textarea
-                  v-model="editingRule.matchRulesText"
-                  class="w-full p-3 border border-apple-200 rounded-lg font-mono text-xs"
-                  rows="6"
-                  placeholder="输入匹配规则，JSON格式"
-                ></textarea>
+                <textarea v-model="editingRule.matchRulesText"
+                  class="w-full p-3 border border-apple-200 rounded-lg font-mono text-xs" rows="6"
+                  placeholder="输入匹配规则，JSON格式"></textarea>
               </div>
 
               <div class="flex items-center gap-4">
                 <label class="flex items-center gap-2 text-sm">
-                  <input
-                    v-model="editingRule.is_active"
-                    type="checkbox"
-                  />
+                  <input v-model="editingRule.is_active" type="checkbox" />
                   启用此规则
                 </label>
               </div>
@@ -328,7 +287,8 @@
         </div>
 
         <!-- 规则测试弹窗 -->
-        <div v-if="testDialogVisible" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div v-if="testDialogVisible"
+          class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div class="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-auto">
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-lg font-semibold">测试事件规则</h3>
@@ -339,14 +299,11 @@
             <div class="space-y-4">
               <div>
                 <label class="block text-sm font-medium mb-2">测试 Payload (JSON格式)</label>
-                <textarea
-                  v-model="testPayload"
-                  class="w-full p-3 border border-apple-200 rounded-lg font-mono text-xs"
-                  rows="10"
-                  placeholder="粘贴要测试的 GitLab Webhook Payload"
-                ></textarea>
+                <textarea v-model="testPayload" class="w-full p-3 border border-apple-200 rounded-lg font-mono text-xs"
+                  rows="10" placeholder="粘贴要测试的 GitLab Webhook Payload"></textarea>
               </div>
-              <div v-if="testResult" class="p-4 rounded-lg" :class="testResult.is_match ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'">
+              <div v-if="testResult" class="p-4 rounded-lg"
+                :class="testResult.is_match ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'">
                 <div class="font-medium mb-2">
                   {{ testResult.is_match ? '✅ 匹配成功' : '❌ 匹配失败' }}
                 </div>
@@ -388,30 +345,35 @@
           </button>
         </div>
 
-        <div v-if="totalChannelCount === 0" class="p-6 bg-apple-50 border border-dashed border-apple-200 text-center rounded-xl text-sm text-apple-500">
+        <div v-if="totalChannelCount === 0"
+          class="p-6 bg-apple-50 border border-dashed border-apple-200 text-center rounded-xl text-sm text-apple-500">
           暂无通知通道，请点击「新建通道」开始配置。
         </div>
 
         <div v-else class="space-y-6">
           <div v-for="type in channelTypes" :key="type.value" class="space-y-3">
             <div class="flex items-center justify-between">
-              <div class="text-sm font-medium text-apple-900">{{ type.label }}</div>
-              <button @click="openChannelDialog(type.value)" class="text-xs text-apple-blue-600 hover:text-apple-blue-500 flex items-center gap-1">
+              <div class="flex items-center gap-2 text-sm font-medium text-apple-900">
+                <img v-if="channelIcons[type.value]" :src="channelIcons[type.value]" :alt="type.label" class="w-5 h-5 object-contain" />
+                <span>{{ type.label }}</span>
+              </div>
+              <button @click="openChannelDialog(type.value)"
+                class="text-xs text-apple-blue-600 hover:text-apple-blue-500 flex items-center gap-1">
                 <PlusCircle class="w-3 h-3" />
                 新增
               </button>
             </div>
 
             <div v-if="groupedChannels[type.value]?.length" class="space-y-3">
-              <div
-                v-for="channel in groupedChannels[type.value]"
-                :key="channel.id"
-                class="p-4 border border-apple-200/60 rounded-xl bg-white shadow-sm space-y-3"
-              >
+              <div v-for="channel in groupedChannels[type.value]" :key="channel.id"
+                class="p-4 border border-apple-200/60 rounded-xl bg-white shadow-sm space-y-3">
                 <div class="flex items-start justify-between gap-3">
-                  <div>
-                    <div class="text-sm font-semibold text-apple-900">{{ channel.name }}</div>
-                    <div class="text-xs text-apple-500 mt-1">{{ channel.description || '暂无备注' }}</div>
+                  <div class="flex items-start gap-2">
+                    <img v-if="channelIcons[channel.notification_type]" :src="channelIcons[channel.notification_type]" :alt="channel.notification_type" class="w-6 h-6 mt-0.5 object-contain flex-shrink-0" />
+                    <div>
+                      <div class="text-sm font-semibold text-apple-900">{{ channel.name }}</div>
+                      <div class="text-xs text-apple-500 mt-1">{{ channel.description || '暂无备注' }}</div>
+                    </div>
                   </div>
                   <div class="flex items-center gap-2">
                     <span v-if="channel.is_default" class="badge badge-success">默认</span>
@@ -427,7 +389,8 @@
                     <Pencil class="w-4 h-4" />
                     编辑
                   </button>
-                  <button class="btn-secondary" @click="testChannel(channel)" :disabled="testingChannelId === channel.id">
+                  <button class="btn-secondary" @click="testChannel(channel)"
+                    :disabled="testingChannelId === channel.id">
                     <Play class="w-4 h-4" />
                     {{ testingChannelId === channel.id ? '发送中...' : '测试' }}
                   </button>
@@ -461,49 +424,42 @@
             </div>
             <div class="config-field-group">
               <label class="config-label">通道类型</label>
-              <select v-model="channelForm.notification_type" class="input-field" :disabled="channelForm.id !== null">
-                <option v-for="type in channelTypes" :key="type.value" :value="type.value">{{ type.label }}</option>
-              </select>
+              <div class="space-y-2">
+                <select v-model="channelForm.notification_type" class="input-field" :disabled="channelForm.id !== null">
+                  <option v-for="type in channelTypes" :key="type.value" :value="type.value">{{ type.label }}</option>
+                </select>
+                <div v-if="channelIcons[channelForm.notification_type]" class="flex items-center gap-2 text-xs text-apple-500">
+                  <img :src="channelIcons[channelForm.notification_type]" :alt="channelForm.notification_type" class="w-5 h-5 object-contain" />
+                  <span>{{ baseChannelTypes[channelForm.notification_type] }}</span>
+                </div>
+              </div>
             </div>
             <div class="config-field-group md:col-span-2">
               <label class="config-label">备注</label>
-              <textarea v-model="channelForm.description" class="input-field" rows="2" placeholder="补充说明该通道的使用场景"></textarea>
+              <textarea v-model="channelForm.description" class="input-field" rows="2"
+                placeholder="补充说明该通道的使用场景"></textarea>
             </div>
-            <div
-              class="config-field-group md:col-span-2"
-              v-if="['dingtalk', 'feishu', 'slack', 'wechat'].includes(channelForm.notification_type)"
-            >
+            <div class="config-field-group md:col-span-2"
+              v-if="['dingtalk', 'feishu', 'slack', 'wechat'].includes(channelForm.notification_type)">
               <label class="config-label">Webhook URL</label>
               <input v-model="channelForm.webhook_url" type="text" class="input-field" placeholder="https://" />
             </div>
-            <div
-              class="config-field-group md:col-span-2"
-              v-if="['dingtalk', 'feishu'].includes(channelForm.notification_type)"
-            >
+            <div class="config-field-group md:col-span-2"
+              v-if="['dingtalk', 'feishu'].includes(channelForm.notification_type)">
               <label class="config-label">Secret <span class="text-sm text-gray-400">(可选)</span></label>
               <div class="relative">
-                <input
-                  v-model="channelForm.secret"
-                  :type="showChannelSecret ? 'text' : 'password'"
-                  class="input-field pr-20"
-                  placeholder="签名密钥（不填则不使用签名验证）"
-                />
+                <input v-model="channelForm.secret" :type="showChannelSecret ? 'text' : 'password'"
+                  class="input-field pr-20" placeholder="签名密钥（不填则不使用签名验证）" />
                 <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                  <button
-                    type="button"
-                    @click="toggleVisibility('channelSecret')"
+                  <button type="button" @click="toggleVisibility('channelSecret')"
                     class="p-1.5 text-apple-500 hover:text-apple-700 hover:bg-apple-50 rounded transition-colors"
-                    :title="showChannelSecret ? '隐藏' : '显示'"
-                  >
+                    :title="showChannelSecret ? '隐藏' : '显示'">
                     <Eye v-if="!showChannelSecret" class="w-4 h-4" />
                     <EyeOff v-else class="w-4 h-4" />
                   </button>
-                  <button
-                    type="button"
-                    @click="copyToClipboard(channelForm.secret, 'Secret')"
+                  <button type="button" @click="copyToClipboard(channelForm.secret, 'Secret')"
                     class="p-1.5 text-apple-500 hover:text-apple-700 hover:bg-apple-50 rounded transition-colors"
-                    title="复制"
-                  >
+                    title="复制">
                     <Copy class="w-4 h-4" />
                   </button>
                 </div>
@@ -597,6 +553,14 @@ const baseChannelTypes: Record<string, string> = {
   email: '邮件通知'
 }
 
+// 通道类型图标映射
+const channelIcons: Record<string, string> = {
+  dingtalk: new URL('../assets/icons/dingtalk.png', import.meta.url).href,
+  feishu: new URL('../assets/icons/feishu.png', import.meta.url).href,
+  wechat: new URL('../assets/icons/wechat.png', import.meta.url).href,
+  gitlab: new URL('../assets/icons/gitlab.png', import.meta.url).href
+}
+
 // 支持的事件类型（仅支持 MR 创建和更新）
 const supportedEventTypeValues = new Set(['mr_open', 'mr_update'])
 
@@ -649,10 +613,8 @@ const filteredEventRules = computed(() => {
 
 // Webhook URL 计算属性
 const webhookUrl = computed(() => {
-  // 从浏览器的当前地址构建 webhook URL
-  const protocol = window.location.protocol // http: 或 https:
-  const host = window.location.host // hostname:port
-  return `${protocol}//${host}/api/webhook/gitlab/`
+  // 显示占位符格式
+  return `http://{host}:{port}/api/webhook/gitlab/`
 })
 
 // Webhook事件规则相关

@@ -119,6 +119,17 @@
                 <pre class="text-xs bg-white p-3 rounded border border-amber-200 overflow-x-auto max-h-60 overflow-y-auto">{{ formatJson(log.processing_details) }}</pre>
               </div>
 
+              <!-- Skip Reason (Warning level) -->
+              <div v-if="log.skip_reason" class="p-4 bg-amber-50">
+                <h4 class="text-sm font-semibold text-amber-900 mb-2 flex items-center gap-2">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  跳过原因
+                </h4>
+                <pre class="text-xs bg-amber-100 p-3 rounded border border-amber-200 overflow-x-auto text-amber-800">{{ log.skip_reason }}</pre>
+              </div>
+
               <!-- Error Details -->
               <div v-if="log.error_message" class="p-4 bg-red-50">
                 <h4 class="text-sm font-semibold text-red-900 mb-2 flex items-center gap-2">
@@ -233,10 +244,10 @@ onMounted(() => {
 const getLogBadge = (level: string) => {
   const badgeMap: Record<string, string> = {
     INFO: 'bg-blue-100 text-blue-800 inline-flex items-center gap-x-1.5 py-1.5 px-3 rounded-full text-xs font-medium',
-    WARNING: 'badge-warning',
-    ERROR: 'badge-danger'
+    WARNING: 'bg-amber-100 text-amber-800 inline-flex items-center gap-x-1.5 py-1.5 px-3 rounded-full text-xs font-medium',
+    ERROR: 'bg-red-100 text-red-800 inline-flex items-center gap-x-1.5 py-1.5 px-3 rounded-full text-xs font-medium'
   }
-  return badgeMap[level] || 'badge-info'
+  return badgeMap[level] || 'bg-blue-100 text-blue-800 inline-flex items-center gap-x-1.5 py-1.5 px-3 rounded-full text-xs font-medium'
 }
 
 const getResponseStatusClass = (status: number) => {
