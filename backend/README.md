@@ -333,7 +333,3 @@ MIT License
 
 - Email: mixuxin@163.com
 - 微信: isxuxin
-
-## Powered by Mobvista - 汇量科技
-
-本项目由 [Mobvista 汇量科技](https://www.mobvista.com) 的技术团队研发及发布。

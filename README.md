@@ -19,9 +19,6 @@
   <a href="#交流-">🚗 联系我们 </a>
 </h4>
 
-<h5 align="center">
-  <a href="#powered-by-mobvista---汇量科技">Powered By Mobvista 汇量科技 - 技术团队</a>
-</h5>
 
 # 项目描述 📚
 
@@ -254,26 +251,6 @@ python3 app.py
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=mimo-x/Code-Review-GPT-Gitlab&type=Date)](https://star-history.com/#mimo-x/Code-Review-GPT-Gitlab&Date)
-
-## Powered by [Mobvista - 汇量科技](https://www.mobvista.com)
-
-<p align="left">
-  <img src="doc/img/Logo-MV.png" style="width:200px;"/>
-</p>
-
-> **本项目由 [Mobvista 汇量科技](https://www.mobvista.com) 的技术团队研发及发布。**
-
-[**Mobvista 汇量科技**](https://www.mobvista.com) 是全球领先的开发者增长平台。我们为全球开发者和营销人员**提供完整的广告和分析工具套件**，包括用户**获取、变现、分析、创意自动化和智能媒体采买**等，能大幅提升广告营销ROI，有效帮助移动应用突破增长平台期。 
-
-
-
-> **This tool is developed by the engineering team at [**Mobvista**](https://www.mobvista.com).** 
-
-Mobvista is a leading mobile technology company that provides **a complete suite of advertising and analytics tools** for app developers and marketers seeking global growth. Offering a range of tailored solutions, such as **user acquisition, monetization, analytics, creative automation, and cross-channel media buying**, Mobvista enables mobile businesses to maximize their potential.
-
-For more information, please visit our website: www.mobvista.com
-
-
 
 # License 📑
 ![github license](https://img.shields.io/github/license/mimo-x/Code-Review-GPT-Gitlab)
