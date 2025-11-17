@@ -18,8 +18,12 @@ class ClaudeCliService:
 
     def __init__(self, request_id=None):
         self.request_id = request_id
-        self.cli_path = getattr(settings, 'CLAUDE_CLI_PATH', 'claude')
-        self.timeout = getattr(settings, 'CLAUDE_CLI_TIMEOUT', 300)
+        # 存储配置到实例变量（不使用全局环境变量）
+        self.anthropic_base_url = None
+        self.anthropic_auth_token = None
+        self.cli_path = 'claude'
+        self.timeout = 300
+        self._load_config()  # 每次初始化都从数据库重新加载
         self.default_prompt = getattr(
             settings,
             'CLAUDE_CLI_DEFAULT_PROMPT',
@@ -30,6 +34,51 @@ class ClaudeCliService:
             "4. 代码风格和可读性\n\n"
             "请提供具体的改进建议。"
         )
+
+    def _load_config(self):
+        """
+        从数据库加载 Claude CLI 配置
+
+        关键特性：
+        1. 每次初始化都重新查询数据库 → 实时获取最新配置
+        2. 配置保存在实例变量中 → 不污染全局环境
+        3. 配置优先级：数据库 > 环境变量 > 默认值
+        """
+        try:
+            from apps.llm.models import ClaudeCliConfig
+
+            # 每次都从数据库查询最新配置
+            cli_config = ClaudeCliConfig.objects.filter(is_active=True).first()
+
+            if cli_config:
+                # 保存到实例变量
+                self.cli_path = cli_config.cli_path or 'claude'
+                self.timeout = cli_config.timeout or 300
+                self.anthropic_base_url = cli_config.anthropic_base_url
+                self.anthropic_auth_token = cli_config.anthropic_auth_token
+
+                logger.info(f"[{self.request_id}] Claude CLI 配置加载成功 - 来源:数据库")
+                logger.info(f"[{self.request_id}] CLI路径:{self.cli_path}, 超时:{self.timeout}秒")
+                if self.anthropic_base_url:
+                    logger.info(f"[{self.request_id}] Base URL: {self.anthropic_base_url}")
+                if self.anthropic_auth_token:
+                    logger.info(f"[{self.request_id}] Auth Token: ***已配置***")
+            else:
+                # 回退到环境变量/默认值
+                self.cli_path = getattr(settings, 'CLAUDE_CLI_PATH', 'claude')
+                self.timeout = getattr(settings, 'CLAUDE_CLI_TIMEOUT', 300)
+                self.anthropic_base_url = os.environ.get('ANTHROPIC_BASE_URL')
+                self.anthropic_auth_token = os.environ.get('ANTHROPIC_AUTH_TOKEN')
+
+                logger.info(f"[{self.request_id}] Claude CLI 配置加载成功 - 来源:环境变量/默认值")
+
+        except Exception as e:
+            logger.error(f"[{self.request_id}] Claude CLI 配置加载失败: {e}", exc_info=True)
+            # 使用默认值
+            self.cli_path = getattr(settings, 'CLAUDE_CLI_PATH', 'claude')
+            self.timeout = getattr(settings, 'CLAUDE_CLI_TIMEOUT', 300)
+            self.anthropic_base_url = os.environ.get('ANTHROPIC_BASE_URL')
+            self.anthropic_auth_token = os.environ.get('ANTHROPIC_AUTH_TOKEN')
 
     def review_code(self, repo_path, custom_prompt=None, commit_range=None):
         """
@@ -118,6 +167,11 @@ class ClaudeCliService:
         """
         执行 Claude CLI 命令
 
+        关键改进：使用独立的环境变量副本
+        - 不修改全局 os.environ
+        - 每个请求使用独立的 env 副本
+        - 实现线程安全
+
         Args:
             command: 命令列表
             cwd: 工作目录
@@ -129,9 +183,23 @@ class ClaudeCliService:
             logger.info(f"[{self.request_id}] Executing: {' '.join(command)}")
             logger.info(f"[{self.request_id}] Working directory: {cwd}")
 
+            # 创建环境变量副本（不影响全局）
+            env = os.environ.copy()
+
+            # 设置 Claude CLI 所需的环境变量
+            if self.anthropic_base_url:
+                env['ANTHROPIC_BASE_URL'] = self.anthropic_base_url
+                logger.info(f"[{self.request_id}] 设置 ANTHROPIC_BASE_URL: {self.anthropic_base_url}")
+
+            if self.anthropic_auth_token:
+                env['ANTHROPIC_AUTH_TOKEN'] = self.anthropic_auth_token
+                logger.info(f"[{self.request_id}] 设置 ANTHROPIC_AUTH_TOKEN: ***已配置***")
+
+            # 执行命令时传递自定义环境变量
             result = subprocess.run(
                 command,
                 cwd=cwd,
+                env=env,  # 🔑 使用独立的环境变量副本
                 capture_output=True,
                 text=True,
                 timeout=self.timeout,
@@ -259,14 +327,22 @@ class ClaudeCliService:
 
     def get_cli_version(self):
         """
-        获取 Claude CLI 版本
+        获取 Claude CLI 版本（使用独立环境变量）
 
         Returns:
             (success, version, error_message)
         """
         try:
+            env = os.environ.copy()
+
+            if self.anthropic_base_url:
+                env['ANTHROPIC_BASE_URL'] = self.anthropic_base_url
+            if self.anthropic_auth_token:
+                env['ANTHROPIC_AUTH_TOKEN'] = self.anthropic_auth_token
+
             result = subprocess.run(
                 [self.cli_path, '--version'],
+                env=env,  # 使用独立环境变量
                 capture_output=True,
                 text=True,
                 timeout=10,
@@ -285,15 +361,26 @@ class ClaudeCliService:
 
     def validate_cli_installation(self):
         """
-        验证 Claude CLI 是否正确安装
+        验证 Claude CLI 是否正确安装并可以连接
+
+        使用独立环境变量副本，确保线程安全
 
         Returns:
             (is_valid, error_message)
         """
-        # 检查命令是否存在
         try:
+            # 创建环境变量副本
+            env = os.environ.copy()
+
+            if self.anthropic_base_url:
+                env['ANTHROPIC_BASE_URL'] = self.anthropic_base_url
+            if self.anthropic_auth_token:
+                env['ANTHROPIC_AUTH_TOKEN'] = self.anthropic_auth_token
+
+            # 执行验证命令
             result = subprocess.run(
                 [self.cli_path, '--help'],
+                env=env,  # 使用独立环境变量
                 capture_output=True,
                 text=True,
                 timeout=10,

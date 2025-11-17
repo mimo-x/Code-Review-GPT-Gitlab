@@ -5,14 +5,18 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 import logging
-from .models import LLMConfig, GitLabConfig, NotificationConfig, NotificationChannel, WebhookEventRule
+import os
+import tempfile
+import subprocess
+from .models import LLMConfig, GitLabConfig, NotificationConfig, NotificationChannel, WebhookEventRule, ClaudeCliConfig
 from .serializers import (
     LLMConfigSerializer,
     GitLabConfigSerializer,
     NotificationConfigSerializer,
     NotificationChannelSerializer,
     WebhookEventRuleSerializer,
-    ConfigSummarySerializer
+    ConfigSummarySerializer,
+    ClaudeCliConfigSerializer
 )
 
 logger = logging.getLogger(__name__)
@@ -756,6 +760,7 @@ class ConfigViewSet(viewsets.GenericViewSet):
         """获取所有配置的摘要信息"""
         active_llm_config = LLMConfig.objects.filter(is_active=True).first()
         active_gitlab_config = GitLabConfig.objects.filter(is_active=True).first()
+        active_claude_cli_config = ClaudeCliConfig.objects.filter(is_active=True).first()
         notification_configs = NotificationConfig.objects.filter(is_active=True)
         notification_channels = NotificationChannel.objects.all()
         webhook_events = WebhookEventRule.objects.all()
@@ -763,6 +768,7 @@ class ConfigViewSet(viewsets.GenericViewSet):
         data = {
             'llm': LLMConfigSerializer(active_llm_config).data if active_llm_config else None,
             'gitlab': GitLabConfigSerializer(active_gitlab_config).data if active_gitlab_config else None,
+            'claude_cli': ClaudeCliConfigSerializer(active_claude_cli_config).data if active_claude_cli_config else None,
             'notifications': NotificationConfigSerializer(notification_configs, many=True).data,
             'channels': NotificationChannelSerializer(notification_channels, many=True).data,
             'webhook_events': WebhookEventRuleSerializer(webhook_events, many=True).data
@@ -813,6 +819,24 @@ class ConfigViewSet(viewsets.GenericViewSet):
                     else:
                         errors['gitlab'] = gitlab_serializer.errors
 
+            # 更新Claude CLI配置
+            if 'claude_cli' in data:
+                claude_cli_data = data['claude_cli']
+                active_claude_cli = ClaudeCliConfig.objects.filter(is_active=True).first()
+
+                if active_claude_cli:
+                    claude_cli_serializer = ClaudeCliConfigSerializer(active_claude_cli, data=claude_cli_data, partial=True)
+                    if claude_cli_serializer.is_valid():
+                        claude_cli_serializer.save()
+                    else:
+                        errors['claude_cli'] = claude_cli_serializer.errors
+                else:
+                    claude_cli_serializer = ClaudeCliConfigSerializer(data=claude_cli_data)
+                    if claude_cli_serializer.is_valid():
+                        claude_cli_serializer.save()
+                    else:
+                        errors['claude_cli'] = claude_cli_serializer.errors
+
             # 通知渠道维护改为单独接口，这里仅做兼容忽略
             data.pop('notifications', None)
             data.pop('channels', None)
@@ -827,3 +851,174 @@ class ConfigViewSet(viewsets.GenericViewSet):
                 {'error': f'Failed to update configs: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    @action(detail=False, methods=['post'], url_path='test-claude-cli')
+    def test_claude_cli(self, request):
+        """
+        测试 Claude CLI 配置是否可用
+
+        测试步骤：
+        1. 验证 CLI 安装（claude --help）
+        2. 获取 CLI 版本（claude --version）
+        3. 实际调用 API 验证环境变量是否生效
+        """
+        try:
+            from apps.review.claude_cli_service import ClaudeCliService
+
+            # 获取前端传来的配置
+            claude_cli_data = request.data.get('claude_cli', {})
+
+            # 创建测试服务实例
+            test_service = ClaudeCliService()
+
+            # 手动设置配置（用于测试，不保存到数据库）
+            test_service.anthropic_base_url = claude_cli_data.get('anthropic_base_url')
+            test_service.anthropic_auth_token = claude_cli_data.get('anthropic_auth_token')
+            test_service.cli_path = claude_cli_data.get('cli_path', 'claude')
+            test_service.timeout = claude_cli_data.get('timeout', 300)
+
+            # 测试 1: 验证 CLI 安装
+            is_valid, error = test_service.validate_cli_installation()
+            if not is_valid:
+                return Response({
+                    'status': 'error',
+                    'message': f'CLI 安装验证失败: {error}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # 测试 2: 获取版本号
+            success, version, version_error = test_service.get_cli_version()
+            if not success:
+                logger.warning(f"无法获取 CLI 版本: {version_error}")
+                version = 'unknown'
+
+            # 测试 3: 快速验证 Base URL 连通性（如果配置了）
+            if test_service.anthropic_base_url:
+                try:
+                    import requests
+                    # 快速检查 base URL 是否可访问（5秒超时）
+                    test_url = test_service.anthropic_base_url.rstrip('/')
+                    logger.info(f"检查 Base URL 连通性: {test_url}")
+
+                    response = requests.get(
+                        test_url,
+                        timeout=5,
+                        allow_redirects=True
+                    )
+                    logger.info(f"Base URL 响应状态: {response.status_code}")
+                except requests.exceptions.Timeout:
+                    return Response({
+                        'status': 'error',
+                        'message': f'Base URL 连接超时，请检查 {test_service.anthropic_base_url} 是否可访问'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                except requests.exceptions.ConnectionError:
+                    return Response({
+                        'status': 'error',
+                        'message': f'无法连接到 {test_service.anthropic_base_url}，请检查 URL 是否正确'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                except Exception as e:
+                    logger.warning(f"Base URL 连通性检查警告: {e}")
+                    # 不阻断测试，继续执行
+
+            # 测试 4: 尝试简单的 API 调用
+            with tempfile.TemporaryDirectory() as temp_dir:
+                env = os.environ.copy()
+                if test_service.anthropic_base_url:
+                    env['ANTHROPIC_BASE_URL'] = test_service.anthropic_base_url
+                if test_service.anthropic_auth_token:
+                    env['ANTHROPIC_AUTH_TOKEN'] = test_service.anthropic_auth_token
+
+                # 初始化 git 仓库
+                subprocess.run(['git', 'init'], cwd=temp_dir, capture_output=True)
+                subprocess.run(['git', 'config', 'user.name', 'Test'], cwd=temp_dir, capture_output=True)
+                subprocess.run(['git', 'config', 'user.email', 'test@test.com'], cwd=temp_dir, capture_output=True)
+
+                # 创建测试文件
+                test_file = os.path.join(temp_dir, 'test.txt')
+                with open(test_file, 'w') as f:
+                    f.write('Hello World')
+
+                subprocess.run(['git', 'add', '.'], cwd=temp_dir, capture_output=True)
+                subprocess.run(['git', 'commit', '-m', 'test'], cwd=temp_dir, capture_output=True)
+
+                # 调用 Claude CLI
+                test_command = [
+                    test_service.cli_path,
+                    '-p', 'Say "test successful" in one word',
+                    '--output-format', 'json'
+                ]
+
+                logger.info(f"执行测试命令: {' '.join(test_command)}")
+                logger.info(f"Base URL: {test_service.anthropic_base_url or '默认'}")
+                logger.info(f"Auth Token: {'已配置' if test_service.anthropic_auth_token else '未配置'}")
+
+                try:
+                    result = subprocess.run(
+                        test_command,
+                        cwd=temp_dir,
+                        env=env,
+                        capture_output=True,
+                        text=True,
+                        timeout=45,  # 45 秒超时，平衡速度和可靠性
+                        check=False
+                    )
+
+                    logger.info(f"命令返回码: {result.returncode}")
+                    if result.stdout:
+                        logger.info(f"stdout: {result.stdout[:500]}")
+                    if result.stderr:
+                        logger.error(f"stderr: {result.stderr[:500]}")
+
+                    if result.returncode == 0:
+                        return Response({
+                            'status': 'success',
+                            'message': 'Claude CLI 配置正确，API 连接成功',
+                            'version': version,
+                            'details': {
+                                'cli_path': test_service.cli_path,
+                                'base_url': test_service.anthropic_base_url or '默认',
+                                'auth_configured': bool(test_service.anthropic_auth_token)
+                            }
+                        })
+                    else:
+                        # 解析错误信息
+                        error_output = result.stderr or result.stdout or '未知错误'
+
+                        # 检查常见错误模式
+                        if 'authentication' in error_output.lower() or 'unauthorized' in error_output.lower():
+                            error_msg = '认证失败：请检查 ANTHROPIC_AUTH_TOKEN 是否正确'
+                        elif 'connection' in error_output.lower() or 'network' in error_output.lower():
+                            error_msg = '网络连接失败：请检查 ANTHROPIC_BASE_URL 和网络连接'
+                        elif 'not found' in error_output.lower():
+                            error_msg = f'Claude CLI 未找到：请检查 cli_path 配置 ({test_service.cli_path})'
+                        else:
+                            error_msg = f'Claude CLI 执行失败: {error_output[:200]}'
+
+                        logger.error(f"Claude CLI 测试失败: {error_msg}")
+
+                        return Response({
+                            'status': 'error',
+                            'message': error_msg,
+                            'details': {
+                                'returncode': result.returncode,
+                                'stderr': result.stderr[:500] if result.stderr else None,
+                                'stdout': result.stdout[:500] if result.stdout else None
+                            }
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
+                except subprocess.TimeoutExpired as e:
+                    logger.error(f"Claude CLI 调用超时 (45秒)")
+                    return Response({
+                        'status': 'error',
+                        'message': 'Claude CLI 调用超时（45秒），可能原因：\n1. 认证信息错误（ANTHROPIC_AUTH_TOKEN 不正确）\n2. API 端点无法访问或响应慢\n3. 网络连接不稳定',
+                        'details': {
+                            'timeout': 45,
+                            'suggestion': '请仔细检查 ANTHROPIC_AUTH_TOKEN 是否正确（常见错误：复制时多了空格或少了字符）'
+                        }
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            logger.error(f"测试 Claude CLI 配置失败: {str(e)}", exc_info=True)
+            return Response({
+                'status': 'error',
+                'message': f'测试失败: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

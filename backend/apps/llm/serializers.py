@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import LLMConfig, GitLabConfig, NotificationConfig, NotificationChannel, WebhookEventRule
+from .models import LLMConfig, GitLabConfig, NotificationConfig, NotificationChannel, WebhookEventRule, ClaudeCliConfig
 
 
 class LLMConfigSerializer(serializers.ModelSerializer):
@@ -254,6 +254,35 @@ class WebhookEventRuleSerializer(serializers.ModelSerializer):
         # 使用模型的 match_rules_dict 属性确保返回正确的字典格式
         data['match_rules'] = instance.match_rules_dict
         return data
+
+
+class ClaudeCliConfigSerializer(serializers.ModelSerializer):
+    """Claude CLI 配置序列化器"""
+    class Meta:
+        model = ClaudeCliConfig
+        fields = [
+            'id',
+            'anthropic_base_url',
+            'anthropic_auth_token',
+            'cli_path',
+            'timeout',
+            'is_active',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def create(self, validated_data):
+        """如果创建新的激活配置，先禁用其他配置"""
+        if validated_data.get('is_active', True):
+            ClaudeCliConfig.objects.filter(is_active=True).update(is_active=False)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        """如果设置为激活状态，先禁用其他配置"""
+        if validated_data.get('is_active', False) and not instance.is_active:
+            ClaudeCliConfig.objects.filter(is_active=True).update(is_active=False)
+        return super().update(instance, validated_data)
 
 
 class ConfigSummarySerializer(serializers.Serializer):
