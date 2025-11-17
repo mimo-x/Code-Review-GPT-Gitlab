@@ -69,11 +69,29 @@
 
 # 功能预览 🌈
 
+### 主页展示
 <p align="center">
-  <video controls width="800">
-    <source src="doc/img/cr.mov" type="video/quicktime">
-    您的浏览器不支持视频播放
-  </video>
+  <img src="doc/img/home_page.png" style="width:700px;"/>
+</p>
+
+### Webhook 配置
+<p align="center">
+  <img src="doc/img/webhook_config.png" style="width:700px;"/>
+</p>
+
+### Prompt 提示词配置
+<p align="center">
+  <img src="doc/img/prompt_config.png" style="width:700px;"/>
+</p>
+
+### 消息通知
+<p align="center">
+  <img src="doc/img/message.png" style="width:700px;"/>
+</p>
+
+### 详细信息
+<p align="center">
+  <img src="doc/img/info.png" style="width:700px;"/>
 </p>
 
 
