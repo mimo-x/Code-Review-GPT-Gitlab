@@ -1,13 +1,52 @@
-/logs/*
-!logs/.gitkeep
-app/mrmax.py
-db/*
-!db/.gitkeep
-/venv/
-.config.py
+# Python
+*.pyc
 __pycache__/
-.DS_Store
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.log
 
-/config/config_local.py
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
 
+# IDE
 .idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Django Backend
+backend/logs/
+backend/staticfiles/
+backend/.env
+backend/db.sqlite3
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+
+# Documentation generated files
+*.pdf
+*.docx
+
+# Temporary files
+*.tmp
+*.bak
+~*
+
+# Repository clones (for code review)
+repo/

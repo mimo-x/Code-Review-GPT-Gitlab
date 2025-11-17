@@ -1,0 +1,252 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-apple-50 text-apple-900 antialiased;
+    font-feature-settings: 'liga', 'kern';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  * {
+    @apply transition-colors duration-200;
+  }
+}
+
+@layer components {
+  /* Apple-style Card */
+  .card {
+    @apply bg-white/80 backdrop-blur-apple rounded-2xl shadow-apple border border-apple-200/50;
+  }
+
+  .card-glass {
+    @apply bg-white/60 backdrop-blur-2xl rounded-2xl shadow-apple border border-white/40;
+  }
+
+  /* Apple-style Buttons */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-medium
+           rounded-full bg-apple-blue-500 text-white shadow-sm
+           hover:bg-apple-blue-600 active:scale-95
+           transition-all duration-200 ease-out;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-medium
+           rounded-full bg-apple-100 text-apple-900
+           hover:bg-apple-200 active:scale-95
+           transition-all duration-200 ease-out;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium
+           rounded-full text-apple-600
+           hover:bg-apple-100 active:scale-95
+           transition-all duration-200 ease-out;
+  }
+
+  /* Apple-style Input */
+  .input-field {
+    @apply w-full px-4 py-3 text-sm bg-apple-50 border border-apple-300/50 rounded-xl
+           text-apple-900 placeholder:text-apple-400
+           focus:outline-none focus:ring-2 focus:ring-apple-blue-500/20 focus:border-apple-blue-500
+           transition-all duration-200;
+  }
+
+  /* Apple-style Badges */
+  .badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium;
+  }
+
+  .badge-success {
+    @apply badge bg-green-100 text-green-700;
+  }
+
+  .badge-warning {
+    @apply badge bg-orange-100 text-orange-700;
+  }
+
+  .badge-danger {
+    @apply badge bg-red-100 text-red-700;
+  }
+
+  .badge-info {
+    @apply badge bg-apple-blue-100 text-apple-blue-700;
+  }
+
+  /* Apple-style Stat Card */
+  .stat-card {
+    @apply relative overflow-hidden rounded-2xl p-6 shadow-apple
+           bg-gradient-to-br from-white to-apple-50
+           border border-apple-200/50
+           hover:shadow-apple-lg hover:-translate-y-1
+           transition-all duration-300 ease-out cursor-pointer;
+  }
+
+  .stat-card::before {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-apple-100/30;
+  }
+
+  /* Apple-style Section Header */
+  .section-header {
+    @apply text-xl font-semibold text-apple-900 tracking-tight;
+  }
+
+  .section-subheader {
+    @apply text-sm text-apple-500 font-medium tracking-wide uppercase;
+  }
+
+  /* Apple-style Divider */
+  .divider {
+    @apply border-t border-apple-200/50;
+  }
+
+  /* Apple-style Link */
+  .link {
+    @apply text-apple-blue-500 hover:text-apple-blue-600
+           transition-colors duration-200 cursor-pointer;
+  }
+
+  /* Apple-style Tag */
+  .tag {
+    @apply inline-flex items-center px-3 py-1 rounded-full
+           text-xs font-medium bg-apple-100 text-apple-700
+           hover:bg-apple-200 transition-colors duration-200;
+  }
+
+  /* Configuration Page Styles */
+  .config-tabs {
+    @apply border-b border-apple-200/50;
+  }
+
+  .config-tab {
+    @apply py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200;
+  }
+
+  .config-tab-active {
+    @apply border-apple-blue-500 text-apple-blue-600;
+  }
+
+  .config-tab-inactive {
+    @apply border-transparent text-apple-500 hover:text-apple-700 hover:border-apple-300;
+  }
+
+  .config-section {
+    @apply bg-white/60 backdrop-blur-2xl rounded-2xl shadow-apple border border-apple-200/50;
+  }
+
+  .config-field-group {
+    @apply space-y-1;
+  }
+
+  .config-label {
+    @apply block text-sm font-medium text-apple-700 mb-2;
+  }
+
+  .config-toggle {
+    @apply relative inline-flex items-center cursor-pointer;
+  }
+
+  .config-toggle-input {
+    @apply sr-only;
+  }
+
+  .config-toggle-slider {
+    @apply w-11 h-6 bg-gray-200 rounded-full transition-colors duration-200 ease-in-out;
+  }
+
+  .config-toggle-slider::after {
+    content: '';
+    @apply absolute top-0.5 left-[2px] bg-white border border-gray-300 rounded-full h-5 w-5 transition-transform duration-200 ease-in-out;
+  }
+
+  input:checked ~ .config-toggle-slider {
+    @apply bg-apple-blue-500;
+  }
+
+  input:checked ~ .config-toggle-slider::after {
+    @apply translate-x-full border-white;
+  }
+
+  /* Loading State */
+  .loading-spinner {
+    @apply animate-spin rounded-full h-4 w-4 border-2 border-apple-200 border-t-apple-blue-500;
+  }
+
+  /* Form Validation */
+  .input-field-error {
+    @apply border-red-300 focus:ring-red-500/20 focus:border-red-500;
+  }
+
+  .error-message {
+    @apply text-red-600 text-sm mt-1;
+  }
+}
+
+/* Custom Scrollbar - Apple Style */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* Selection */
+::selection {
+  background: rgba(0, 122, 255, 0.2);
+  color: inherit;
+}
+
+/* Focus Visible */
+:focus-visible {
+  outline: 2px solid rgba(0, 122, 255, 0.5);
+  outline-offset: 2px;
+}
+
+/* Smooth transitions */
+@media (prefers-reduced-motion: no-preference) {
+  * {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Toast Animations */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}

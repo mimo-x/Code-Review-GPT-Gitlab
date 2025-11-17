@@ -1,0 +1,40 @@
+# Django Framework
+Django==4.1.13
+djangorestframework==3.14.0
+
+# Database Support (SQLite is built-in)
+# Optional MongoDB Support (set USE_MONGODB=True to enable)
+# djongo==1.3.6
+# pymongo==3.12.3
+# sqlparse==0.2.4
+
+# CORS Support
+django-cors-headers==4.3.1
+
+# HTTP Requests
+requests==2.31.0
+requests-toolbelt==1.0.0
+
+# Retry mechanism
+retrying==1.3.4
+
+# LLM Integration
+openai==1.59.7
+unionllm==0.1.23
+litellm==1.58.2
+
+# GitLab Integration
+python-gitlab==3.15.0
+
+# Utilities
+python-dateutil==2.8.2
+
+# Production Server
+gunicorn==21.2.0
+gevent==23.9.1
+
+# Environment Variables
+python-dotenv==1.0.0
+
+# System Information
+psutil==5.9.8
