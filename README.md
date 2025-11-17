@@ -162,11 +162,50 @@ npm run build
 - [(字节)基于大模型 + 知识库的 Code Review 实践](https://mp.weixin.qq.com/s?__biz=Mzg2ODQ1OTExOA==&mid=2247504479&idx=1&sn=1ec09afbb5b5b9b2aaf151994be5fd27&chksm=cea9655ef9deec48b17cbab05ddd1ab04c86736d8b469eaac6f5a707ca110ce4186e8985ff41&mpshare=1&scene=1&srcid=1011C8l5RmCM2EL4Rpl3wdRy&sharer_shareinfo=96d0a83631aaa25db87709baa250085d&sharer_shareinfo_first=96d0a83631aaa25db87709baa250085d#rd)
 - [(美团)代码变更风险可视化系统建设与实践](https://tech.meituan.com/2023/09/22/construction-and-practice-of-code-change-risk-visualization-system.html)
 
+## 贡献者 👥
 
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="14.28%">
+        <a href="https://github.com/mimo-x">
+          <img src="https://avatars.githubusercontent.com/u/17410629?v=4" width="100px;" alt="mimo-x" style="border-radius: 50%;" /><br />
+          <sub><b>mimo-x</b></sub>
+        </a>
+      </td>
+      <td align="center" valign="top" width="14.28%">
+        <a href="https://github.com/Robbings">
+          <img src="https://avatars.githubusercontent.com/u/88301764?v=4" width="100px;" alt="Robbings" style="border-radius: 50%;" /><br />
+          <sub><b>Robbings</b></sub>
+        </a>
+      </td>
+      <td align="center" valign="top" width="14.28%">
+        <a href="https://github.com/vstars1">
+          <img src="https://avatars.githubusercontent.com/u/196412637?v=4" width="100px;" alt="vstars1" style="border-radius: 50%;" /><br />
+          <sub><b>vstars1</b></sub>
+        </a>
+      </td>
+      <td align="center" valign="top" width="14.28%">
+        <a href="https://github.com/kexicui">
+          <img src="https://avatars.githubusercontent.com/u/96035673?v=4" width="100px;" alt="kexicui" style="border-radius: 50%;" /><br />
+          <sub><b>kexicui</b></sub>
+        </a>
+      </td>
+      <td align="center" valign="top" width="14.28%">
+        <a href="https://github.com/andaoai">
+          <img src="https://avatars.githubusercontent.com/u/55041866?v=4" width="100px;" alt="andaoai" style="border-radius: 50%;" /><br />
+          <sub><b>andaoai</b></sub>
+        </a>
+      </td>
+    </tr>
+  </tbody>
+</table>
 
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=mimo-x/Code-Review-GPT-Gitlab&type=Date)](https://star-history.com/#mimo-x/Code-Review-GPT-Gitlab&Date)
+
+
 
 # License 📑
 ![github license](https://img.shields.io/github/license/mimo-x/Code-Review-GPT-Gitlab)
