@@ -1,6 +1,14 @@
 {
-	"name": "Python & Typescript",
-	"image": "ghcr.io/prulloac/base:bookworm",
+	"name": "Code Review GPT (Dev Environment)",
+
+	// 👇 使用 Docker Compose 方式支持多服务
+	"dockerComposeFile": "docker-compose.yml",
+
+	// 👇 指定主开发容器服务
+	"service": "app",
+
+	// 👇 工作目录
+	"workspaceFolder": "/workspaces",
 
 	// 👇 Features to add to the Dev Container. More info: https://containers.dev/implementors/features.
 	"features": {
@@ -12,14 +20,64 @@
 	},
 
 	// 👇 Commands to run when the container is created.
-	"postCreateCommand": "curl -LsSf https://astral.sh/uv/install.sh | sh"
+	"postCreateCommand": "curl -LsSf https://astral.sh/uv/install.sh | sh && uv sync",
 
-	// 👇 Use 'forwardPorts' to make a list of ports inside the container available locally.
-	// "forwardPorts": [],
+	// 👇 端口转发 - 将服务端口暴露到本地
+	"forwardPorts": [8000, 3000, 27017],
+
+	// 👇 端口属性
+	"portsAttributes": {
+		"8000": {
+			"label": "Django Backend",
+			"onAutoForward": "notify"
+		},
+		"3000": {
+			"label": "Vue.js Frontend",
+			"onAutoForward": "notify"
+		},
+		"27017": {
+			"label": "MongoDB",
+			"onAutoForward": "silent"
+		}
+	},
 
 	// 👇 Configure tool-specific properties.
-	// "customizations": {},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-python.python",
+				"ms-python.black-formatter",
+				"ms-python.flake8",
+				"Vue.volar",
+				"Vue.vscode-typescript-vue-plugin",
+				"bradlc.vscode-tailwindcss",
+				"ms-azuretools.vscode-docker"
+			],
+			"settings": {
+				"python.defaultInterpreterPath": "/usr/local/bin/python",
+				"python.formatting.provider": "black",
+				"editor.formatOnSave": true
+			}
+		}
+	},
+
+	// 👇 环境变量设置
+	"remoteEnv": {
+		"MONGODB_HOST": "mongodb",
+		"MONGODB_PORT": "27017",
+		"MONGODB_USER": "admin",
+		"MONGODB_PASSWORD": "password"
+	},
+
+	// 👇 挂载卷（如果有需要持久化的数据）
+	"mounts": [
+		"source=${localWorkspaceFolder}/backend,target=/workspaces/backend,type=bind",
+		"source=${localWorkspaceFolder}/frontend,target=/workspaces/frontend,type=bind"
+	],
+
+	// 👇 生命周期脚本
+	"postStartCommand": "cd /workspaces/backend && python manage.py migrate",
 
 	// 👇 Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
-	// "remoteUser": "root"
+	"remoteUser": "root"
 }
