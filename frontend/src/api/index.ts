@@ -340,3 +340,13 @@ export const getWebhookUrl = () => {
     method: 'get'
   })
 }
+
+// 测试 Claude CLI 配置
+export const testClaudeCliConfigApi = (data: any) => {
+  return request({
+    url: getApiUrl('/configs/test-claude-cli/'),
+    method: 'post',
+    data,
+    timeout: 90000  // 90 秒超时（后端测试最多 45 秒 + 额外处理时间）
+  })
+}

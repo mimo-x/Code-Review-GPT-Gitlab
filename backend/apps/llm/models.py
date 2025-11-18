@@ -247,3 +247,49 @@ class NotificationChannel(models.Model):
     @config_dict.setter
     def config_dict(self, value):
         self.config_data = json.dumps(value)
+
+
+class ClaudeCliConfig(models.Model):
+    """
+    Claude CLI 配置模型
+    用于存储 Claude CLI 执行所需的环境变量和配置
+    """
+    id = models.AutoField(primary_key=True)
+
+    # Claude CLI 环境变量
+    anthropic_base_url = models.URLField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text="ANTHROPIC_BASE_URL - Claude API 基础地址"
+    )
+    anthropic_auth_token = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="ANTHROPIC_AUTH_TOKEN - Claude 认证令牌"
+    )
+
+    # Claude CLI 可执行文件路径
+    cli_path = models.CharField(
+        max_length=500,
+        default='claude',
+        help_text="Claude CLI 可执行文件路径"
+    )
+
+    # 超时设置（秒）
+    timeout = models.IntegerField(
+        default=300,
+        help_text="Claude CLI 执行超时时间（秒）"
+    )
+
+    # 状态和时间戳
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'claude_cli_configs'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Claude CLI Config - {self.cli_path}"
