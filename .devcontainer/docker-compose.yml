@@ -9,6 +9,7 @@ services:
     command: sleep infinity
     volumes:
       - ..:/workspaces:cached
+      - uv_cache:/root/.cache/uv
     working_dir: /workspaces
     networks:
       - dev_network
@@ -17,6 +18,7 @@ services:
       - MONGODB_PORT=27017
       - MONGODB_USER=admin
       - MONGODB_PASSWORD=password
+      - UV_LINK_MODE=copy
     depends_on:
       - mongodb
 
@@ -38,6 +40,7 @@ services:
 
 volumes:
   mongodb_dev_data:
+  uv_cache:
 
 networks:
   dev_network:

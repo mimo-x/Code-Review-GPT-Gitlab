@@ -20,7 +20,7 @@
 	},
 
 	// 👇 Commands to run when the container is created.
-	"postCreateCommand": "curl -LsSf https://astral.sh/uv/install.sh | sh && uv sync",
+	"postCreateCommand": "curl -LsSf https://astral.sh/uv/install.sh | sh && cd /workspaces/backend && uv sync",
 
 	// 👇 端口转发 - 将服务端口暴露到本地
 	"forwardPorts": [8000, 3000, 27017],
@@ -76,7 +76,7 @@
 	],
 
 	// 👇 生命周期脚本
-	"postStartCommand": "cd /workspaces/backend && python manage.py migrate",
+	"postStartCommand": "cd /workspaces/backend && uv run python manage.py migrate",
 
 	// 👇 Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
 	"remoteUser": "root"
