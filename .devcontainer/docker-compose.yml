@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  # 主开发容器应用
+  app:
+    image: ghcr.io/prulloac/base:bookworm
+    container_name: dev_code_review_app
+    restart: unless-stopped
+    command: sleep infinity
+    volumes:
+      - ..:/workspaces:cached
+      - uv_cache:/root/.cache/uv
+    working_dir: /workspaces
+    networks:
+      - dev_network
+    environment:
+      - MONGODB_HOST=mongodb
+      - MONGODB_PORT=27017
+      - MONGODB_USER=admin
+      - MONGODB_PASSWORD=password
+      - UV_LINK_MODE=copy
+    depends_on:
+      - mongodb
+    ports:
+      - "3000:3000"
+      - "8000:8000"
+
+  # MongoDB 服务
+  mongodb:
+    image: mongo:6.0
+    container_name: dev_code_review_mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_DATABASE: code_review_gpt
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_dev_data:/data/db
+    networks:
+      - dev_network
+
+volumes:
+  mongodb_dev_data:
+  uv_cache:
+
+networks:
+  dev_network:
+    driver: bridge
