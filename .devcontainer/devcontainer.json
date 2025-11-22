@@ -71,5 +71,5 @@
 	"postStartCommand": "cd /workspaces/backend && uv run python manage.py migrate",
 
 	// 👇 Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
-	"remoteUser": "vscode"
+	"remoteUser": "root"
 }
