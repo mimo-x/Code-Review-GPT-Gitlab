@@ -1,0 +1,56 @@
+# 开发环境覆盖配置，会自动与 docker-compose.yml 合并
+version: '3.8'
+
+services:
+  # Django后端开发配置
+  backend:
+    volumes:
+      - ./backend:/app
+      - /app/__pycache__
+      - backend_dev_static:/app/staticfiles
+      - backend_dev_media:/app/media
+    environment:
+      - DEBUG=True
+      - DJANGO_SETTINGS_MODULE=core.settings
+    command: python manage.py runserver 0.0.0.0:8000
+    stdin_open: true
+    tty: true
+
+  # Vue.js前端开发配置
+  frontend:
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - frontend_dev_dist:/app/dist
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000
+      - VITE_NODE_ENV=development
+    command: npm run dev
+    stdin_open: true
+    tty: true
+
+  # Redis开发配置
+  redis:
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+
+  # 开发工具服务（可选）
+  adminer:
+    image: adminer
+    container_name: code-review-adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    networks:
+      - code-review-network
+    profiles:
+      - tools
+
+volumes:
+  backend_dev_static:
+    driver: local
+  backend_dev_media:
+    driver: local
+  frontend_dev_dist:
+    driver: local

@@ -25,7 +25,7 @@ python manage.py createsuperuser  # Admin user
 gunicorn core.wsgi:application --bind 0.0.0.0:8000 --workers 4 --worker-class gevent
 
 # Docker
-docker-compose up -d        # Start with MongoDB
+docker-compose up -d        # Start with Redis
 ```
 
 ### Frontend (Vue.js)
@@ -42,7 +42,7 @@ npm run preview            # Preview production build
 - **Django Apps**: `webhook` (GitLab integration), `review` (code review logic), `llm` (LLM integration), `response` (notifications)
 - **Entry Point**: `backend/core/wsgi.py` for production, `manage.py` for development
 - **Main Settings**: `backend/core/settings.py` - contains all Django, LLM, and notification configurations
-- **Database**: SQLite by default, optional MongoDB via djongo (set `USE_MONGODB=True`)
+- **Database**: SQLite by default with Redis caching
 
 ### Frontend Structure
 - **Framework**: Vue 3 + TypeScript + Vite
@@ -63,14 +63,14 @@ npm run preview            # Preview production build
 - **GitLab**: `GITLAB_SERVER_URL`, `GITLAB_PRIVATE_TOKEN`
 - **LLM**: `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_API_BASE`
 - **Notifications**: `DINGDING_BOT_WEBHOOK`, `SLACK_WEBHOOK_URL`, `FEISHU_WEBHOOK_URL`
-- **Database**: `USE_MONGODB=True` + MongoDB settings to use MongoDB instead of SQLite
+- **Database**: SQLite with Redis for caching and session storage
 - **Claude CLI**: `CLAUDE_CLI_PATH`, `CLAUDE_CLI_TIMEOUT` for Claude integration
 
 ### Important Files
 - `backend/core/settings.py` - Main Django configuration
 - `backend/requirements.txt` - Python dependencies
 - `frontend/package.json` - Node.js dependencies and scripts
-- `backend/docker-compose.yml` - MongoDB + Django setup
+- `backend/docker-compose.yml` - Redis + Django setup
 
 ## LLM Integration
 
@@ -123,6 +123,6 @@ Currently no test framework is configured. This is a known gap that should be ad
 ## Deployment
 
 - **Production Server**: Gunicorn with gevent workers
-- **Database**: SQLite (default) or MongoDB (optional)
+- **Database**: SQLite (default) with Redis caching
 - **Docker**: Multi-container setup available
 - **Static Files**: Collected to `staticfiles/` directory

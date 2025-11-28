@@ -72,24 +72,6 @@ DATABASES = {
     }
 }
 
-# 可选：如果需要同时支持MongoDB（通过环境变量切换）
-USE_MONGODB = os.environ.get('USE_MONGODB', 'False').lower() == 'true'
-
-if USE_MONGODB:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'djongo',
-            'NAME': os.environ.get('MONGODB_NAME', 'code_review_gpt'),
-            'CLIENT': {
-                'host': os.environ.get('MONGODB_HOST', 'localhost'),
-                'port': int(os.environ.get('MONGODB_PORT', 27017)),
-                'username': os.environ.get('MONGODB_USER', ''),
-                'password': os.environ.get('MONGODB_PASSWORD', ''),
-                'authSource': os.environ.get('MONGODB_AUTH_SOURCE', 'admin'),
-                'authMechanism': 'SCRAM-SHA-1'
-            }
-        }
-    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [

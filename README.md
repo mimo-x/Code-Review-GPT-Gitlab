@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="doc/img/log.png" style="width:500px;"/>
+  <img src="docs/img/log.png" style="width:500px;"/>
 </p>
 
 
@@ -42,13 +42,13 @@
 # 项目架构 🚗
 ### 前期架构
 <p align="center">
-  <img src="doc/img/old-architecture.png" style="width:500px;"/>
+  <img src="docs/img/old-architecture.png" style="width:500px;"/>
 </p>
 
 ### 🚀 **全新架构升级：更强大、更灵活、更高效！** 🌈
 
 <p align="center">
-  <img src="doc/img/project_framework.png" style="width:500px;"/>
+  <img src="docs/img/project_framework.png" style="width:500px;"/>
 </p>
 
 🌟 **丰富的模型接入**　支持轻松接入<span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">更多的模型</span>，无论是经典模型还是最新的 AI 模型，都能轻松集成！  
@@ -71,27 +71,27 @@
 
 ### 主页展示
 <p align="center">
-  <img src="doc/img/home_page.png" style="width:700px;"/>
+  <img src="docs/img/home_page.png" style="width:700px;"/>
 </p>
 
 ### Webhook 配置
 <p align="center">
-  <img src="doc/img/webhook_config.png" style="width:700px;"/>
+  <img src="docs/img/webhook_config.png" style="width:700px;"/>
 </p>
 
 ### Prompt 提示词配置
 <p align="center">
-  <img src="doc/img/prompt_config.png" style="width:700px;"/>
+  <img src="docs/img/prompt_config.png" style="width:700px;"/>
 </p>
 
 ### 消息通知
 <p align="center">
-  <img src="doc/img/message.png" style="width:700px;"/>
+  <img src="docs/img/message.png" style="width:700px;"/>
 </p>
 
 ### 详细信息
 <p align="center">
-  <img src="doc/img/info.png" style="width:700px;"/>
+  <img src="docs/img/info.png" style="width:700px;"/>
 </p>
 
 
@@ -132,7 +132,7 @@ npm run build
 #### **配置Gitlab webhook**
 > 填写```Webhook URL```时，请在域名后添加路径```/api/webhook/gitlab/```，例如：```http://example.com/api/webhook/gitlab/```
 <p align="center">
-  <img src="doc/img/webhookconfig.png" style="width:300px;"/>
+  <img src="docs/img/webhookconfig.png" style="width:300px;"/>
 </p>
 
 #### **尝试发起一个 Merge Request 吧🎉**
@@ -151,9 +151,9 @@ npm run build
 
 📱 *wx*：**isxuxin**
 
-👨‍👨‍👦‍👦 如果有任何使用问题，欢迎来这里交流（<span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">AI 研发效能领域</span>） 👋 
+👨‍👨‍👦‍👦 如果有任何使用问题，欢迎来这里交流（<span style="background-image: linear-gradient(to right, #ff9900, #ff66cc);-webkit-background-clip: text;color: transparent;font-weight: bold;">AI 研发效能领域</span>） 👋
 <p float="left">
-  <img src="doc/img/xuxin.png" width="400" /> 
+  <img src="docs/img/xuxin.png" width="400" />
 </p>
 
 

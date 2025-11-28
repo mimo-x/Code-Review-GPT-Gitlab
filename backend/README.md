@@ -1,12 +1,12 @@
 # Code Review GPT - Django Backend
 
-基于 Django + MongoDB 的 GitLab 代码审查后端服务
+基于 Django + SQLite 的 GitLab 代码审查后端服务
 
 ## 项目架构
 
 ### 技术栈
 - **框架**: Django 4.2.9 + Django REST Framework
-- **数据库**: MongoDB (��用 djongo ORM)
+- **数据库**: SQLite (Django 默认 ORM) + Redis 缓存
 - **LLM集成**: UnionLLM (支持多种大模型)
 - **生产服务器**: Gunicorn + Gevent
 
