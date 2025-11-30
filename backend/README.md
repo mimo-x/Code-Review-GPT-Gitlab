@@ -1,12 +1,12 @@
 # Code Review GPT - Django Backend
 
-基于 Django + MongoDB 的 GitLab 代码审查后端服务
+基于 Django + SQLite 的 GitLab 代码审查后端服务
 
 ## 项目架构
 
 ### 技术栈
 - **框架**: Django 4.2.9 + Django REST Framework
-- **数据库**: MongoDB (��用 djongo ORM)
+- **数据库**: SQLite (Django 默认 ORM) + Redis 缓存
 - **LLM集成**: UnionLLM (支持多种大模型)
 - **生产服务器**: Gunicorn + Gevent
 
@@ -35,9 +35,8 @@ backend/
 │   └── gitlab_parser.py   # GitLab 解析工具
 ├── manage.py              # Django 管理脚本
 ├── requirements.txt       # 依赖列表
-├── Dockerfile             # Docker 配置
-├── docker-compose.yml     # Docker Compose 配置
 ├── start.sh               # 开发环境启动脚本
 └── start_production.sh    # 生产环境启动脚本
 ```
 
+> 后端 Docker 镜像配置位于仓库根目录的 `docker/backend/Dockerfile`，可按需扩展系统依赖。

@@ -60,7 +60,18 @@ export const API_ENDPOINTS = {
 
 // 完整URL生成函数
 export const getApiUrl = (endpoint: string): string => {
-  return `${API_CONFIG.BASE_URL}${endpoint}`
+  if (/^https?:\/\//.test(endpoint)) {
+    return endpoint
+  }
+
+  const baseUrl = (API_CONFIG.BASE_URL || '').replace(/\/+$/, '')
+  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+
+  if (!baseUrl) {
+    return normalizedEndpoint
+  }
+
+  return `${baseUrl}${normalizedEndpoint}`
 }
 
 // 通用API URL集合（包含完整路径）

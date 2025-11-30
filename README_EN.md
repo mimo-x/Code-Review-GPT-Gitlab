@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="doc/img/log.png" style="width:500px;"/>
+  <img src="docs/img/log.png" style="width:500px;"/>
 </p>
 
 
@@ -28,7 +28,7 @@
 # [Project structure 🚗](https://vze9i86ezn.feishu.cn/docx/BuFidAogAoH1ecxQstscBUdhnfb?openbrd=1&doc_app_id=501&blockId=YneudO6sRoXPFIxkohtcgbwenye&blockType=whiteboard&blockToken=Yd3CwIPdphgGmFbWcRfcx9aNnrf#YneudO6sRoXPFIxkohtcgbwenye)
 
 <p align="center">
-  <img src="doc/img/project_framework.png" style="width:500px;"/>
+  <img src="docs/img/project_framework.png" style="width:500px;"/>
 </p>
 
 
@@ -36,18 +36,18 @@
 
 ### 1. Gitlab Code Review for Merge Request
 <p align="center">
-  <img src="doc/img/gpt_code_review_gitlab.png" style="width:500px;"/>
+  <img src="docs/img/gpt_code_review_gitlab.png" style="width:500px;"/>
 </p>
 
-### 2. Dingding-code-review message 
+### 2. Dingding-code-review message
 <p align="center">
-  <img src="doc/img/img.png" style="width:500px;"/>
+  <img src="docs/img/img.png" style="width:500px;"/>
 </p>
 
 ### 3. Integration of More Large Models
 
 1. Custom models can be quickly integrated by implementing the project interface. 
-For specific configuration methods, refer to [config.md](doc/config.md).
+For specific configuration methods, refer to [config.md](docs/config.md).
 2. The project supports multiple models through [UnionLLM](https://github.com/EvalsOne/UnionLLM/), 
 which is compatible with [LiteLLM](https://docs.litellm.ai/docs). 
 The default supported models are listed in the table below.
@@ -149,7 +149,7 @@ python3 app.py
 5.**config gitlab webhook**
 > When filling in the ```Webhook URL```, please add ```/git/webhook``` after the domain name. For example: ```http://example.com/git/webhook```
 <p align="center">
-  <img src="doc/img/webhookconfig.png" style="width:300px;"/>
+  <img src="docs/img/webhookconfig.png" style="width:300px;"/>
 </p>
 6.**make a mr 🎉**
 
@@ -180,7 +180,7 @@ todo dockerfile
 📮 Email：mixuxin@163.com 
 
 👨‍👨‍👦‍👦 This is our WeChat group
-<img src="doc/img/wechat.jpg" style="width:400px">
+<img src="docs/img/wechat.jpg" style="width:400px">
 
 # reference 📚
 - [(字节)基于大模型 + 知识库的 Code Review 实践](https://mp.weixin.qq.com/s?__biz=Mzg2ODQ1OTExOA==&mid=2247504479&idx=1&sn=1ec09afbb5b5b9b2aaf151994be5fd27&chksm=cea9655ef9deec48b17cbab05ddd1ab04c86736d8b469eaac6f5a707ca110ce4186e8985ff41&mpshare=1&scene=1&srcid=1011C8l5RmCM2EL4Rpl3wdRy&sharer_shareinfo=96d0a83631aaa25db87709baa250085d&sharer_shareinfo_first=96d0a83631aaa25db87709baa250085d#rd)

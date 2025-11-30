@@ -75,9 +75,11 @@ api_config = {
 
 
 ## Gitlab配置
-- `GITLAB_SERVER_URL`: Gitlab服务器地址
-- `GITLAB_PRIVATE_TOKEN`: Gitlab私有令牌
-- `maximum_files`: Gitlab Merge Request最大文件数
+GitLab 服务器地址与访问令牌通过后台的 *GitLab 配置* 页面写入 `GitLabConfig` 表，系统仅读取数据库中的激活记录。
+- `server_url`: GitLab 实例地址
+- `private_token`: 用于访问 API 的 Token
+- `is_active`: 控制是否为当前生效配置（仅允许单条激活）
+- `maximum_files`: GitLab Merge Request 最大文件数（可选）
 
 ## 消息通知配置
 - `dingtalk_webhook`: 钉钉机器人Webhook

@@ -50,3 +50,7 @@ frontend/.env.local
 
 # Repository clones (for code review)
 repo/
+
+# Ensure .env.example files are tracked
+!.env.example
+!**/.env.example

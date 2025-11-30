@@ -3,10 +3,19 @@ Webhook services for project and event management
 """
 import logging
 from datetime import timedelta
+from urllib.parse import urlparse, urlunparse
+
 from django.conf import settings
 from django.utils import timezone
 from django.db import models
+
 import pytz
+
+try:
+    from apps.llm.models import GitLabConfig
+except Exception:  # pragma: no cover - fallback when config model unavailable
+    GitLabConfig = None
+
 from .models import Project, WebhookLog, MergeRequestReview
 
 logger = logging.getLogger(__name__)
@@ -49,6 +58,8 @@ class ProjectService:
             logger.error("Project ID not found in webhook payload")
             return None, False
 
+        canonical_url = ProjectService._build_project_url(project_data)
+
         # Check if project exists
         try:
             project = Project.objects.get(project_id=project_id)
@@ -56,7 +67,13 @@ class ProjectService:
 
             # Update last webhook time
             project.last_webhook_at = timezone.now()
-            project.save(update_fields=['last_webhook_at', 'updated_at'])
+            update_fields = ['last_webhook_at', 'updated_at']
+
+            if canonical_url and project.project_url != canonical_url:
+                project.project_url = canonical_url
+                update_fields.append('project_url')
+
+            project.save(update_fields=update_fields)
 
             logger.info(f"Project {project.project_name} (ID: {project_id}) found - Review enabled: {project.review_enabled}")
 
@@ -66,7 +83,7 @@ class ProjectService:
                 project_id=project_id,
                 project_name=project_data.get('name', ''),
                 project_path=project_data.get('path_with_namespace', ''),
-                project_url=project_data.get('web_url', ''),
+                project_url=canonical_url,
                 namespace=project_data.get('namespace', ''),
                 review_enabled=False,  # Default: disabled
                 auto_review_on_mr=True,
@@ -80,6 +97,67 @@ class ProjectService:
             logger.info(f"New project created: {project.project_name} (ID: {project_id}) - Review disabled by default")
 
         return project, created
+
+    @staticmethod
+    def _build_project_url(project_data):
+        """Build a canonical project URL based on configured GitLab server."""
+        base_url = ProjectService._get_gitlab_base_url()
+        project_path = project_data.get('path_with_namespace') or ''
+
+        if not base_url:
+            return project_data.get('web_url', '')
+
+        if not project_path:
+            return base_url.rstrip('/')
+
+        return f"{base_url.rstrip('/')}/{project_path.lstrip('/')}"
+
+    @staticmethod
+    def _get_gitlab_base_url():
+        """Resolve GitLab base URL from config or settings."""
+        if GitLabConfig:
+            config = GitLabConfig.objects.filter(is_active=True).values_list('server_url', flat=True).first()
+            if config:
+                return config
+
+        return None
+
+    @staticmethod
+    def build_clone_url(project_data, base_url=None):
+        """Build clone URL ensuring it uses the configured GitLab server host."""
+        base_url = base_url or ProjectService._get_gitlab_base_url()
+        raw_clone_url = project_data.get('git_http_url') or project_data.get('http_url')
+
+        if raw_clone_url:
+            parsed_clone = urlparse(raw_clone_url)
+            parsed_base = urlparse(base_url) if base_url else None
+
+            if parsed_base and parsed_base.scheme and parsed_base.netloc:
+                path = parsed_clone.path or ''
+
+                if not path:
+                    project_path = project_data.get('path_with_namespace')
+                    if project_path:
+                        path = f"/{project_path.lstrip('/')}.git"
+
+                return urlunparse((
+                    parsed_base.scheme,
+                    parsed_base.netloc,
+                    path,
+                    '',
+                    '',
+                    ''
+                ))
+
+        # Fallback to manual construction when raw URL missing or malformed
+        if base_url:
+            project_path = project_data.get('path_with_namespace')
+            if project_path:
+                suffix = '.git' if not project_path.endswith('.git') else ''
+                return f"{base_url.rstrip('/')}/{project_path.lstrip('/')}{suffix}"
+            return base_url.rstrip('/')
+        # As last resort, return whatever raw URL we received
+        return raw_clone_url
 
     @staticmethod
     def enable_review(project_id):
