@@ -8,7 +8,6 @@ import hashlib
 import base64
 import urllib.parse
 import requests
-from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +33,7 @@ class DingTalkService:
 
     def _load_config(self):
         """
-        从数据库加载钉钉配置，如果找不到则回退到环境变量
+        从数据库加载钉钉配置，若不存在则保持为空并记录日志
         """
         try:
             from apps.llm.models import NotificationChannel
@@ -49,14 +48,13 @@ class DingTalkService:
                 self.secret = config_dict.get('secret')
                 logger.info(f"[{self.request_id}] 钉钉配置从数据库加载成功: {channel.name}")
             else:
-                # 回退到环境变量
-                self.webhook_url = getattr(settings, 'DINGDING_BOT_WEBHOOK', None)
-                self.secret = getattr(settings, 'DINGDING_SECRET', None)
-                logger.info(f"[{self.request_id}] 钉钉配置从环境变量加载")
+                self.webhook_url = getattr(self, 'webhook_url', None)
+                self.secret = getattr(self, 'secret', None)
+                logger.info(f"[{self.request_id}] 未找到数据库中的钉钉配置")
         except Exception as e:
-            logger.warning(f"[{self.request_id}] 钉钉配置加载失败，使用环境变量: {e}")
-            self.webhook_url = getattr(settings, 'DINGDING_BOT_WEBHOOK', None)
-            self.secret = getattr(settings, 'DINGDING_SECRET', None)
+            logger.warning(f"[{self.request_id}] 钉钉配置加载失败: {e}")
+            self.webhook_url = None
+            self.secret = None
 
     def send_markdown(self, title, content):
         """
@@ -164,7 +162,7 @@ class SlackService:
 
     def _load_config(self):
         """
-        从数据库加载Slack配置，如果找不到则回退到环境变量
+        从数据库加载Slack配置，若不存在则保持为空
         """
         try:
             from apps.llm.models import NotificationChannel
@@ -178,12 +176,11 @@ class SlackService:
                 self.webhook_url = config_dict.get('webhook_url') or config_dict.get('webhook')
                 logger.info(f"[{self.request_id}] Slack配置从数据库加载成功: {channel.name}")
             else:
-                # 回退到环境变量
-                self.webhook_url = getattr(settings, 'SLACK_WEBHOOK_URL', None)
-                logger.info(f"[{self.request_id}] Slack配置从环境变量加载")
+                self.webhook_url = getattr(self, 'webhook_url', None)
+                logger.info(f"[{self.request_id}] 未找到数据库中的 Slack 配置")
         except Exception as e:
-            logger.warning(f"[{self.request_id}] Slack配置加载失败，使用环境变量: {e}")
-            self.webhook_url = getattr(settings, 'SLACK_WEBHOOK_URL', None)
+            logger.warning(f"[{self.request_id}] Slack配置加载失败: {e}")
+            self.webhook_url = None
 
     def send_message(self, text, blocks=None):
         """
@@ -253,7 +250,7 @@ class FeishuService:
 
     def _load_config(self):
         """
-        从数据库加载飞书配置，如果找不到则回退到环境变量
+        从数据库加载飞书配置，若不存在则保持为空
         """
         try:
             from apps.llm.models import NotificationChannel
@@ -268,14 +265,13 @@ class FeishuService:
                 self.secret = config_dict.get('secret')
                 logger.info(f"[{self.request_id}] 飞书配置从数据库加载成功: {channel.name}")
             else:
-                # 回退到环境变量
-                self.webhook_url = getattr(settings, 'FEISHU_WEBHOOK_URL', None)
-                self.secret = getattr(settings, 'FEISHU_SECRET', None)
-                logger.info(f"[{self.request_id}] 飞书配置从环境变量加载")
+                self.webhook_url = getattr(self, 'webhook_url', None)
+                self.secret = getattr(self, 'secret', None)
+                logger.info(f"[{self.request_id}] 未找到数据库中的飞书配置")
         except Exception as e:
-            logger.warning(f"[{self.request_id}] 飞书配置加载失败，使用环境变量: {e}")
-            self.webhook_url = getattr(settings, 'FEISHU_WEBHOOK_URL', None)
-            self.secret = getattr(settings, 'FEISHU_SECRET', None)
+            logger.warning(f"[{self.request_id}] 飞书配置加载失败: {e}")
+            self.webhook_url = None
+            self.secret = None
 
     def send_text(self, text):
         """
@@ -364,7 +360,7 @@ class WechatWorkService:
 
     def _load_config(self):
         """
-        从数据库加载企业微信配置，如果找不到则回退到环境变量
+        从数据库加载企业微信配置，若不存在则保持为空
         """
         try:
             from apps.llm.models import NotificationChannel
@@ -378,12 +374,11 @@ class WechatWorkService:
                 self.webhook_url = config_dict.get('webhook_url') or config_dict.get('webhook')
                 logger.info(f"[{self.request_id}] 企业微信配置从数据库加载成功: {channel.name}")
             else:
-                # 回退到环境变量
-                self.webhook_url = getattr(settings, 'WECHAT_WORK_WEBHOOK_URL', None)
-                logger.info(f"[{self.request_id}] 企业微信配置从环境变量加载")
+                self.webhook_url = getattr(self, 'webhook_url', None)
+                logger.info(f"[{self.request_id}] 未找到数据库中的企业微信配置")
         except Exception as e:
-            logger.warning(f"[{self.request_id}] 企业微信配置加载失败，使用环境变量: {e}")
-            self.webhook_url = getattr(settings, 'WECHAT_WORK_WEBHOOK_URL', None)
+            logger.warning(f"[{self.request_id}] 企业微信配置加载失败: {e}")
+            self.webhook_url = None
 
     def send_text(self, content):
         """

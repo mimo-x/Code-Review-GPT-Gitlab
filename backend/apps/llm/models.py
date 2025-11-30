@@ -15,6 +15,7 @@ class LLMConfig(models.Model):
             ('deepseek', 'DeepSeek'),
             ('claude', 'Anthropic Claude'),
             ('gemini', 'Google Gemini'),
+            ('mock', 'Mock (No LLM)'),
         ],
         default='openai'
     )

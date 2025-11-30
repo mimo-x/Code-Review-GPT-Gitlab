@@ -22,53 +22,42 @@ class LLMService:
 
     def _load_config(self):
         """
-        从数据库加载LLM配置，设置为环境变量，如果找不到活跃配置则回退到环境变量
+        从数据库加载 LLM 配置，如缺失则抛出 ImproperlyConfigured
         """
         try:
             from .models import LLMConfig
-            llm_config = LLMConfig.objects.filter(is_active=True).first()
+        except ImportError as exc:
+            raise ImproperlyConfigured("无法导入 LLMConfig 模型，请确认 apps.llm 已正确安装") from exc
 
-            if llm_config:
-                self.provider = llm_config.provider
-                self.api_key = llm_config.api_key
-                self.api_base = llm_config.api_base
-                self.model = llm_config.model
-                self.config_source = "database"
-                api_key_status = "已配置" if self.api_key else "未配置"
-                logger.info(f"[{self.request_id}] LLM配置加载成功 - 来源:数据库, 提供商:{self.provider}, 模型:{self.model}, API密钥:{api_key_status}")
+        llm_config = LLMConfig.objects.filter(is_active=True).first()
 
-                # 将数据库配置设置为环境变量
-                self._set_environment_variables()
-            else:
-                # 回退到环境变量
-                self.provider = getattr(settings, 'LLM_PROVIDER', 'openai')
-                self.api_key = getattr(settings, 'LLM_API_KEY', '')
-                self.api_base = getattr(settings, 'LLM_API_BASE', '')
-                self.model = getattr(settings, 'LLM_MODEL', 'gpt-4')
-                self.config_source = "environment"
-                api_key_status = "已配置" if self.api_key else "未配置"
-                logger.info(f"[{self.request_id}] LLM配置加载成功 - 来源:环境变量, 提供商:{self.provider}, 模型:{self.model}, API密钥:{api_key_status}")
+        if not llm_config:
+            raise ImproperlyConfigured("未检测到有效的 LLM 配置，请在后台管理或接口中创建并启用一条 LLM 配置")
 
-        except ImportError:
-            logger.warning(f"[{self.request_id}] 无法导入LLMConfig模型，使用环境变量配置")
-            self.provider = getattr(settings, 'LLM_PROVIDER', 'openai')
-            self.api_key = getattr(settings, 'LLM_API_KEY', '')
-            self.api_base = getattr(settings, 'LLM_API_BASE', '')
-            self.model = getattr(settings, 'LLM_MODEL', 'gpt-4')
-            self.config_source = "environment"
-        except Exception as e:
-            logger.error(f"[{self.request_id}] LLM配置加载失败: {e}", exc_info=True)
-            # 使用环境变量作为最后回退
-            self.provider = getattr(settings, 'LLM_PROVIDER', 'openai')
-            self.api_key = getattr(settings, 'LLM_API_KEY', '')
-            self.api_base = getattr(settings, 'LLM_API_BASE', '')
-            self.model = getattr(settings, 'LLM_MODEL', 'gpt-4')
-            self.config_source = "environment"
+        self.provider = llm_config.provider
+        self.api_key = llm_config.api_key
+        self.api_base = llm_config.api_base
+        self.model = llm_config.model
+        self.config_source = "database"
+        self.is_mock = self.provider == 'mock'
+
+        api_key_status = "已配置" if self.api_key else "未配置"
+        logger.info(
+            f"[{self.request_id}] LLM配置加载成功 - 提供商:{self.provider}, 模型:{self.model}, API密钥:{api_key_status}"
+        )
+
+        if not self.is_mock:
+            if not self.api_key:
+                logger.warning(f"[{self.request_id}] LLM 配置缺少 API Key，后续请求可能失败")
+            self._set_environment_variables()
 
     def _set_environment_variables(self):
         """
         将数据库配置设置为环境变量，供 LLM 库使用
         """
+        if self.is_mock:
+            return
+
         try:
             # 根据不同的提供商设置相应的环境变量
             if self.provider.lower() == 'openai':

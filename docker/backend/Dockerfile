@@ -1,32 +1,31 @@
-FROM python:3.12-slim
+FROM python:3.11-slim
 
-# 设置工作目录
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 安装系统依赖，可按需增删
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       build-essential \
+       git \
+       curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# 为 claude 可执行文件预留路径并安装 Claude CLI
+ENV PATH="/root/.local/bin:${PATH}"
+RUN curl -fsSL https://claude.ai/install.sh | bash
+
+# 复制依赖并安装 Python 包
 WORKDIR /app
-
-# 设置环境变量
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     DJANGO_SETTINGS_MODULE=core.settings
 
-# 安装系统依赖
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    curl \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+COPY backend/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt \
+    && rm /tmp/requirements.txt
 
-# 安装Python依赖
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# 复制项目代码（运行时仍会挂载宿主目录，确保本地修改可生效）
+COPY backend/ /app
 
-# 复制项目文件
-COPY backend/ .
-
-# 创建必要的目录
-RUN mkdir -p logs staticfiles media
-
-# 暴露端口
-EXPOSE 8000
-
-# 启动命令
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# 默认启动命令：先迁移数据库，再启动 Gunicorn
+CMD ["sh", "-c", "python manage.py migrate --noinput && gunicorn core.wsgi:application --bind 0.0.0.0:8000 --workers ${GUNICORN_WORKERS:-4} --worker-class gevent"]

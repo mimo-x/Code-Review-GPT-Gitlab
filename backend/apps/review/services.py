@@ -7,7 +7,7 @@ import shutil
 import logging
 import gitlab
 from retrying import retry
-from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 
 from apps.llm.services import LLMService
 from utils.gitlab_parser import parse_diff_content
@@ -27,35 +27,25 @@ class GitlabService:
 
     def _load_config(self):
         """
-        从数据库加载GitLab配置，如果找不到活跃配置则回退到环境变量
+        从数据库加载GitLab配置，未配置时抛出异常
         """
         try:
             from apps.llm.models import GitLabConfig
-            gitlab_config = GitLabConfig.objects.filter(is_active=True).first()
+        except ImportError as exc:
+            logger.error(f"[{self.request_id}] 无法导入 GitLabConfig 模型: {exc}")
+            raise ImproperlyConfigured("GitLabConfig 模型不可用，请检查应用安装和迁移") from exc
 
-            if gitlab_config:
-                self.server_url = gitlab_config.server_url
-                self.private_token = gitlab_config.private_token
-                self.config_source = "database"
-                logger.info(f"[{self.request_id}] GitLab配置加载成功 - 来源:数据库, 服务器:{self.server_url}")
-            else:
-                # 回退到环境变量
-                self.server_url = getattr(settings, 'GITLAB_SERVER_URL', 'https://gitlab.com')
-                self.private_token = getattr(settings, 'GITLAB_PRIVATE_TOKEN', '')
-                self.config_source = "environment"
-                logger.info(f"[{self.request_id}] GitLab配置加载成功 - 来源:环境变量, 服务器:{self.server_url}")
+        gitlab_config = GitLabConfig.objects.filter(is_active=True).first()
 
-        except ImportError:
-            logger.warning(f"[{self.request_id}] 无法导入GitLabConfig模型，使用环境变量配置")
-            self.server_url = getattr(settings, 'GITLAB_SERVER_URL', 'https://gitlab.com')
-            self.private_token = getattr(settings, 'GITLAB_PRIVATE_TOKEN', '')
-            self.config_source = "environment"
-        except Exception as e:
-            logger.error(f"[{self.request_id}] GitLab配置加载失败: {e}", exc_info=True)
-            # 使用环境变量作为最后回退
-            self.server_url = getattr(settings, 'GITLAB_SERVER_URL', 'https://gitlab.com')
-            self.private_token = getattr(settings, 'GITLAB_PRIVATE_TOKEN', '')
-            self.config_source = "environment"
+        if not gitlab_config:
+            error_msg = "未找到已激活的 GitLab 配置，请在管理后台创建并启用对应配置"
+            logger.error(f"[{self.request_id}] {error_msg}")
+            raise ImproperlyConfigured(error_msg)
+
+        self.server_url = gitlab_config.server_url
+        self.private_token = gitlab_config.private_token
+        self.config_source = "database"
+        logger.info(f"[{self.request_id}] GitLab配置加载成功 - 来源:数据库, 服务器:{self.server_url}")
 
     def _init_gitlab_client(self):
         """
@@ -185,7 +175,15 @@ class ReviewService:
     def __init__(self, project_id=None, request_id=None):
         self.project_id = project_id
         self.request_id = request_id
-        self.llm_service = LLMService(request_id=request_id)
+        try:
+            self.llm_service = LLMService(request_id=request_id)
+            self.llm_error = None
+            self.is_mock_mode = getattr(self.llm_service, 'is_mock', False)
+        except ImproperlyConfigured as exc:
+            logger.error(f"[{self.request_id}] 初始化 LLMService 失败: {exc}")
+            self.llm_service = None
+            self.llm_error = str(exc)
+            self.is_mock_mode = False
         self._load_config()
 
     def _load_config(self):
@@ -248,8 +246,29 @@ class ReviewService:
                     'files_reviewed': []
                 }
 
+            mock_context = {
+                'project_name': payload.get('project', {}).get('name') if isinstance(payload, dict) else None,
+                'title': payload.get('object_attributes', {}).get('title') if isinstance(payload, dict) else None,
+                'author': payload.get('user', {}).get('name') if isinstance(payload, dict) else None,
+                'file_count': len(filtered_changes),
+                'changes_count': sum(change.get('diff', '').count('\n') for change in filtered_changes),
+            }
+
             # Build review context
             review_context = self._build_review_context(filtered_changes)
+
+            if self.is_mock_mode:
+                from apps.review.report_generator import ReportGenerator
+                generator = ReportGenerator(request_id=self.request_id)
+                mock_report = generator.generate_mock(mock_context)
+                return {
+                    'content': mock_report.get('content', ''),
+                    'score': mock_report.get('metadata', {}).get('score'),
+                    'files_reviewed': [change.get('new_path') for change in filtered_changes]
+                }
+
+            if not self.llm_service:
+                raise ImproperlyConfigured(self.llm_error or 'LLM 服务未初始化')
 
             # Get review from LLM
             review_result = self.llm_service.review_code(review_context)

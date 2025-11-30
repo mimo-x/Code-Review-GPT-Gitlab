@@ -184,23 +184,21 @@ LOGGING = {
     },
 }
 
-# GitLab Configuration
-GITLAB_SERVER_URL = os.environ.get('GITLAB_SERVER_URL', 'https://gitlab.com')
-GITLAB_PRIVATE_TOKEN = os.environ.get('GITLAB_PRIVATE_TOKEN', '')
+# GitLab Configuration is managed via database (GitLabConfig)
 
-# DingTalk Configuration
-DINGDING_BOT_WEBHOOK = os.environ.get('DINGDING_BOT_WEBHOOK', '')
-DINGDING_SECRET = os.environ.get('DINGDING_SECRET', '')
+# DingTalk Configuration (configured via NotificationChannel)
+DINGDING_BOT_WEBHOOK = None
+DINGDING_SECRET = None
 
 # Code Review Settings
 EXCLUDE_FILE_TYPES = os.environ.get('EXCLUDE_FILE_TYPES', '.py,.java,.class,.vue,.go,.c,.cpp').split(',')
 IGNORE_FILE_TYPES = os.environ.get('IGNORE_FILE_TYPES', 'mod.go').split(',')
 
-# LLM Configuration
-LLM_PROVIDER = os.environ.get('LLM_PROVIDER', 'deepseek')
-LLM_API_KEY = os.environ.get('LLM_API_KEY', '')
-LLM_API_BASE = os.environ.get('LLM_API_BASE', '')
-LLM_MODEL = os.environ.get('LLM_MODEL', 'deepseek-chat')
+# LLM Configuration (configured via LLMConfig)
+LLM_PROVIDER = None
+LLM_API_KEY = None
+LLM_API_BASE = None
+LLM_MODEL = None
 
 # Review Prompt Template
 GPT_MESSAGE = """
@@ -229,8 +227,8 @@ GPT_MESSAGE = """
 # Create logs directory if it doesn't exist
 os.makedirs(os.path.join(BASE_DIR, 'logs'), exist_ok=True)
 
-# Mock Mode Configuration
-CODE_REVIEW_MOCK_MODE = os.environ.get('CODE_REVIEW_MOCK_MODE', 'False') == 'True'
+# Mock Mode Configuration（请通过 LLMConfig 设置 provider='mock' 来启用）
+CODE_REVIEW_MOCK_MODE = False
 
 # ===== Claude CLI Code Review Configuration =====
 # Repository Management
@@ -262,19 +260,19 @@ os.makedirs(REPOSITORY_BASE_PATH, exist_ok=True)
 
 # Email Configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
-EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
-EMAIL_FROM = os.environ.get('EMAIL_FROM', EMAIL_HOST_USER)
+EMAIL_HOST = None
+EMAIL_PORT = None
+EMAIL_HOST_USER = None
+EMAIL_HOST_PASSWORD = None
+EMAIL_USE_TLS = True
+EMAIL_FROM = None
 
 # Slack Configuration
-SLACK_WEBHOOK_URL = os.environ.get('SLACK_WEBHOOK_URL', '')
+SLACK_WEBHOOK_URL = None
 
 # Feishu Configuration
-FEISHU_WEBHOOK_URL = os.environ.get('FEISHU_WEBHOOK_URL', '')
-FEISHU_SECRET = os.environ.get('FEISHU_SECRET', '')
+FEISHU_WEBHOOK_URL = None
+FEISHU_SECRET = None
 
 # WeChat Work Configuration
-WECHAT_WORK_WEBHOOK_URL = os.environ.get('WECHAT_WORK_WEBHOOK_URL', '')
+WECHAT_WORK_WEBHOOK_URL = None

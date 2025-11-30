@@ -20,7 +20,9 @@ from .serializers import (
     ProjectNotificationUpdateSerializer
 )
 from .services import ProjectService
+from django.core.exceptions import ImproperlyConfigured
 from apps.review.services import GitlabService, ReviewService
+from apps.llm.models import LLMConfig
 from apps.common.logging_utils import get_logger, TimerContext
 
 logger = logging.getLogger(__name__)
@@ -528,7 +530,20 @@ def process_merge_request_review(project_id, merge_request_iid, review_id, paylo
         )
 
         # 初始化服务
-        gitlab_service = GitlabService(request_id=request_id)
+        try:
+            gitlab_service = GitlabService(request_id=request_id)
+        except ImproperlyConfigured as config_error:
+            structured_logger.error(f"GitLab配置缺失: {config_error}")
+            review.status = 'failed'
+            review.error_message = str(config_error)
+            review.save()
+            return
+        except Exception as service_error:
+            structured_logger.error(f"GitLab服务初始化失败: {service_error}", error=str(service_error))
+            review.status = 'failed'
+            review.error_message = str(service_error)
+            review.save()
+            return
 
         # 获取MR变更信息
         with TimerContext(structured_logger, "get_mr_changes"):
@@ -554,9 +569,17 @@ def process_merge_request_review(project_id, merge_request_iid, review_id, paylo
 
         structured_logger.info(f"获取到 {file_count} 个文件变更，{changes_count} 行代码变更")
 
-        # 判断是否使用Mock模式
-        is_mock_mode = getattr(settings, 'CODE_REVIEW_MOCK_MODE', False)
-        structured_logger.info(f"使用模式: {'Mock' if is_mock_mode else 'Real LLM'}")
+        # 判断是否使用Mock模式（基于 LLMConfig）
+        llm_config = LLMConfig.objects.filter(is_active=True).first()
+        if not llm_config:
+            structured_logger.error("未找到有效的 LLM 配置，请在管理后台创建并启用 LLM 配置")
+            review.status = 'failed'
+            review.error_message = '未找到有效的 LLM 配置'
+            review.save()
+            return
+
+        is_mock_mode = llm_config.provider == 'mock'
+        structured_logger.info(f"使用模式: {'Mock' if is_mock_mode else 'Real LLM'} (provider={llm_config.provider})")
 
         # 生成报告
         if is_mock_mode:
@@ -584,16 +607,20 @@ def process_merge_request_review(project_id, merge_request_iid, review_id, paylo
             # 初始化仓库管理器
             repo_manager = RepositoryManager(request_id=request_id)
 
-            # 获取项目 URL 和访问令牌
-            project_url = project_data.get('git_http_url') or project_data.get('http_url')
-
             # 从 GitLab 配置获取访问令牌（使用已导入的 GitlabService）
             # GitlabService 已经在文件顶部从 apps.review.services 导入
             # 它的 _load_config 方法会从 GitLabConfig 数据库表加载配置
-            gitlab_svc = GitlabService(request_id=request_id)
+            gitlab_svc = gitlab_service
             access_token = gitlab_svc.private_token  # 使用 private_token 属性
 
-            structured_logger.info(f"准备克隆项目: {project_url}")
+            # 获取项目 URL，并将 host 替换为配置的 GitLab 服务器地址
+            project_url = ProjectService.build_clone_url(project_data, base_url=getattr(gitlab_svc, 'server_url', None))
+
+            structured_logger.info(
+                "准备克隆项目",
+                raw_url=project_data.get('git_http_url') or project_data.get('http_url'),
+                normalized_url=project_url
+            )
 
             # 克隆或更新仓库
             with TimerContext(structured_logger, "clone_or_update_repository"):
@@ -670,7 +697,14 @@ def process_merge_request_review(project_id, merge_request_iid, review_id, paylo
                     structured_logger.warning(f"获取自定义 Prompt 失败: {e}，使用系统默认")
 
             # 调用 LLM 进行代码审查（使用 Claude CLI）
-            llm_service = LLMService(request_id=request_id)
+            try:
+                llm_service = LLMService(request_id=request_id)
+            except ImproperlyConfigured as exc:
+                structured_logger.error(f"LLM 初始化失败: {exc}")
+                review.status = 'failed'
+                review.error_message = str(exc)
+                review.save()
+                return
             llm_start_time = time.time()
 
             llm_result = llm_service.review_code(

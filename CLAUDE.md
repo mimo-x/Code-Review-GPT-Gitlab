@@ -25,7 +25,7 @@ python manage.py createsuperuser  # Admin user
 gunicorn core.wsgi:application --bind 0.0.0.0:8000 --workers 4 --worker-class gevent
 
 # Docker
-docker-compose up -d        # Start with Redis
+docker compose up -d        # Build backend image + start stack
 ```
 
 ### Frontend (Vue.js)
@@ -60,17 +60,16 @@ npm run preview            # Preview production build
 ## Configuration
 
 ### Environment Variables (.env)
-- **GitLab**: `GITLAB_SERVER_URL`, `GITLAB_PRIVATE_TOKEN`
-- **LLM**: `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_API_BASE`
-- **Notifications**: `DINGDING_BOT_WEBHOOK`, `SLACK_WEBHOOK_URL`, `FEISHU_WEBHOOK_URL`
+- **GitLab**: 通过后台的 GitLab 配置页面维护，不再依赖 `.env`
 - **Database**: SQLite with Redis for caching and session storage
 - **Claude CLI**: `CLAUDE_CLI_PATH`, `CLAUDE_CLI_TIMEOUT` for Claude integration
+> LLM 及通知渠道改为通过数据库管理（`LLMConfig` / `NotificationChannel`）。
 
 ### Important Files
 - `backend/core/settings.py` - Main Django configuration
 - `backend/requirements.txt` - Python dependencies
 - `frontend/package.json` - Node.js dependencies and scripts
-- `backend/docker-compose.yml` - Redis + Django setup
+- `docker-compose.yml` - 统一的后端/前端/Redis 编排
 
 ## LLM Integration
 
@@ -112,7 +111,7 @@ The review prompt template is defined in `settings.py` and can be customized per
 
 - **Timezone**: Configured for Asia/Shanghai, not UTC
 - **Language**: Chinese language code (`zh-hans`)
-- **Mock Mode**: Enable with `CODE_REVIEW_MOCK_MODE=True` for testing
+- **Mock Mode**: 将 `LLMConfig.provider` 设置为 `mock` 以启用本地模拟
 - **File Filtering**: Configure file types to include/exclude via `EXCLUDE_FILE_TYPES` and `IGNORE_FILE_TYPES`
 - **CORS**: Pre-configured for frontend development servers
 
@@ -124,5 +123,5 @@ Currently no test framework is configured. This is a known gap that should be ad
 
 - **Production Server**: Gunicorn with gevent workers
 - **Database**: SQLite (default) with Redis caching
-- **Docker**: Multi-container setup available
+- **Docker**: Compose builds backend via `docker/backend/Dockerfile`
 - **Static Files**: Collected to `staticfiles/` directory

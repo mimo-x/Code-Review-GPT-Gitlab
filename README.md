@@ -97,7 +97,17 @@
 
 # 部署 📖
 
-#### 源代码运行 💻
+## Docker 快速上手
+
+```bash
+cp .env.example .env
+docker compose up -d
+docker compose logs -f backend
+```
+
+按部署环境调整 `.env` 中的 `VITE_API_BASE_URL` / `VITE_DEV_PROXY_TARGET`，然后访问 http://localhost:3000 前端界面；停止可执行 `docker compose down`。
+
+## 源代码运行 💻
 
 **后端启动**
 ```bash

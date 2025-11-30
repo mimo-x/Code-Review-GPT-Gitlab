@@ -5,6 +5,7 @@ import logging
 import time
 from typing import Dict, Any, Optional
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -116,6 +117,16 @@ class NotificationDispatcher:
 
             return summary
 
+        except ImproperlyConfigured as config_error:
+            elapsed_time = time.time() - start_time
+            error_msg = f'GitLab配置缺失: {config_error}'
+            logger.error(f"[{self.request_id}] {error_msg}")
+            return {
+                'success': False,
+                'message': error_msg,
+                'response_time': elapsed_time,
+                'details': {'error': str(config_error)}
+            }
         except Exception as e:
             logger.error(f"[{self.request_id}] 通知分发异常: {e}", exc_info=True)
             return {

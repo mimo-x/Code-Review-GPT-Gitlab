@@ -35,9 +35,8 @@ backend/
 │   └── gitlab_parser.py   # GitLab 解析工具
 ├── manage.py              # Django 管理脚本
 ├── requirements.txt       # 依赖列表
-├── Dockerfile             # Docker 配置
-├── docker-compose.yml     # Docker Compose 配置
 ├── start.sh               # 开发环境启动脚本
 └── start_production.sh    # 生产环境启动脚本
 ```
 
+> 后端 Docker 镜像配置位于仓库根目录的 `docker/backend/Dockerfile`，可按需扩展系统依赖。

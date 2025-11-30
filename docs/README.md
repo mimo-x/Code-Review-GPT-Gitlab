@@ -22,16 +22,12 @@
 1. **环境配置**
    ```bash
    cp .env.example .env
-   # 编辑.env文件配置必要信息
+   # 编辑.env文件配置必要信息（LLM/通知请在系统内配置）
    ```
 
 2. **Docker部署**
    ```bash
-   # 开发环境
-   docker-compose up -d
-
-   # 生产环境
-   docker-compose -f docker-compose.prod.yml up -d
+   docker compose up -d
    ```
 
 3. **源码部署**

@@ -1,72 +1,44 @@
-version: '3.8'
-
 services:
-  # Django后端服务
   backend:
     build:
       context: .
       dockerfile: docker/backend/Dockerfile
-    container_name: code-review-backend
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
-    environment:
-      - DATABASE_NAME=code_review
-      - REDIS_URL=redis://redis:6379/0
-    volumes:
-      - ./backend:/app
-      - backend_static:/app/staticfiles
-      - backend_media:/app/media
-      - backend_logs:/app/logs
-    depends_on:
-      - redis
-    networks:
-      - code-review-network
+    working_dir: /app
     env_file:
       - .env
-
-  # Vue.js前端服务
-  frontend:
-    build:
-      context: .
-      dockerfile: docker/frontend/Dockerfile
-    container_name: code-review-frontend
-    restart: unless-stopped
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////app/db.sqlite3}
+    volumes:
+      - ./backend:/app
     ports:
-      - "3000:3000"
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      - redis
+    command: >-
+      sh -c "python manage.py migrate --noinput && gunicorn core.wsgi:application --bind 0.0.0.0:8000 --workers ${GUNICORN_WORKERS:-4} --worker-class gevent"
+
+  frontend:
+    image: node:18-alpine
+    working_dir: /app
+    environment:
+      VITE_NODE_ENV: development
     volumes:
       - ./frontend:/app
-      - /app/node_modules
+      - frontend-node-modules:/app/node_modules
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
       - backend
-    networks:
-      - code-review-network
-    environment:
-      - VITE_API_BASE_URL=http://localhost:8000
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
 
-  # Redis缓存
   redis:
     image: redis:7.2-alpine
-    container_name: code-review-redis
-    restart: unless-stopped
     ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - code-review-network
-    command: redis-server --appendonly yes
+      - "${REDIS_PORT:-6379}:6379"
+    command: redis-server --save "" --appendonly no
 
 volumes:
-  redis_data:
-    driver: local
-  backend_static:
-    driver: local
-  backend_media:
-    driver: local
-  backend_logs:
-    driver: local
-
-networks:
-  code-review-network:
-    driver: bridge
+  frontend-node-modules:
