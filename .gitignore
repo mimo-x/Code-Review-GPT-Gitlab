@@ -54,3 +54,6 @@ repo/
 # Ensure .env.example files are tracked
 !.env.example
 !**/.env.example
+
+
+backend/data/
