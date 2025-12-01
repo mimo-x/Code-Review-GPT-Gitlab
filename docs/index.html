@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code-Review-GPT-Gitlab | 智能代码评审助手</title>
+    <meta name="description" content="利用大模型帮助我们在 Gitlab 上进行 Code Review，提升研发效能。支持 GPT、DeepSeek 等多种模型，Multi-Agent 协同工作。">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --surface-color: #ffffff;
+            --surface-highlight: #f9fafb;
+            --text-primary: #09090b;
+            --text-secondary: #71717a;
+            --accent-primary: #000000;
+            --accent-hover: #27272a;
+            --border-color: #e4e4e7;
+            --gradient-text: linear-gradient(135deg, #ff9900, #ff66cc);
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.5;
+            overflow-x: hidden;
+        }
+
+        a {
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.2s ease;
+        }
+
+        ul {
+            list-style: none;
+        }
+
+        /* Utilities */
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        .gradient-text {
+            background: var(--gradient-text);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            color: transparent;
+            font-weight: 800;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 20px;
+            border-radius: 9999px; /* Pill shape */
+            font-weight: 500;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: var(--accent-primary);
+            color: white;
+            border: 1px solid transparent;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn-secondary:hover {
+            background: var(--surface-highlight);
+            border-color: #d4d4d8;
+            transform: translateY(-1px);
+        }
+
+        /* Badge */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 12px;
+            background: #f4f4f5;
+            border: 1px solid var(--border-color);
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+            transition: all 0.2s;
+        }
+
+        .badge:hover {
+            border-color: #a1a1aa;
+            background: #ffffff;
+        }
+
+        .badge-dot {
+            width: 6px;
+            height: 6px;
+            background: #10b981;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        /* Header */
+        header {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            z-index: 1000;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+        }
+
+        nav {
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            font-weight: 700;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-primary);
+        }
+        
+        .logo img {
+            height: 28px;
+            border-radius: 6px;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 32px;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .nav-links a:hover {
+            color: var(--text-primary);
+        }
+
+        .nav-cta {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        /* Hero Section */
+        .hero {
+            padding: 180px 0 100px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Floating Lines Animation */
+        .floating-lines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .line {
+            position: absolute;
+            background: linear-gradient(90deg, rgba(255, 153, 0, 0.25), rgba(255, 102, 204, 0.25));
+            border-radius: 50%;
+            filter: blur(50px);
+            opacity: 0.6;
+            animation: float-anim 20s infinite ease-in-out alternate;
+        }
+
+        .line:nth-child(1) {
+            width: 600px;
+            height: 100px;
+            top: 10%;
+            left: -10%;
+            animation-delay: 0s;
+            transform: rotate(-15deg);
+        }
+
+        .line:nth-child(2) {
+            width: 400px;
+            height: 80px;
+            top: 40%;
+            right: -5%;
+            animation-delay: -7s;
+            background: linear-gradient(90deg, rgba(255, 102, 204, 0.2), rgba(56, 189, 248, 0.2));
+            transform: rotate(10deg);
+        }
+
+        .line:nth-child(3) {
+            width: 500px;
+            height: 120px;
+            bottom: 10%;
+            left: 30%;
+            animation-delay: -3s;
+            background: linear-gradient(90deg, rgba(168, 85, 247, 0.2), rgba(236, 72, 153, 0.2));
+            transform: rotate(-5deg);
+        }
+
+        @keyframes float-anim {
+            0% { transform: translate(0, 0) rotate(0deg) scale(1); }
+            50% { transform: translate(30px, -40px) rotate(5deg) scale(1.05); }
+            100% { transform: translate(-20px, 20px) rotate(-5deg) scale(0.95); }
+        }
+
+        .hero h1 {
+            font-size: 4.5rem;
+            font-weight: 800;
+            line-height: 1.05;
+            margin-bottom: 24px;
+            letter-spacing: -0.03em;
+            color: #09090b;
+        }
+
+        .hero-subtitle-container {
+            min-height: 2em;
+            margin-bottom: 40px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .hero p.subtitle {
+            font-size: 1.35rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto;
+            font-weight: 400;
+        }
+
+        .hero-btns {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            margin-bottom: 80px;
+        }
+
+        .hero-image-wrapper {
+            position: relative;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 10px;
+            background: rgba(255,255,255,0.5);
+            border: 1px solid rgba(0,0,0,0.05);
+            border-radius: 16px;
+            box-shadow: var(--shadow-xl);
+        }
+
+        .hero-image {
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            background: #fff;
+        }
+
+        .hero-image img {
+            width: 100%;
+            display: block;
+            height: auto;
+        }
+
+        /* Sections */
+        .section-padding {
+            padding: 100px 0;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 80px;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .section-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+
+        .section-desc {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        /* Features Grid */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 24px;
+        }
+
+        .feature-card {
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 32px;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .feature-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+            border-color: #d4d4d8;
+        }
+
+        .feature-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: #f4f4f5;
+            color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            margin-bottom: 24px;
+        }
+
+        .feature-card h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .feature-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        /* How It Works - 3 Columns */
+        .how-it-works {
+            background: #fafafa;
+            border-top: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .steps-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 40px;
+            margin-top: 60px;
+        }
+
+        .step-card {
+            position: relative;
+        }
+
+        .step-number {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #000;
+            background: #fff;
+            border: 1px solid var(--border-color);
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .step-card h3 {
+            font-size: 1.25rem;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+
+        .step-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-bottom: 24px;
+        }
+
+        .step-visual {
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            background: #fff;
+            box-shadow: var(--shadow-md);
+        }
+
+        .step-visual img {
+            width: 100%;
+            display: block;
+        }
+
+        .code-block {
+            background: #18181b;
+            padding: 16px;
+            border-radius: 8px;
+            font-family: 'Menlo', monospace;
+            font-size: 0.8rem;
+            color: #e4e4e7;
+            position: relative;
+            overflow-x: auto;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: #fff;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Testimonials */
+        .testimonials-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 24px;
+        }
+
+        .review-card {
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .review-card:hover {
+            border-color: #a1a1aa;
+        }
+
+        .review-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .review-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #f4f4f5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .review-author h4 {
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        .review-author span {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .review-text {
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        /* FAQ Section */
+        .faq {
+            background: #fafafa;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .faq-grid {
+            max-width: 800px;
+            margin: 0 auto;
+            display: grid;
+            gap: 24px;
+        }
+
+        .faq-item {
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .faq-item:hover {
+            border-color: #a1a1aa;
+        }
+
+        .faq-question {
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1.05rem;
+        }
+
+        .faq-answer {
+            margin-top: 12px;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            display: none;
+            line-height: 1.6;
+        }
+        
+        .faq-item.active .faq-answer {
+            display: block;
+        }
+
+        .faq-toggle {
+            color: var(--text-secondary);
+            transition: transform 0.3s;
+        }
+
+        .faq-item.active .faq-toggle {
+            transform: rotate(180deg);
+        }
+
+        /* Footer */
+        footer {
+            background: #fff;
+            border-top: 1px solid var(--border-color);
+            padding: 80px 0 40px;
+        }
+
+        .footer-content {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 60px;
+            margin-bottom: 60px;
+        }
+
+        .footer-brand h3 {
+            font-size: 1.2rem;
+            margin-bottom: 16px;
+            font-weight: 700;
+        }
+
+        .footer-brand p {
+            color: var(--text-secondary);
+            max-width: 300px;
+            font-size: 0.9rem;
+        }
+
+        .footer-col h4 {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .footer-col ul li {
+            margin-bottom: 12px;
+        }
+
+        .footer-col a {
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+
+        .footer-col a:hover {
+            color: #000;
+            text-decoration: underline;
+        }
+
+        .copyright {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            padding-top: 40px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        /* Mobile */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 3rem;
+            }
+            
+            .steps-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .footer-content {
+                grid-template-columns: 1fr;
+                gap: 40px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navigation -->
+    <header>
+        <div class="container">
+            <nav>
+                <a href="#" class="logo">
+                    <img src="img/gemini_logo.png" alt="Logo">
+                    Code-Review-GPT
+                </a>
+                <div class="nav-links">
+                    <a href="#features">功能</a>
+                    <a href="#how-it-works">使用指南</a>
+                    <a href="#faq">FAQ</a>
+                    <a href="https://tqz0rsrhsvf.feishu.cn/docx/FlgzdMrj0oYOg2xXY7EcrsZZnjb" target="_blank">文档</a>
+                </div>
+                <div class="nav-cta">
+                    <a href="https://github.com/mimo-x/Code-Review-GPT-Gitlab" target="_blank" class="btn btn-secondary">
+                        <i class="fab fa-github"></i> <span style="font-size: 0.9rem;">GitHub</span>
+                    </a>
+                    <a href="#deploy" class="btn btn-primary">
+                        开始部署
+                    </a>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Hero -->
+    <section class="hero">
+        <div class="floating-lines">
+            <div class="line"></div>
+            <div class="line"></div>
+            <div class="line"></div>
+        </div>
+        <div class="container">
+            <a href="https://github.com/mimo-x/Code-Review-GPT-Gitlab/releases" class="badge" target="_blank">
+                <span class="badge-dot"></span>
+                全新架构升级 v2.0 已发布
+            </a>
+            <h1>
+                智能代码评审的<br>
+                <span class="gradient-text">未来已来</span>
+            </h1>
+            <div class="hero-subtitle-container">
+                <p class="subtitle" id="typewriter-text"></p><span style="width: 2px; height: 1.2em; background: #000; display: inline-block; animation: blink 1s infinite; margin-left: 4px;"></span>
+            </div>
+            <div class="hero-btns">
+                <a href="#deploy" class="btn btn-primary" style="padding: 14px 32px; font-size: 1.05rem;">
+                    <i class="fas fa-terminal"></i> 立即部署
+                </a>
+                <a href="https://github.com/mimo-x/Code-Review-GPT-Gitlab" target="_blank" class="btn btn-secondary" style="padding: 14px 32px; font-size: 1.05rem;">
+                    查看源码
+                </a>
+            </div>
+            <div class="hero-image-wrapper">
+                <div class="hero-image">
+                    <img src="img/home_page.png" alt="Dashboard Interface">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section id="features" class="section-padding">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">为研发团队量身定制</h2>
+                <p class="section-desc">Code-Review-GPT-Gitlab 不仅仅是一个机器人，它是您团队中不知疲倦的代码质量守护者。</p>
+            </div>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fab fa-gitlab"></i></div>
+                    <h3>Gitlab 无缝集成</h3>
+                    <p>专为 Gitlab 打造，通过 Webhook 自动触发。支持 Merge Request 事件，评论直接反馈在代码行间。</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-users-cog"></i></div>
+                    <h3>Multi-Agent 协同</h3>
+                    <p>引入多智能体架构，模拟真实团队评审流程。不同 Agent 关注安全、性能、风格等不同维度。</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-brain"></i></div>
+                    <h3>多模型灵活切换</h3>
+                    <p>支持 GPT-4, DeepSeek, Claude 等主流大模型。根据预算和需求，灵活配置最适合的 AI 引擎。</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-lock"></i></div>
+                    <h3>私有化安全部署</h3>
+                    <p>数据不出域，核心代码安全无忧。支持接入私有化部署的 LLM 模型，满足企业级合规要求。</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-sliders-h"></i></div>
+                    <h3>高度可配置</h3>
+                    <p>自定义 Prompt 提示词，定制评审标准。支持忽略特定文件、设置触发关键词等细粒度控制。</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-chart-pie"></i></div>
+                    <h3>效能洞察报告</h3>
+                    <p>不仅仅是 Review，更提供研发效能分析。生成详细的评审报告，帮助团队持续改进代码质量。</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section id="how-it-works" class="section-padding how-it-works">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">简单三步，即刻启用</h2>
+                <p class="section-desc">无需复杂的配置，通过 Docker Compose 即可在几分钟内完成私有化部署。</p>
+            </div>
+            
+            <div class="steps-grid">
+                <!-- Step 1 -->
+                <div class="step-card">
+                    <div class="step-number">1</div>
+                    <h3>配置 Webhook</h3>
+                    <p>在 Gitlab 项目设置中添加 Webhook，指向您的服务地址。</p>
+                    <div class="step-visual">
+                        <img src="img/webhookconfig.png" alt="Webhook Config">
+                    </div>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="step-card" id="deploy">
+                    <div class="step-number">2</div>
+                    <h3>启动服务</h3>
+                    <p>使用 Docker Compose 一键启动后端服务。</p>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCommand()"><i class="fas fa-copy"></i></button>
+                        <code id="deploy-cmd">cp .env.example .env
+docker compose up -d</code>
+                    </div>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="step-card">
+                    <div class="step-number">3</div>
+                    <h3>自动评审</h3>
+                    <p>提交 MR，AI 助手将自动进行评审并发表评论。</p>
+                    <div class="step-visual">
+                        <img src="img/message.png" alt="Review Result">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Testimonials -->
+    <section class="section-padding">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">社区反馈</h2>
+                <p class="section-desc">加入 500+ 开发者，一起体验 AI 驱动的代码评审。</p>
+            </div>
+            <div class="testimonials-grid">
+                <div class="review-card">
+                    <div class="review-header">
+                        <div class="review-avatar">M</div>
+                        <div class="review-author">
+                            <h4>Mimo-x</h4>
+                            <span>Project Maintainer</span>
+                        </div>
+                    </div>
+                    <p class="review-text">"Multi-Agent 的设计让评审结果更加精准。极大减轻了我们团队 Leader 的 Review 负担，让 Code Review 变得不再痛苦。"</p>
+                </div>
+                <div class="review-card">
+                    <div class="review-header">
+                        <div class="review-avatar">K</div>
+                        <div class="review-author">
+                            <h4>Kexicui</h4>
+                            <span>Contributor</span>
+                        </div>
+                    </div>
+                    <p class="review-text">"支持私有化模型部署是最大的亮点。对于对代码安全性要求极高的金融类项目，这是一个完美的解决方案。"</p>
+                </div>
+                <div class="review-card">
+                    <div class="review-header">
+                        <div class="review-avatar">R</div>
+                        <div class="review-author">
+                            <h4>Robbings</h4>
+                            <span>Developer</span>
+                        </div>
+                    </div>
+                    <p class="review-text">"UI 界面简洁现代，功能预览清晰。新的架构升级后，扩展性变强了很多，我可以轻松集成自定义的 Linter 规则。"</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ -->
+    <section id="faq" class="section-padding faq">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">常见问题</h2>
+            </div>
+            <div class="faq-grid">
+                <div class="faq-item" onclick="toggleFaq(this)">
+                    <div class="faq-question">
+                        支持哪些 Gitlab 版本？
+                        <i class="fas fa-chevron-down faq-toggle"></i>
+                    </div>
+                    <div class="faq-answer">
+                        目前支持 Gitlab CE/EE 13.0 及以上版本。只要您的 Gitlab 实例支持 Webhook 功能即可接入。
+                    </div>
+                </div>
+                <div class="faq-item" onclick="toggleFaq(this)">
+                    <div class="faq-question">
+                        如何接入私有化模型？
+                        <i class="fas fa-chevron-down faq-toggle"></i>
+                    </div>
+                    <div class="faq-answer">
+                        后端支持 OpenAI 兼容接口。如果您使用 Ollama、LocalAI 或 vLLM 等工具部署了私有模型，只需在 .env 文件中配置对应的 API Base URL 即可。
+                    </div>
+                </div>
+                <div class="faq-item" onclick="toggleFaq(this)">
+                    <div class="faq-question">
+                        是否收费？
+                        <i class="fas fa-chevron-down faq-toggle"></i>
+                    </div>
+                    <div class="faq-answer">
+                        本项目完全开源（MIT License），您可以免费使用、修改和分发。使用的 LLM 模型费用由您自行承担（如调用 OpenAI API）。
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <div class="logo" style="margin-bottom: 16px;">
+                        <img src="img/gemini_logo.png" alt="Logo">
+                        Code-Review-GPT
+                    </div>
+                    <p>打造最懂研发的代码评审助手。<br>基于 Multi-Agent 架构，安全、高效、可扩展。</p>
+                </div>
+                <div class="footer-col">
+                    <h4>产品</h4>
+                    <ul>
+                        <li><a href="#features">功能特性</a></li>
+                        <li><a href="#how-it-works">部署指南</a></li>
+                        <li><a href="https://github.com/mimo-x/Code-Review-GPT-Gitlab/releases">更新日志</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h4>链接</h4>
+                    <ul>
+                        <li><a href="https://github.com/mimo-x/Code-Review-GPT-Gitlab" target="_blank">GitHub 仓库</a></li>
+                        <li><a href="https://tqz0rsrhsvf.feishu.cn/docx/FlgzdMrj0oYOg2xXY7EcrsZZnjb" target="_blank">官方文档</a></li>
+                        <li><a href="mailto:mixuxin@163.com">联系我们</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="copyright">
+                &copy; 2023-2025 Code-Review-GPT-Gitlab. MIT License. Built with ❤️ by Open Source Community.
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Typewriter
+        const texts = [
+            "基于 Multi-Agent 的深度评审",
+            "支持 DeepSeek / GPT / Claude",
+            "数据隐私安全保障",
+            "一键 Docker 私有化部署"
+        ];
+        let count = 0;
+        let index = 0;
+        let currentText = "";
+        let letter = "";
+        let isDeleting = false;
+
+        function type() {
+            if (count === texts.length) count = 0;
+            currentText = texts[count];
+
+            if (isDeleting) letter = currentText.slice(0, --index);
+            else letter = currentText.slice(0, ++index);
+
+            document.getElementById("typewriter-text").textContent = letter;
+
+            let speed = 80;
+            if (!isDeleting && letter.length === currentText.length) {
+                speed = 2000;
+                isDeleting = true;
+            } else if (isDeleting && letter.length === 0) {
+                isDeleting = false;
+                count++;
+                speed = 500;
+            }
+            setTimeout(type, speed);
+        }
+        document.addEventListener("DOMContentLoaded", type);
+
+        // FAQ Toggle
+        function toggleFaq(element) {
+            element.classList.toggle('active');
+        }
+
+        // Copy Command
+        function copyCommand() {
+            const text = document.getElementById('deploy-cmd').textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.querySelector('.copy-btn');
+                btn.innerHTML = '<i class="fas fa-check"></i>';
+                setTimeout(() => btn.innerHTML = '<i class="fas fa-copy"></i>', 2000);
+            });
+        }
+
+        // Blink animation style
+        const styleSheet = document.createElement("style");
+        styleSheet.innerText = `
+            @keyframes blink {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0; }
+            }
+        `;
+        document.head.appendChild(styleSheet);
+    </script>
+</body>
+</html>
