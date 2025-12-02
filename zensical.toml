@@ -1,3 +1,25 @@
 [project]
 site_name = "Code Review GPT"
+site_url = "https://mimo-x.github.io/Code-Review-GPT-Gitlab/"
+site_description = "An LLM-powered assistant that automates GitLab merge request reviews"
+site_dir = "site/Code-Review-GPT-Gitlab"
+nav = [
+    { "Home" = "index.md" },
+    { "Deployment Guide" = "docker-deployment.md" },
+    { "FAQ" = "QA.md" }
+]
 
+[project.theme]
+language = "en"
+direction = "ltr"
+
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.pymdownx.details]
+[project.markdown_extensions.pymdownx.superfences]
+
+[project.extra]
+homepage = "index.md"
+alternate = [
+    { name = "English", link = ".", lang = "en" },
+    { name = "中文", link = "zh/", lang = "zh" }
+]

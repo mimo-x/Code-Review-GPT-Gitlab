@@ -21,9 +21,9 @@ jobs:
         with:
           python-version: 3.x
       - run: pip install zensical
-      - run: zensical build --clean 
+      - run: bash scripts/build-docs.sh
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: site
+          path: site/Code-Review-GPT-Gitlab
       - uses: actions/deploy-pages@v4
         id: deployment

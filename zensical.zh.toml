@@ -1,0 +1,26 @@
+[project]
+site_name = "Code Review GPT"
+site_url = "https://mimo-x.github.io/Code-Review-GPT-Gitlab/zh/"
+site_description = "利用大模型帮助开发团队在 GitLab 上进行自动化代码审查，提升研发效能的智能工具"
+docs_dir = "docs_zh"
+site_dir = "site/Code-Review-GPT-Gitlab/zh"
+nav = [
+    { "首页" = "index.md" },
+    { "部署指南" = "docker-deployment.md" },
+    { "常见问题" = "QA.md" }
+]
+
+[project.theme]
+language = "zh"
+direction = "ltr"
+
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.pymdownx.details]
+[project.markdown_extensions.pymdownx.superfences]
+
+[project.extra]
+homepage = "index.md"
+alternate = [
+    { name = "English", link = "../", lang = "en" },
+    { name = "中文", link = "./", lang = "zh" }
+]
