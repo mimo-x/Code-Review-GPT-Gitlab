@@ -326,7 +326,7 @@ const initPieChart = () => {
         data: [
           { value: 335, name: 'GPT-4', itemStyle: { color: '#007aff' } },
           { value: 234, name: 'DeepSeek', itemStyle: { color: '#34c759' } },
-          { value: 154, name: 'Claude', itemStyle: { color: '#af52de' } },
+          { value: 154, name: 'OpenCode', itemStyle: { color: '#af52de' } },
           { value: 89, name: 'Gemini', itemStyle: { color: '#ff9500' } }
         ]
       }

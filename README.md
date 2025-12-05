@@ -126,6 +126,26 @@ python manage.py runserver 0.0.0.0:8001
 # 或使用: ./start.sh
 ```
 
+### OpenCode CLI 依赖
+
+本项目默认通过 [OpenCode CLI](https://opencode.ai) 执行代码审查，请确保部署环境已经安装：
+
+```bash
+curl -fsSL https://opencode.ai/install | bash
+# 或使用包管理器:
+brew install opencode        # macOS / Linux
+npm i -g opencode-ai@latest  # Node 生态
+```
+
+安装完成后，请通过 `opencode --version` 验证，并使用 `opencode auth login` 配置模型凭证。后台「OpenCode CLI 配置」中可以自定义 CLI 路径、API Endpoint 与 Token。
+
+在「配置管理 → OpenCode CLI 配置」中需要粘贴以下文件内容（路径仅作为提示）：
+
+- `auth.json` 内容（默认 `~/.local/share/opencode/auth.json`）
+- `opencode.json` 内容（默认 `~/.config/opencode/opencode.json`）
+- `.env` 内容（可选，每行一个 `KEY=VALUE`）
+- 以及设置审查超时时间
+
 **前端启动**
 ```bash
 cd frontend

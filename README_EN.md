@@ -153,9 +153,26 @@ python3 app.py
 </p>
 6.**make a mr 🎉**
 
+### OpenCode CLI
 
+This project relies on [OpenCode CLI](https://opencode.ai) for automated code reviews. Install it on your host/server:
 
-   
+```bash
+curl -fsSL https://opencode.ai/install | bash
+# or use a package manager
+brew install opencode
+npm i -g opencode-ai@latest
+```
+
+Run `opencode --version` to verify, then configure credentials via `opencode auth login`. Finally, fill in the “OpenCode CLI 配置” tab in the UI if you need to override CLI path, API endpoint, or token.
+
+You should paste the following file contents on that page (paths only for reference):
+
+- `auth.json` content (default `~/.local/share/opencode/auth.json`)
+- `opencode.json` content (default `~/.config/opencode/opencode.json`)
+- Optional `.env` content (`KEY=VALUE` per line)
+- Review timeout
+
 #### Docker
 
 ```bash
@@ -190,6 +207,3 @@ todo dockerfile
 # License 📑
 ![github license](https://img.shields.io/github/license/mimo-x/Code-Review-GPT-Gitlab)
 **This project is licensed under the [MIT License](https://chat.openai.com/c/9be6b422-f10c-4379-b152-e756230d54f8#:~:text=%E7%9A%84%E5%AE%8C%E6%95%B4%E6%96%87%E6%9C%AC%EF%BC%9A-,MIT%20License,-%E4%BD%A0%E5%8F%AF%E4%BB%A5%E8%AE%BF%E9%97%AE).**
-
-
-

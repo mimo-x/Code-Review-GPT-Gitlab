@@ -54,10 +54,7 @@
           <div class="config-field-group">
             <label class="config-label">LLM 提供商</label>
             <select v-model="config.llm.provider" class="input-field">
-              <option value="openai">OpenAI GPT-4</option>
-              <option value="deepseek">DeepSeek</option>
-              <option value="claude">Anthropic Claude</option>
-              <option value="gemini">Google Gemini</option>
+              <option value="opencode">OpenCode CLI</option>
             </select>
           </div>
 
@@ -174,70 +171,61 @@
       </div>
     </div>
 
-    <!-- Claude CLI Config -->
-    <div v-show="activeTab === 'claude-cli'" class="config-section">
+    <!-- OpenCode CLI Config -->
+    <div v-show="activeTab === 'opencode-cli'" class="config-section">
       <div class="p-6 space-y-6">
         <div class="flex items-center gap-3">
           <div class="w-2 h-2 bg-purple-500 rounded-full"></div>
-          <h3 class="text-lg font-semibold text-apple-900">Claude CLI 配置</h3>
+          <h3 class="text-lg font-semibold text-apple-900">OpenCode CLI 配置</h3>
         </div>
 
         <div class="bg-apple-50/50 border border-apple-200/40 rounded-xl p-4 text-sm text-apple-600">
-          配置 Claude CLI 运行所需的环境变量。这些配置将在执行代码审查时自动注入到 Claude 命令环境中。
+          配置 OpenCode CLI 运行所需的环境变量。这些配置将在执行代码审查时自动注入到 CLI 命令环境中。
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div class="md:col-span-2 config-field-group">
+          <div class="config-field-group">
             <label class="config-label">
-              ANTHROPIC_BASE_URL
+              auth.json 内容
+              <span class="text-xs text-apple-400">(默认路径 ~/.local/share/opencode/auth.json)</span>
             </label>
-            <input v-model="config.claude_cli.anthropic_base_url" type="text" class="input-field"
-              placeholder="https://api.anthropic.com" />
-            <p class="text-xs text-apple-500 mt-1">Claude API 的基础地址，留空使用默认值</p>
-          </div>
-
-          <div class="md:col-span-2 config-field-group">
-            <label class="config-label">ANTHROPIC_AUTH_TOKEN</label>
-            <div class="relative">
-              <input v-model="config.claude_cli.anthropic_auth_token" :type="showClaudeToken ? 'text' : 'password'"
-                class="input-field pr-20" placeholder="请输入 Claude 认证令牌" />
-              <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                <button type="button" @click="toggleVisibility('claudeToken')"
-                  class="p-1.5 text-apple-500 hover:text-apple-700 hover:bg-apple-50 rounded transition-colors"
-                  :title="showClaudeToken ? '隐藏' : '显示'">
-                  <Eye v-if="!showClaudeToken" class="w-4 h-4" />
-                  <EyeOff v-else class="w-4 h-4" />
-                </button>
-                <button type="button" @click="copyToClipboard(config.claude_cli.anthropic_auth_token, 'Auth Token')"
-                  class="p-1.5 text-apple-500 hover:text-apple-700 hover:bg-apple-50 rounded transition-colors"
-                  title="复制">
-                  <Copy class="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+            <textarea v-model="config.opencode_cli.auth_content" rows="4" class="input-field"
+              placeholder="请粘贴 auth.json 文件内容"></textarea>
           </div>
 
           <div class="config-field-group">
-            <label class="config-label">CLI 路径</label>
-            <input v-model="config.claude_cli.cli_path" type="text" class="input-field" placeholder="claude" />
-            <p class="text-xs text-apple-500 mt-1">Claude CLI 可执行文件路径</p>
+            <label class="config-label">
+              opencode.json 内容
+              <span class="text-xs text-apple-400">(默认路径 ~/.config/opencode/opencode.json)</span>
+            </label>
+            <textarea v-model="config.opencode_cli.config_content" rows="4" class="input-field"
+              placeholder="请粘贴 opencode.json 文件内容"></textarea>
+          </div>
+
+          <div class="config-field-group">
+            <label class="config-label">
+              .env 内容（可选）
+              <span class="text-xs text-apple-400">示例：OPENCODE_API_KEY=xxx</span>
+            </label>
+            <textarea v-model="config.opencode_cli.env_content" rows="3" class="input-field"
+              placeholder="可选：粘贴需要注入的环境变量，每行一个 KEY=VALUE"></textarea>
           </div>
 
           <div class="config-field-group">
             <label class="config-label">超时时间（秒）</label>
-            <input v-model.number="config.claude_cli.timeout" type="number" class="input-field" placeholder="300"
+            <input v-model.number="config.opencode_cli.timeout" type="number" class="input-field" placeholder="300"
               min="30" max="600" />
           </div>
         </div>
 
         <!-- 测试按钮 -->
         <div class="border-t border-apple-200/50 pt-6">
-          <button @click="testClaudeCliConfig" :disabled="testingClaude" class="btn-secondary">
+          <button @click="testOpencodeCliConfig" :disabled="testingOpencode" class="btn-secondary">
             <Play class="w-4 h-4" />
-            {{ testingClaude ? '测试中...' : '测试 Claude CLI 连接' }}
+            {{ testingOpencode ? '测试中...' : '测试 OpenCode CLI 连接' }}
           </button>
           <p class="text-xs text-apple-500 mt-2">
-            点击测试按钮验证 Claude CLI 是否正确安装并可以连接
+            点击测试按钮验证 OpenCode CLI 是否正确安装并可以连接
           </p>
         </div>
       </div>
@@ -595,22 +583,21 @@ const messageType = ref<'success' | 'error'>('success')
 const showLlmApiKey = ref(false)
 const showGitlabToken = ref(false)
 const showChannelSecret = ref(false)
-const showClaudeToken = ref(false)
 
 // 测试状态
-const testingClaude = ref(false)
+const testingOpencode = ref(false)
 
 const tabs = [
   { key: 'gitlab', label: 'GitLab 配置' },
-  { key: 'claude-cli', label: 'Claude CLI 配置' },
+  { key: 'opencode-cli', label: 'OpenCode CLI 配置' },
   { key: 'webhook-events', label: 'Webhook 事件' },
   { key: 'notification', label: '通知配置' }
 ]
 
 const config = ref({
   llm: {
-    provider: 'openai',
-    model: 'gpt-4',
+    provider: 'opencode',
+    model: 'opencode-cli-review',
     apiKey: '',
     apiBase: ''
   },
@@ -618,10 +605,10 @@ const config = ref({
     serverUrl: 'https://gitlab.com',
     privateToken: ''
   },
-  claude_cli: {
-    anthropic_base_url: '',
-    anthropic_auth_token: '',
-    cli_path: 'claude',
+  opencode_cli: {
+    auth_content: '',
+    config_content: '',
+    env_content: '',
     timeout: 300
   }
 })
@@ -746,8 +733,6 @@ const toggleVisibility = (field: string) => {
     case 'channelSecret':
       showChannelSecret.value = !showChannelSecret.value
       break
-    case 'claudeToken':
-      showClaudeToken.value = !showClaudeToken.value
       break
   }
 }
@@ -824,13 +809,13 @@ const loadConfig = async () => {
       }
     }
 
-    // 更新 Claude CLI 配置
-    if (data.claude_cli) {
-      config.value.claude_cli = {
-        anthropic_base_url: data.claude_cli.anthropic_base_url || '',
-        anthropic_auth_token: data.claude_cli.anthropic_auth_token || '',
-        cli_path: data.claude_cli.cli_path || 'claude',
-        timeout: data.claude_cli.timeout || 300
+    // 更新 OpenCode CLI 配置
+    if (data.opencode_cli) {
+      config.value.opencode_cli = {
+        auth_content: data.opencode_cli.auth_content || '',
+        config_content: data.opencode_cli.config_content || '',
+        env_content: data.opencode_cli.env_content || '',
+        timeout: data.opencode_cli.timeout || 300
       }
     }
 
@@ -857,22 +842,20 @@ const loadConfig = async () => {
   }
 }
 
-// 测试 Claude CLI 配置
-const testClaudeCliConfig = async () => {
-  testingClaude.value = true
-
-  // 提示用户测试可能需要较长时间
-  showMessage('正在测试 Claude CLI 配置，包括网络连通性、CLI 安装和 API 认证，预计需要 15-45 秒...', 'success')
+// 测试 OpenCode CLI 配置
+const testOpencodeCliConfig = async () => {
+  testingOpencode.value = true
+  showMessage('正在测试 OpenCode CLI 配置，预计需要 15-45 秒...', 'success')
 
   try {
-    const { testClaudeCliConfigApi } = await import('@/api/index')
-    const response: any = await testClaudeCliConfigApi({
-      claude_cli: config.value.claude_cli
+    const { testOpencodeCliConfigApi } = await import('@/api/index')
+    const response: any = await testOpencodeCliConfigApi({
+      opencode_cli: config.value.opencode_cli
     })
 
     if (response.status === 'success') {
       showMessage(
-        `✅ 测试成功！Claude CLI 版本: ${response.version || 'unknown'}`,
+        `✅ 测试成功！OpenCode CLI 版本: ${response.version || 'unknown'}`,
         'success'
       )
     } else {
@@ -882,7 +865,7 @@ const testClaudeCliConfig = async () => {
     const errorMsg = error?.response?.data?.message || error?.message || '未知错误'
     showMessage(`❌ 测试失败: ${errorMsg}`, 'error')
   } finally {
-    testingClaude.value = false
+    testingOpencode.value = false
   }
 }
 
@@ -904,11 +887,11 @@ const handleSave = async () => {
         private_token: config.value.gitlab.privateToken,
         is_active: true
       },
-      claude_cli: {
-        anthropic_base_url: config.value.claude_cli.anthropic_base_url || null,
-        anthropic_auth_token: config.value.claude_cli.anthropic_auth_token,
-        cli_path: config.value.claude_cli.cli_path || 'claude',
-        timeout: config.value.claude_cli.timeout || 300,
+      opencode_cli: {
+        auth_content: config.value.opencode_cli.auth_content || '',
+        config_content: config.value.opencode_cli.config_content || '',
+        env_content: config.value.opencode_cli.env_content || '',
+        timeout: config.value.opencode_cli.timeout || 300,
         is_active: true
       }
     }

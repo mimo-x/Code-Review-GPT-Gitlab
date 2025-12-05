@@ -10,9 +10,9 @@ RUN apt-get update \
        curl \
     && rm -rf /var/lib/apt/lists/*
 
-# 为 claude 可执行文件预留路径并安装 Claude CLI
-ENV PATH="/root/.local/bin:${PATH}"
-RUN curl -fsSL https://claude.ai/install.sh | bash
+# 安装 OpenCode CLI
+ENV PATH="/root/.opencode/bin:/root/.local/bin:${PATH}"
+RUN curl -fsSL https://opencode.ai/install | bash
 
 # 复制依赖并安装 Python 包
 WORKDIR /app

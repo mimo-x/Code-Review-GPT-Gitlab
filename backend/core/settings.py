@@ -230,26 +230,16 @@ os.makedirs(os.path.join(BASE_DIR, 'logs'), exist_ok=True)
 # Mock Mode Configuration（请通过 LLMConfig 设置 provider='mock' 来启用）
 CODE_REVIEW_MOCK_MODE = False
 
-# ===== Claude CLI Code Review Configuration =====
+# ===== OpenCode CLI Code Review Configuration =====
 # Repository Management
 REPOSITORY_BASE_PATH = os.environ.get(
     'REPOSITORY_BASE_PATH',
     os.path.join(BASE_DIR, 'data', 'repositories')
 )
 
-# Claude CLI Configuration
-CLAUDE_CLI_PATH = os.environ.get('CLAUDE_CLI_PATH', 'claude')
-CLAUDE_CLI_TIMEOUT = int(os.environ.get('CLAUDE_CLI_TIMEOUT', 300))  # seconds
-CLAUDE_CLI_DEFAULT_PROMPT = os.environ.get(
-    'CLAUDE_CLI_DEFAULT_PROMPT',
-    """请帮我 code review 最近一次提交的内容，从以下角度分析：
-1. 代码质量和最佳实践
-2. 潜在的 bug 和安全问题
-3. 性能优化建议
-4. 代码风格和可读性
-
-请提供具体的改进建议。"""
-)
+# OpenCode CLI Configuration
+OPENCODE_CLI_PATH = os.environ.get('OPENCODE_CLI_PATH', 'opencode')
+OPENCODE_CLI_TIMEOUT = int(os.environ.get('OPENCODE_CLI_TIMEOUT', 300))  # seconds
 
 # Repository Cleanup Configuration
 REPOSITORY_CACHE_DAYS = int(os.environ.get('REPOSITORY_CACHE_DAYS', 7))  # 保留天数

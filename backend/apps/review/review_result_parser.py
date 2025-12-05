@@ -1,6 +1,6 @@
 """
-Review Result Parser for Claude CLI Output
-Parses Claude CLI JSON output and formats it for storage and display
+Review Result Parser for CLI Output
+Parses OpenCode CLI JSON output (or compatible data) for storage and display
 """
 import re
 import logging
@@ -10,19 +10,17 @@ logger = logging.getLogger(__name__)
 
 
 class ReviewResultParser:
-    """
-    Parser for Claude CLI review results
-    """
+    """Parser for OpenCode CLI review results"""
 
     def __init__(self, request_id=None):
         self.request_id = request_id
 
     def parse(self, claude_output: Dict) -> Dict:
         """
-        解析 Claude CLI 的输出结果
+        解析 CLI 的输出结果
 
         Args:
-            claude_output: Claude CLI 返回的 JSON 数据
+            claude_output: CLI 返回的 JSON 数据
 
         Returns:
             解析后的审查数据字典:
@@ -74,7 +72,7 @@ class ReviewResultParser:
             return parsed_data
 
         except Exception as e:
-            logger.error(f"[{self.request_id}] Error parsing Claude output: {e}", exc_info=True)
+            logger.error(f"[{self.request_id}] Error parsing CLI output: {e}", exc_info=True)
             # 返回基本结构以避免崩溃
             return {
                 'content': claude_output.get('result', 'Error parsing result'),
@@ -376,7 +374,7 @@ class ReviewResultParser:
 
             # 元数据
             report_parts.append(f"\n---\n")
-            report_parts.append(f"*审查由 Claude AI 完成，耗时 {parsed_data['duration_ms']}ms*\n")
+            report_parts.append(f"*审查由 OpenCode CLI 完成，耗时 {parsed_data['duration_ms']}ms*\n")
 
             return '\n'.join(report_parts)
 

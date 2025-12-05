@@ -1,5 +1,12 @@
 from rest_framework import serializers
-from .models import LLMConfig, GitLabConfig, NotificationConfig, NotificationChannel, WebhookEventRule, ClaudeCliConfig
+from .models import (
+    LLMConfig,
+    GitLabConfig,
+    NotificationConfig,
+    NotificationChannel,
+    WebhookEventRule,
+    OpenCodeCliConfig,
+)
 
 
 class LLMConfigSerializer(serializers.ModelSerializer):
@@ -256,15 +263,15 @@ class WebhookEventRuleSerializer(serializers.ModelSerializer):
         return data
 
 
-class ClaudeCliConfigSerializer(serializers.ModelSerializer):
-    """Claude CLI 配置序列化器"""
+class OpenCodeCliConfigSerializer(serializers.ModelSerializer):
+    """OpenCode CLI 配置序列化器"""
     class Meta:
-        model = ClaudeCliConfig
+        model = OpenCodeCliConfig
         fields = [
             'id',
-            'anthropic_base_url',
-            'anthropic_auth_token',
-            'cli_path',
+            'auth_content',
+            'config_content',
+            'env_content',
             'timeout',
             'is_active',
             'created_at',
@@ -275,13 +282,13 @@ class ClaudeCliConfigSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """如果创建新的激活配置，先禁用其他配置"""
         if validated_data.get('is_active', True):
-            ClaudeCliConfig.objects.filter(is_active=True).update(is_active=False)
+            OpenCodeCliConfig.objects.filter(is_active=True).update(is_active=False)
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
         """如果设置为激活状态，先禁用其他配置"""
         if validated_data.get('is_active', False) and not instance.is_active:
-            ClaudeCliConfig.objects.filter(is_active=True).update(is_active=False)
+            OpenCodeCliConfig.objects.filter(is_active=True).update(is_active=False)
         return super().update(instance, validated_data)
 
 
@@ -289,6 +296,7 @@ class ConfigSummarySerializer(serializers.Serializer):
     """配置摘要序列化器，用于返回所有配置的概览"""
     llm = LLMConfigSerializer(source='active_llm_config', read_only=True)
     gitlab = GitLabConfigSerializer(source='active_gitlab_config', read_only=True)
+    opencode_cli = OpenCodeCliConfigSerializer(source='active_opencode_cli_config', read_only=True)
     notifications = NotificationConfigSerializer(many=True, read_only=True)
     channels = NotificationChannelSerializer(many=True, read_only=True)
     webhook_events = WebhookEventRuleSerializer(many=True, read_only=True)

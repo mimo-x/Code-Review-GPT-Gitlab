@@ -599,7 +599,7 @@ def process_merge_request_review(project_id, merge_request_iid, review_id, paylo
                 success=True
             )
         else:
-            # 真实 Claude CLI 模式
+            # 真实 OpenCode CLI 模式
             from apps.llm.services import LLMService
             from apps.review.report_generator import ReportGenerator
             from apps.review.repository_manager import RepositoryManager
@@ -696,7 +696,7 @@ def process_merge_request_review(project_id, merge_request_iid, review_id, paylo
                 except Exception as e:
                     structured_logger.warning(f"获取自定义 Prompt 失败: {e}，使用系统默认")
 
-            # 调用 LLM 进行代码审查（使用 Claude CLI）
+            # 调用 LLM 进行代码审查（使用 OpenCode CLI）
             try:
                 llm_service = LLMService(request_id=request_id)
             except ImproperlyConfigured as exc:
@@ -727,8 +727,8 @@ def process_merge_request_review(project_id, merge_request_iid, review_id, paylo
                 return
 
             # 成功获取审查结果（字典格式）
-            llm_provider = 'claude-cli'
-            llm_model = 'claude-sonnet-4-5'  # Claude CLI 使用的模型
+            llm_provider = 'opencode-cli'
+            llm_model = 'opencode-cli-review'
 
             # 提取审查内容和元数据
             review_content = llm_result.get('content', '')
@@ -740,7 +740,7 @@ def process_merge_request_review(project_id, merge_request_iid, review_id, paylo
                 model=llm_model,
                 success=True,
                 duration=llm_duration,
-                prompt_length=0,  # Claude CLI 不返回 prompt 长度
+                prompt_length=0,  # OpenCode CLI 不返回 prompt 长度
                 response_length=len(review_content)
             )
 
