@@ -350,3 +350,29 @@ export const testClaudeCliConfigApi = (data: any) => {
     timeout: 90000  // 90 秒超时（后端测试最多 45 秒 + 额外处理时间）
   })
 }
+
+// 认证相关 API
+// 登录
+export const login = (data: { username: string; password: string }) => {
+  return request({
+    url: getApiUrl('/auth/login'),
+    method: 'post',
+    data
+  })
+}
+
+// 登出
+export const logout = () => {
+  return request({
+    url: getApiUrl('/auth/logout'),
+    method: 'post'
+  })
+}
+
+// 检查认证状态
+export const checkAuth = () => {
+  return request({
+    url: getApiUrl('/auth/check'),
+    method: 'get'
+  })
+}

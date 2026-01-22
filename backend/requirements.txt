@@ -34,3 +34,6 @@ python-dotenv==1.0.0
 
 # System Information
 psutil==5.9.8
+
+# Redis Support
+redis==5.0.1

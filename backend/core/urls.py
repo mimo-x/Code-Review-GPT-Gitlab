@@ -7,6 +7,7 @@ from django.http import JsonResponse
 from apps.webhook import urls as webhook_urls
 from apps.review import urls as review_urls
 from apps.llm import urls as llm_urls
+from apps.api_auth import urls as auth_urls
 import psutil
 import time
 from datetime import datetime
@@ -89,6 +90,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('health/', health_check, name='health_check'),
     path('api/system/info', system_info, name='system_info'),
+    path('api/auth/', include(auth_urls)),
     path('api/webhook/', include(webhook_urls)),
     path('api/review/', include(review_urls)),
     path('api/', include(llm_urls)),
