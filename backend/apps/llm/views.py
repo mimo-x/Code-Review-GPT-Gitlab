@@ -154,6 +154,8 @@ class NotificationChannelViewSet(viewsets.ModelViewSet):
             return self._test_wechat(channel, test_id, timestamp)
         elif channel.notification_type == 'email':
             return self._test_email(channel, test_id, timestamp)
+        elif channel.notification_type == 'custom_webhook':
+            return self._test_custom_webhook(channel, test_id, timestamp)
         else:
             return Response({
                 'success': False,
@@ -485,6 +487,107 @@ Code Review GPT 自动发送
                     else:
                         delattr(settings, key)
 
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f'测试异常: {str(e)}',
+                'test_id': test_id
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    def _test_custom_webhook(self, channel, test_id, timestamp):
+        """测试自定义Webhook通知渠道"""
+        try:
+            import requests
+
+            config_dict = channel.config_dict
+            url = config_dict.get('url') or config_dict.get('webhook_url') or config_dict.get('webhook')
+
+            if not url:
+                return Response({
+                    'success': False,
+                    'message': '自定义Webhook URL未配置，请在config_data中设置 url 字段'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            method = config_dict.get('method', 'POST').upper()
+            headers = config_dict.get('headers', {})
+            payload_template = config_dict.get('payload_template', {})
+            req_timeout = config_dict.get('timeout', 10)
+
+            # 构建测试模板变量
+            template_vars = {
+                '{project_name}': '测试项目',
+                '{mr_title}': '测试合并请求',
+                '{mr_author}': '测试用户',
+                '{mr_url}': 'https://example.com/mr/1',
+                '{review_content}': '这是一条测试消息，用于验证自定义Webhook配置是否正确。',
+                '{review_score}': '95',
+                '{timestamp}': timestamp,
+                '{source_branch}': 'feature/test',
+                '{target_branch}': 'main',
+            }
+
+            def apply_template(obj):
+                if isinstance(obj, str):
+                    result = obj
+                    for var, value in template_vars.items():
+                        result = result.replace(var, value)
+                    return result
+                elif isinstance(obj, dict):
+                    return {apply_template(k): apply_template(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [apply_template(item) for item in obj]
+                return obj
+
+            payload = apply_template(payload_template) if payload_template else {
+                "msgtype": "text",
+                "text": {"content": template_vars['{review_content}']}
+            }
+
+            if method == 'GET':
+                response = requests.get(url, headers=headers, timeout=req_timeout)
+            elif method == 'PUT':
+                response = requests.put(url, json=payload, headers=headers, timeout=req_timeout)
+            elif method == 'PATCH':
+                response = requests.patch(url, json=payload, headers=headers, timeout=req_timeout)
+            elif method == 'DELETE':
+                response = requests.delete(url, headers=headers, timeout=req_timeout)
+            else:
+                response = requests.post(url, json=payload, headers=headers, timeout=req_timeout)
+
+            if 200 <= response.status_code < 300:
+                return Response({
+                    'success': True,
+                    'message': f'测试消息发送成功 - HTTP {response.status_code}',
+                    'test_id': test_id,
+                    'details': {
+                        'status_code': response.status_code,
+                        'response_body': response.text[:500]
+                    }
+                })
+            else:
+                return Response({
+                    'success': False,
+                    'message': f'测试消息发送失败 - HTTP {response.status_code}',
+                    'test_id': test_id,
+                    'details': {
+                        'status_code': response.status_code,
+                        'response_body': response.text[:500]
+                    }
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except requests.exceptions.Timeout:
+            return Response({
+                'success': False,
+                'message': '请求超时，请检查目标URL是否可达',
+                'test_id': test_id
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except requests.exceptions.ConnectionError:
+            return Response({
+                'success': False,
+                'message': '无法连接到目标URL，请检查URL是否正确',
+                'test_id': test_id
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
             return Response({
                 'success': False,

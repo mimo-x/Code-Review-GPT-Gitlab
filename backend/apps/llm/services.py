@@ -40,6 +40,10 @@ class LLMService:
         self.model = llm_config.model
         self.config_source = "database"
         self.is_mock = self.provider == 'mock'
+        # LLM API 调用超时时间（秒），避免 MR 文件较多时无限等待
+        self.timeout = getattr(llm_config, 'timeout', None) or int(
+            os.environ.get('LLM_API_TIMEOUT', '600')
+        )
 
         api_key_status = "已配置" if self.api_key else "未配置"
         logger.info(
@@ -86,6 +90,19 @@ class LLMService:
                     os.environ['GOOGLE_API_KEY'] = self.api_key
                     logger.info(f"[{self.request_id}] 设置 GOOGLE_API_KEY 环境变量")
 
+            elif self.provider.lower() == 'unionllm':
+                if self.api_key:
+                    os.environ['UNIONLLM_API_KEY'] = self.api_key
+                    logger.info(f"[{self.request_id}] 设置 UNIONLLM_API_KEY 环境变量")
+                if self.api_base:
+                    os.environ['UNIONLLM_API_BASE'] = self.api_base
+                    logger.info(f"[{self.request_id}] 设置 UNIONLLM_API_BASE 环境变量")
+
+            elif self.provider.lower() == 'litellm':
+                if self.api_key:
+                    os.environ['LITELLM_API_KEY'] = self.api_key
+                    logger.info(f"[{self.request_id}] 设置 LITELLM_API_KEY 环境变量")
+
             # 通用配置，适用于所有提供商
             if self.model:
                 os.environ['LLM_MODEL'] = self.model
@@ -94,28 +111,92 @@ class LLMService:
         except Exception as e:
             logger.error(f"[{self.request_id}] 设置环境变量失败: {e}", exc_info=True)
 
-    def review_code(self, code_context, mr_info=None, repo_path=None, commit_range=None, custom_prompt=None):
+    def review_code(self, code_context=None, mr_info=None, repo_path=None,
+                    commit_range=None, custom_prompt=None):
         """
-        Review code using Claude CLI (新版本)
+        代码审查入口 - 根据 provider 分发到不同的审查策略
+
+        双模式接口：
+        - Claude CLI 模式：需要 repo_path + commit_range（本地仓库审查）
+        - API 模式（unionllm/litellm/openai 等）：需要 code_context（文本审查）
 
         Args:
-            code_context: 代码上下文（已弃用，保留用于向后兼容）
+            code_context: 代码上下文文本（API 模式使用）
             mr_info: MR 信息字典
-            repo_path: 本地仓库路径（使用 Claude CLI 时必需）
-            commit_range: Git 提交范围
-            custom_prompt: 外部传入的自定义 prompt（优先级最高，来自项目配置）
+            repo_path: 本地仓库路径（Claude CLI 模式必需）
+            commit_range: Git 提交范围（Claude CLI 模式使用）
+            custom_prompt: 外部传入的自定义 prompt（优先级最高）
 
         Returns:
-            解析后的审查结果字典或错误消息字符串
+            统一格式的审查结果字典或错误消息字符串:
+            {
+                'content': str,       # 格式化的审查内容
+                'score': int,         # 0-100 评分
+                'issues': list,       # 解析出的问题列表
+                'metadata': dict,     # provider/model/duration 等元数据
+            }
         """
         import time
         start_time = time.time()
+
+        # === Provider 分发 ===
+        if self.is_mock:
+            logger.info(f"[{self.request_id}] 使用 Mock 模式进行代码审查")
+            return self._review_with_mock(mr_info, start_time)
+
+        if self.provider == 'claude':
+            logger.info(f"[{self.request_id}] 使用 Claude CLI 模式进行代码审查")
+            return self._review_with_claude_cli(
+                repo_path, mr_info, commit_range, custom_prompt, start_time
+            )
+
+        # 所有 API 模式 provider（unionllm, litellm, openai, deepseek, gemini）
+        logger.info(f"[{self.request_id}] 使用 API 模式进行代码审查 (provider={self.provider})")
+        prompt = self._build_review_prompt(code_context, mr_info, custom_prompt)
+        return self._review_with_api_provider(prompt, start_time)
+
+    def _review_with_mock(self, mr_info, start_time):
+        """
+        Mock 模式：生成模拟审查报告
+        """
+        import time
+        from apps.review.report_generator import ReportGenerator
+
+        generator = ReportGenerator(request_id=self.request_id)
+        context = {
+            'project_name': mr_info.get('project_name', '') if mr_info else '',
+            'title': mr_info.get('title', '') if mr_info else '',
+            'author': mr_info.get('author', '') if mr_info else '',
+            'file_count': mr_info.get('file_count', 0) if mr_info else 0,
+            'changes_count': mr_info.get('changes_count', 0) if mr_info else 0,
+        }
+        report_data = generator.generate_mock(context)
+
+        elapsed = time.time() - start_time
+        return {
+            'content': report_data.get('content', ''),
+            'score': int(report_data.get('metadata', {}).get('score', 0) * 20),
+            'issues': [],
+            'metadata': {
+                'provider': 'mock',
+                'model': 'mock',
+                'duration': elapsed,
+                'is_mock': True,
+            },
+        }
+
+    def _review_with_claude_cli(self, repo_path, mr_info, commit_range,
+                                 custom_prompt, start_time):
+        """
+        Claude CLI 模式：通过 subprocess 执行 claude 命令行工具
+        保留原有逻辑不变
+        """
+        import time
 
         logger.info(f"[{self.request_id}] 开始代码审查 - 使用 Claude CLI")
         logger.info(f"[{self.request_id}] 仓库路径: {repo_path}")
         logger.info(f"[{self.request_id}] 提交范围: {commit_range}")
 
-        # 检查是否提供了仓库路径
         if not repo_path:
             error_msg = "代码审查失败：未提供仓库路径，Claude CLI 需要本地仓库"
             logger.error(f"[{self.request_id}] {error_msg}")
@@ -125,31 +206,24 @@ class LLMService:
             from apps.review.claude_cli_service import ClaudeCliService
             from apps.review.review_result_parser import ReviewResultParser
 
-            # 初始化 Claude CLI 服务
             cli_service = ClaudeCliService(request_id=self.request_id)
 
-            # 验证 Claude CLI 安装
             is_valid, validation_error = cli_service.validate_cli_installation()
             if not is_valid:
                 error_msg = f"代码审查失败：{validation_error}"
                 logger.error(f"[{self.request_id}] {error_msg}")
                 return error_msg
 
-            # 构建最终使用的 prompt
-            # 优先级：外部传入的 custom_prompt > 基于 mr_info 构建的默认 prompt
             final_prompt = None
             if custom_prompt:
-                # 如果外部提供了自定义 prompt，直接使用
                 logger.info(f"[{self.request_id}] 使用外部传入的自定义 Prompt (长度: {len(custom_prompt)})")
                 final_prompt = custom_prompt
             elif mr_info:
-                # 否则使用系统默认构建逻辑
                 logger.info(f"[{self.request_id}] 使用系统默认 Prompt 构建逻辑")
                 final_prompt = self._build_claude_cli_prompt(mr_info)
             else:
                 logger.info(f"[{self.request_id}] 未提供任何 Prompt，使用 Claude CLI 默认行为")
 
-            # 执行代码审查
             success, result_data, error = cli_service.review_code(
                 repo_path=repo_path,
                 custom_prompt=final_prompt,
@@ -163,7 +237,6 @@ class LLMService:
                 logger.error(f"[{self.request_id}] {error_msg}")
                 return error_msg
 
-            # 解析审查结果
             parser = ReviewResultParser(request_id=self.request_id)
             parsed_result = parser.parse(result_data)
 
@@ -179,6 +252,158 @@ class LLMService:
             elapsed_time = time.time() - start_time
             logger.error(f"[{self.request_id}] 代码审查异常 - 耗时:{elapsed_time:.2f}秒, 错误:{e}", exc_info=True)
             return f"代码审查失败: {str(e)}"
+
+    def _review_with_api_provider(self, prompt, start_time):
+        """
+        API 模式：通过 unionllm/litellm 调用 LLM API
+
+        回退链：unionllm → litellm → 错误返回
+        """
+        import time
+
+        # 尝试 unionllm
+        try:
+            result = self._try_unionllm(prompt)
+            if result is not None:
+                result['metadata'] = {
+                    **result.get('metadata', {}),
+                    'duration': time.time() - start_time,
+                }
+                return result
+        except Exception as e:
+            logger.warning(
+                f"[{self.request_id}] unionllm 调用失败，回退到 litellm: {e}"
+            )
+
+        # 回退到 litellm
+        try:
+            result = self._try_litellm(prompt)
+            if result is not None:
+                result['metadata'] = {
+                    **result.get('metadata', {}),
+                    'duration': time.time() - start_time,
+                }
+                return result
+        except Exception as e:
+            logger.error(f"[{self.request_id}] litellm 回退也失败: {e}")
+
+        # 全部失败
+        error_msg = "代码审查失败: unionllm 和 litellm 均调用失败"
+        logger.error(f"[{self.request_id}] {error_msg}")
+        return error_msg
+
+    def _try_unionllm(self, prompt):
+        """
+        通过 unionllm 调用 LLM API
+        """
+        from unionllm import unionchat
+
+        logger.info(f"[{self.request_id}] 调用 unionllm, model={self.model}, timeout={self.timeout}s")
+
+        response = unionchat(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            timeout=self.timeout,
+        )
+
+        content = response.get('choices', [{}])[0].get('message', {}).get('content', '')
+        if not content:
+            raise ValueError("unionllm 返回空响应")
+
+        logger.info(f"[{self.request_id}] unionllm 调用成功, 响应长度: {len(content)}")
+        return self._normalize_api_response(content, 'unionllm', self.model)
+
+    def _try_litellm(self, prompt):
+        """
+        通过 litellm 调用 LLM API（unionllm 的回退方案）
+        """
+        import litellm
+
+        logger.info(f"[{self.request_id}] 回退到 litellm, model={self.model}, timeout={self.timeout}s")
+
+        response = litellm.completion(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            timeout=self.timeout,
+        )
+
+        content = response.choices[0].message.content
+        if not content:
+            raise ValueError("litellm 返回空响应")
+
+        logger.info(f"[{self.request_id}] litellm 调用成功, 响应长度: {len(content)}")
+        return self._normalize_api_response(content, 'litellm', self.model)
+
+    def _normalize_api_response(self, content, provider, model):
+        """
+        将 LLM API 返回的原始文本统一为标准审查结果格式
+        所有 API provider 输出相同结构
+        """
+        import re
+
+        # 提取评分（匹配 "评分: 85"、"分数: 90"、"Score: 85" 等）
+        score = 0
+        score_pattern = r'(?:评分|分数|Score|代码评分)[:：\s]*(\d+)'
+        score_match = re.search(score_pattern, content)
+        if score_match:
+            try:
+                score = int(score_match.group(1))
+            except ValueError:
+                pass
+
+        # 提取问题列表
+        issues = self._extract_issues_from_text(content)
+
+        return {
+            'content': content,
+            'score': score,
+            'issues': issues,
+            'metadata': {
+                'provider': provider,
+                'model': model,
+            },
+        }
+
+    @staticmethod
+    def _extract_issues_from_text(text):
+        """
+        从审查文本中简单提取问题列表
+        匹配以 - [问题] 或数字序号开头的行
+        """
+        import re
+        issues = []
+        for match in re.finditer(
+            r'[-*]\s*\[.+\]\s*(.+?)(?=\n|$)',
+            text
+        ):
+            issues.append({
+                'title': match.group(1).strip(),
+                'severity': 'medium',
+            })
+        return issues
+
+    def _build_review_prompt(self, code_context, mr_info, custom_prompt):
+        """
+        为 API 模式构建审查 prompt
+        优先级：custom_prompt > 系统默认模板 + mr_info + code_context
+        """
+        if custom_prompt:
+            base = custom_prompt
+        else:
+            base = self.prompt_template
+
+        parts = [base]
+
+        if mr_info:
+            parts.append(
+                f"\n**MR 信息**: {mr_info.get('title', '')} "
+                f"作者: {mr_info.get('author', '')}"
+            )
+
+        if code_context:
+            parts.append(f"\n## 代码变更:\n{code_context}")
+
+        return '\n'.join(parts)
 
     def _build_claude_cli_prompt(self, mr_info):
         """

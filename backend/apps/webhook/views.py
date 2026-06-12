@@ -128,9 +128,10 @@ def gitlab_webhook(request):
                         field="error_message"
                     )
 
+                # 返回 200 防止 GitLab 重试 webhook
                 return Response(
                     {'status': 'error', 'message': f'Event handler failed: {str(handler_error)}'},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    status=status.HTTP_200_OK
                 )
 
     except Exception as e:
@@ -147,9 +148,10 @@ def gitlab_webhook(request):
             except Exception as save_error:
                 logger.error(f"Failed to update webhook log {request_id}: {str(save_error)}")
 
+        # 返回 200 防止 GitLab 重试 webhook
         return Response(
             {'status': 'error', 'message': str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            status=status.HTTP_200_OK
         )
 
 
@@ -400,9 +402,10 @@ def handle_webhook_event(payload, webhook_log, project_id):
             webhook_log.error_message = str(e)
             webhook_log.save()
 
+        # 返回 200 防止 GitLab 重试 webhook
         return Response(
             {'status': 'error', 'message': str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            status=status.HTTP_200_OK
         )
 
 
@@ -468,9 +471,10 @@ def _start_merge_request_review(payload, webhook_log, project_id, project_name, 
             webhook_log.error_message = str(e)
             webhook_log.save()
 
+        # 返回 200 防止 GitLab 重试 webhook
         return Response(
             {'status': 'error', 'message': str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            status=status.HTTP_200_OK
         )
 
 
@@ -599,82 +603,9 @@ def process_merge_request_review(project_id, merge_request_iid, review_id, paylo
                 success=True
             )
         else:
-            # 真实 Claude CLI 模式
+            # 真实 LLM 模式 - 根据 provider 选择审查路径
             from apps.llm.services import LLMService
             from apps.review.report_generator import ReportGenerator
-            from apps.review.repository_manager import RepositoryManager
-
-            # 初始化仓库管理器
-            repo_manager = RepositoryManager(request_id=request_id)
-
-            # 从 GitLab 配置获取访问令牌（使用已导入的 GitlabService）
-            # GitlabService 已经在文件顶部从 apps.review.services 导入
-            # 它的 _load_config 方法会从 GitLabConfig 数据库表加载配置
-            gitlab_svc = gitlab_service
-            access_token = gitlab_svc.private_token  # 使用 private_token 属性
-
-            # 获取项目 URL，并将 host 替换为配置的 GitLab 服务器地址
-            project_url = ProjectService.build_clone_url(project_data, base_url=getattr(gitlab_svc, 'server_url', None))
-
-            structured_logger.info(
-                "准备克隆项目",
-                raw_url=project_data.get('git_http_url') or project_data.get('http_url'),
-                normalized_url=project_url
-            )
-
-            # 克隆或更新仓库
-            with TimerContext(structured_logger, "clone_or_update_repository"):
-                success, repo_path, clone_error = repo_manager.get_or_clone_repository(
-                    project_url=project_url,
-                    project_id=project_id,
-                    access_token=access_token
-                )
-
-            if not success:
-                structured_logger.error(f"仓库克隆失败: {clone_error}")
-                review.status = 'failed'
-                review.error_message = f'仓库克隆失败: {clone_error}'
-                review.save()
-                return
-
-            structured_logger.info(f"仓库路径: {repo_path}")
-
-            # 切换到 MR 分支
-            source_branch = mr_data.get('source_branch', '')
-            target_branch = mr_data.get('target_branch', 'main')
-
-            with TimerContext(structured_logger, "checkout_merge_request"):
-                success, checkout_error = repo_manager.checkout_merge_request(
-                    repo_path=repo_path,
-                    mr_iid=merge_request_iid,
-                    source_branch=source_branch,
-                    target_branch=target_branch
-                )
-
-            if not success:
-                structured_logger.error(f"分支切换失败: {checkout_error}")
-                review.status = 'failed'
-                review.error_message = f'分支切换失败: {checkout_error}'
-                review.save()
-                return
-
-            # 获取提交范围
-            success, commit_range, range_error = repo_manager.get_commit_range(
-                repo_path=repo_path,
-                target_branch=target_branch
-            )
-
-            if not success:
-                structured_logger.warning(f"获取提交范围失败: {range_error}，使用默认范围")
-                commit_range = "HEAD~1..HEAD"
-
-            structured_logger.info(f"提交范围: {commit_range}")
-
-            # 更新 MR 信息
-            mr_info.update({
-                'source_branch': source_branch,
-                'target_branch': target_branch,
-            })
 
             # 获取项目自定义 Prompt（如果配置了）
             custom_prompt = None
@@ -688,7 +619,6 @@ def process_merge_request_review(project_id, merge_request_iid, review_id, paylo
                     ).select_related('event_rule').first()
 
                     if prompt_config and prompt_config.custom_prompt:
-                        # 渲染 prompt 模板，替换占位符
                         custom_prompt = prompt_config.render_prompt(mr_info)
                         structured_logger.info(f"使用项目自定义 Prompt (Event: {matched_rule.name}, 长度: {len(custom_prompt)})")
                     else:
@@ -696,7 +626,7 @@ def process_merge_request_review(project_id, merge_request_iid, review_id, paylo
                 except Exception as e:
                     structured_logger.warning(f"获取自定义 Prompt 失败: {e}，使用系统默认")
 
-            # 调用 LLM 进行代码审查（使用 Claude CLI）
+            # 调用 LLM 进行代码审查
             try:
                 llm_service = LLMService(request_id=request_id)
             except ImproperlyConfigured as exc:
@@ -705,21 +635,103 @@ def process_merge_request_review(project_id, merge_request_iid, review_id, paylo
                 review.error_message = str(exc)
                 review.save()
                 return
+
             llm_start_time = time.time()
 
-            llm_result = llm_service.review_code(
-                code_context=None,  # 不再需要
-                mr_info=mr_info,
-                repo_path=repo_path,
-                commit_range=commit_range,
-                custom_prompt=custom_prompt  # 传递自定义 prompt
-            )
+            if llm_config.provider == 'claude':
+                # === Claude CLI 路径：需要克隆仓库到本地 ===
+                from apps.review.repository_manager import RepositoryManager
+
+                repo_manager = RepositoryManager(request_id=request_id)
+                gitlab_svc = gitlab_service
+                access_token = gitlab_svc.private_token
+                project_url = ProjectService.build_clone_url(project_data, base_url=getattr(gitlab_svc, 'server_url', None))
+
+                structured_logger.info(
+                    "准备克隆项目",
+                    raw_url=project_data.get('git_http_url') or project_data.get('http_url'),
+                    normalized_url=project_url
+                )
+
+                with TimerContext(structured_logger, "clone_or_update_repository"):
+                    success, repo_path, clone_error = repo_manager.get_or_clone_repository(
+                        project_url=project_url,
+                        project_id=project_id,
+                        access_token=access_token
+                    )
+
+                if not success:
+                    structured_logger.error(f"仓库克隆失败: {clone_error}")
+                    review.status = 'failed'
+                    review.error_message = f'仓库克隆失败: {clone_error}'
+                    review.save()
+                    return
+
+                structured_logger.info(f"仓库路径: {repo_path}")
+
+                source_branch = mr_data.get('source_branch', '')
+                target_branch = mr_data.get('target_branch', 'main')
+
+                with TimerContext(structured_logger, "checkout_merge_request"):
+                    success, checkout_error = repo_manager.checkout_merge_request(
+                        repo_path=repo_path,
+                        mr_iid=merge_request_iid,
+                        source_branch=source_branch,
+                        target_branch=target_branch
+                    )
+
+                if not success:
+                    structured_logger.error(f"分支切换失败: {checkout_error}")
+                    review.status = 'failed'
+                    review.error_message = f'分支切换失败: {checkout_error}'
+                    review.save()
+                    return
+
+                success, commit_range, range_error = repo_manager.get_commit_range(
+                    repo_path=repo_path,
+                    target_branch=target_branch
+                )
+
+                if not success:
+                    structured_logger.warning(f"获取提交范围失败: {range_error}，使用默认范围")
+                    commit_range = "HEAD~1..HEAD"
+
+                structured_logger.info(f"提交范围: {commit_range}")
+
+                mr_info.update({
+                    'source_branch': source_branch,
+                    'target_branch': target_branch,
+                })
+
+                llm_result = llm_service.review_code(
+                    code_context=None,
+                    mr_info=mr_info,
+                    repo_path=repo_path,
+                    commit_range=commit_range,
+                    custom_prompt=custom_prompt
+                )
+
+                llm_provider = 'claude-cli'
+                llm_model = 'claude-sonnet-4-5'
+            else:
+                # === API 路径：直接使用 GitLab API 返回的 diff 文本 ===
+                code_context = build_code_context(changes)
+
+                llm_result = llm_service.review_code(
+                    code_context=code_context,
+                    mr_info=mr_info,
+                    repo_path=None,
+                    commit_range=None,
+                    custom_prompt=custom_prompt
+                )
+
+                llm_provider = llm_config.provider
+                llm_model = llm_config.model
 
             llm_duration = time.time() - llm_start_time
 
             # 检查审查结果
             if isinstance(llm_result, str):
-                # 错误消息
                 structured_logger.error(f"代码审查失败: {llm_result}")
                 review.status = 'failed'
                 review.error_message = llm_result
@@ -727,24 +739,18 @@ def process_merge_request_review(project_id, merge_request_iid, review_id, paylo
                 return
 
             # 成功获取审查结果（字典格式）
-            llm_provider = 'claude-cli'
-            llm_model = 'claude-sonnet-4-5'  # Claude CLI 使用的模型
-
-            # 提取审查内容和元数据
             review_content = llm_result.get('content', '')
             review_score = llm_result.get('score', 0)
-            # duration_ms 和 token_usage 保存在 metadata 中，这里不需要单独提取
 
             structured_logger.log_llm_call(
                 provider=llm_provider,
                 model=llm_model,
                 success=True,
                 duration=llm_duration,
-                prompt_length=0,  # Claude CLI 不返回 prompt 长度
+                prompt_length=0,
                 response_length=len(review_content)
             )
 
-            # 构建报告数据（兼容现有格式）
             report_data = {
                 'content': review_content,
                 'metadata': llm_result.get('metadata', {}),
@@ -826,8 +832,15 @@ def process_merge_request_review(project_id, merge_request_iid, review_id, paylo
             review.status = 'failed'
             review.error_message = str(e)
             review.save()
-        except:
-            pass
+        except Exception as save_error:
+            structured_logger.log_error_with_context(
+                save_error,
+                context={
+                    "operation": "save_failed_review",
+                    "review_id": review.pk,
+                    "original_error": str(e)
+                }
+            )
 
 
 def build_code_context(changes):
