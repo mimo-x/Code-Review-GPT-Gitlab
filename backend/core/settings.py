@@ -72,6 +72,14 @@ DATABASES = {
     }
 }
 
+# 测试环境使用内存 SQLite，避免影响开发数据库
+import sys
+if 'test' in sys.argv or 'pytest' in sys.modules:
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': ':memory:',
+    }
+
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
