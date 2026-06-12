@@ -16,6 +16,8 @@ class LLMConfig(models.Model):
             ('claude', 'Anthropic Claude'),
             ('gemini', 'Google Gemini'),
             ('mock', 'Mock (No LLM)'),
+            ('unionllm', 'UnionLLM'),
+            ('litellm', 'LiteLLM'),
         ],
         default='openai'
     )
