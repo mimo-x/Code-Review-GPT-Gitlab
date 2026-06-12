@@ -538,6 +538,39 @@
                 </div>
               </div>
             </div>
+            <!-- 自定义Webhook专用字段 -->
+            <template v-if="channelForm.notification_type === 'custom_webhook'">
+              <div class="config-field-group md:col-span-2">
+                <label class="config-label">Webhook URL</label>
+                <input v-model="channelForm.webhook_url" type="text" class="input-field" placeholder="https://your-api.com/webhook" />
+              </div>
+              <div class="config-field-group">
+                <label class="config-label">HTTP 方法</label>
+                <select v-model="channelForm.http_method" class="input-field">
+                  <option value="POST">POST</option>
+                  <option value="PUT">PUT</option>
+                  <option value="PATCH">PATCH</option>
+                  <option value="GET">GET</option>
+                  <option value="DELETE">DELETE</option>
+                </select>
+              </div>
+              <div class="config-field-group">
+                <label class="config-label">超时 (秒)</label>
+                <input v-model="channelForm.http_timeout" type="number" class="input-field" min="1" max="300" placeholder="30" />
+              </div>
+              <div class="config-field-group md:col-span-2">
+                <label class="config-label">自定义 Headers (JSON)</label>
+                <textarea v-model="channelForm.headers_text" class="input-field" rows="3" placeholder='{"Authorization": "Bearer xxx", "Content-Type": "application/json"}'></textarea>
+              </div>
+              <div class="config-field-group md:col-span-2">
+                <label class="config-label">
+                  消息模板 (JSON)
+                  <span class="text-sm text-gray-400">可用变量: {'{'}project_name{'}'}, {'{'}mr_title{'}'}, {'{'}mr_author{'}'}, {'{'}review_content{'}'}, {'{'}review_score{'}'}, {'{'}timestamp{'}'}</span>
+                </label>
+                <textarea v-model="channelForm.payload_template_text" class="input-field font-mono text-xs" rows="8"
+                  placeholder='{"msgtype": "text", "text": {"content": "{review_content}"}}'></textarea>
+              </div>
+            </template>
             <div class="flex items-center gap-4 md:col-span-2">
               <label class="flex items-center gap-2 text-xs text-apple-600">
                 <input v-model="channelForm.is_active" type="checkbox" />
@@ -634,7 +667,8 @@ const baseChannelTypes: Record<string, string> = {
   wechat: '企业微信通知',
   slack: 'Slack 通知',
   gitlab: 'GitLab 评论',
-  email: '邮件通知'
+  email: '邮件通知',
+  custom_webhook: '自定义Webhook'
 }
 
 // 通道类型图标映射
@@ -658,6 +692,10 @@ const channelForm = ref({
   description: '',
   webhook_url: '',
   secret: '',
+  http_method: 'POST' as string,
+  http_timeout: 30 as number,
+  headers_text: '' as string,
+  payload_template_text: '' as string,
   is_active: true,
   is_default: false
 })
@@ -784,6 +822,10 @@ const resetChannelForm = (notificationType?: string) => {
     description: '',
     webhook_url: '',
     secret: '',
+    http_method: 'POST',
+    http_timeout: 30,
+    headers_text: '',
+    payload_template_text: '',
     is_active: true,
     is_default: false
   }
@@ -940,6 +982,10 @@ const editChannel = (channel: any) => {
     description: channel.description || '',
     webhook_url: channel.webhook_url || '',
     secret: channel.secret || '',
+    http_method: channel.http_method || 'POST',
+    http_timeout: channel.http_timeout || 30,
+    headers_text: channel.headers_text || '',
+    payload_template_text: channel.payload_template_text || '',
     is_active: channel.is_active !== false,
     is_default: channel.is_default || false
   }
@@ -969,6 +1015,14 @@ const submitChannelForm = async () => {
     if (['dingtalk', 'feishu'].includes(channelForm.value.notification_type)) {
       // Secret是可选的，如果为空则不发送
       payload.secret = channelForm.value.secret?.trim() || null
+    }
+
+    if (channelForm.value.notification_type === 'custom_webhook') {
+      payload.webhook_url = channelForm.value.webhook_url
+      payload.http_method = channelForm.value.http_method || 'POST'
+      payload.http_timeout = channelForm.value.http_timeout || 30
+      payload.headers_text = channelForm.value.headers_text || ''
+      payload.payload_template_text = channelForm.value.payload_template_text || ''
     }
 
     if (channelForm.value.id) {
