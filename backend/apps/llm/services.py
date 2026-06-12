@@ -40,6 +40,10 @@ class LLMService:
         self.model = llm_config.model
         self.config_source = "database"
         self.is_mock = self.provider == 'mock'
+        # LLM API 调用超时时间（秒），避免 MR 文件较多时无限等待
+        self.timeout = getattr(llm_config, 'timeout', None) or int(
+            os.environ.get('LLM_API_TIMEOUT', '600')
+        )
 
         api_key_status = "已配置" if self.api_key else "未配置"
         logger.info(
@@ -294,11 +298,12 @@ class LLMService:
         """
         from unionllm import unionchat
 
-        logger.info(f"[{self.request_id}] 调用 unionllm, model={self.model}")
+        logger.info(f"[{self.request_id}] 调用 unionllm, model={self.model}, timeout={self.timeout}s")
 
         response = unionchat(
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
+            timeout=self.timeout,
         )
 
         content = response.get('choices', [{}])[0].get('message', {}).get('content', '')
@@ -314,11 +319,12 @@ class LLMService:
         """
         import litellm
 
-        logger.info(f"[{self.request_id}] 回退到 litellm, model={self.model}")
+        logger.info(f"[{self.request_id}] 回退到 litellm, model={self.model}, timeout={self.timeout}s")
 
         response = litellm.completion(
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
+            timeout=self.timeout,
         )
 
         content = response.choices[0].message.content

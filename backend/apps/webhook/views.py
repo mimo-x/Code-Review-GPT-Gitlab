@@ -832,8 +832,15 @@ def process_merge_request_review(project_id, merge_request_iid, review_id, paylo
             review.status = 'failed'
             review.error_message = str(e)
             review.save()
-        except:
-            pass
+        except Exception as save_error:
+            structured_logger.log_error_with_context(
+                save_error,
+                context={
+                    "operation": "save_failed_review",
+                    "review_id": review.pk,
+                    "original_error": str(e)
+                }
+            )
 
 
 def build_code_context(changes):

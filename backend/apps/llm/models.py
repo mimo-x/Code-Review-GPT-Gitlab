@@ -24,6 +24,7 @@ class LLMConfig(models.Model):
     model = models.CharField(max_length=100, default='gpt-4')
     api_key = models.CharField(max_length=500, blank=True)
     api_base = models.URLField(max_length=500, blank=True, null=True)
+    timeout = models.IntegerField(default=600, help_text="LLM API 调用超时时间（秒），默认 600 秒")
 
     # 状态和时间戳
     is_active = models.BooleanField(default=True)
@@ -70,6 +71,7 @@ class NotificationConfig(models.Model):
         ('slack', 'Slack通知'),
         ('feishu', '飞书通知'),
         ('wechat', '企业微信通知'),
+        ('custom_webhook', '自定义Webhook'),
     ]
 
     id = models.AutoField(primary_key=True)
