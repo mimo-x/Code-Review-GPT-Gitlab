@@ -12,7 +12,12 @@ RUN apt-get update \
 
 # 为 claude 可执行文件预留路径并安装 Claude CLI
 ENV PATH="/root/.local/bin:${PATH}"
-RUN curl -fsSL https://claude.ai/install.sh | bash
+RUN curl -fsSL https://claude.ai/install.sh | bash \
+    && claude --version || echo "WARNING: Claude CLI installation failed"
+
+# 复制初始化脚本
+COPY scripts/init-claude.sh /usr/local/bin/init-claude
+RUN chmod +x /usr/local/bin/init-claude
 
 # 复制依赖并安装 Python 包
 WORKDIR /app
