@@ -208,6 +208,8 @@ class NotificationDispatcher:
                 return self._send_to_wechat(channel, report_data, mr_info, start_time)
             elif channel_type == 'email':
                 return self._send_to_email(channel, report_data, mr_info, start_time)
+            elif channel_type == 'custom_webhook':
+                return self._send_to_custom_webhook(channel, report_data, mr_info, start_time)
             else:
                 return {
                     'success': False,
@@ -445,13 +447,14 @@ class NotificationDispatcher:
 
     def _send_to_feishu(self, channel, report_data: Dict[str, Any], mr_info: Dict[str, Any], start_time: float) -> Dict[str, Any]:
         """
-        发送到飞书（使用简单文本格式，不使用签名）
+        发送到飞书（使用富文本卡片格式，支持签名校验）
         """
         try:
-            import requests
+            from .services import FeishuService
 
             config_dict = channel.config_dict
             webhook_url = config_dict.get('webhook_url') or config_dict.get('webhook')
+            secret = config_dict.get('secret')
 
             if not webhook_url:
                 return {
@@ -460,57 +463,24 @@ class NotificationDispatcher:
                     'response_time': time.time() - start_time
                 }
 
-            # 构建飞书消息
-            content = report_data['content']
-            mr_title = mr_info.get('title', '代码审查')
-            project_name = mr_info.get('project_name', '未知项目')
+            content = report_data.get('content', '')
+            score = report_data.get('score', 0)
 
-            # 限制消息长度
-            if len(content) > 1500:
-                content = content[:1500] + "\n\n...(内容过长已截断)"
-
-            # 构建简单的文本消息（不使用签名）
-            message_text = f"🤖 AI代码审查报告\n\n项目: {project_name}\nMR: {mr_title}\n时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n{content}"
-
-            payload = {
-                "msg_type": "text",
-                "content": {
-                    "text": message_text
+            service = FeishuService(webhook_url=webhook_url, secret=secret, request_id=self.request_id)
+            result = service.send_interactive(
+                title=mr_info.get('title', 'AI代码审查报告'),
+                content=content,
+                extra_info={
+                    'project_name': mr_info.get('project_name', '未知项目'),
+                    'mr_title': mr_info.get('title', ''),
+                    'score': score,
+                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 }
-            }
+            )
 
-            logger.debug(f"[{self.request_id}] 飞书请求payload: {payload}")
-            response = requests.post(webhook_url, json=payload, timeout=30)
             elapsed_time = time.time() - start_time
-
-            logger.info(f"[{self.request_id}] 飞书API响应 - 状态码:{response.status_code}, 响应内容:{response.text}")
-
-            if response.status_code == 200:
-                result = response.json()
-                if result.get('code') == 0:
-                    logger.info(f"[{self.request_id}] 飞书发送成功 - 耗时:{elapsed_time:.2f}秒")
-                    return {
-                        'success': True,
-                        'message': '飞书发送成功',
-                        'response_time': elapsed_time,
-                        'details': {'code': result.get('code')}
-                    }
-                else:
-                    logger.error(f"[{self.request_id}] 飞书发送失败 - 错误码:" + str(result.get("code")) + ", 消息:" + str(result.get("msg")) + ", 完整响应:" + str(result))
-                    return {
-                        'success': False,
-                        'message': "飞书API错误: " + str(result.get('msg', '未知错误')),
-                        'response_time': elapsed_time,
-                        'details': result
-                    }
-            else:
-                logger.error(f"[{self.request_id}] 飞书发送失败 - 状态码:{response.status_code}, 响应:{response.text}")
-                return {
-                    'success': False,
-                    'message': f'飞书发送失败 - HTTP {response.status_code}',
-                    'response_time': elapsed_time,
-                    'details': {'status_code': response.status_code, 'response': response.text[:200]}
-                }
+            result['response_time'] = elapsed_time
+            return result
 
         except Exception as e:
             elapsed_time = time.time() - start_time
@@ -668,5 +638,122 @@ MR: {mr_title}
             return {
                 'success': False,
                 'message': f'邮件发送异常: {str(e)}',
+                'response_time': elapsed_time
+            }
+
+    def _send_to_custom_webhook(self, channel, report_data: Dict[str, Any], mr_info: Dict[str, Any], start_time: float) -> Dict[str, Any]:
+        """
+        发送到自定义 Webhook URL，支持模板变量替换和自定义 HTTP 方法
+
+        config_data 格式:
+        {
+            "url": "https://example.com/webhook",
+            "method": "POST",
+            "headers": {"Authorization": "Bearer xxx", "Content-Type": "application/json"},
+            "payload_template": {
+                "msgtype": "text",
+                "text": {"content": "{review_content}"}
+            },
+            "timeout": 30
+        }
+        """
+        try:
+            import requests
+
+            config_dict = channel.config_dict
+            url = config_dict.get('url') or config_dict.get('webhook_url') or config_dict.get('webhook')
+
+            if not url:
+                return {
+                    'success': False,
+                    'message': '自定义Webhook URL未配置',
+                    'response_time': time.time() - start_time
+                }
+
+            method = config_dict.get('method', 'POST').upper()
+            headers = config_dict.get('headers', {})
+            payload_template = config_dict.get('payload_template', {})
+            req_timeout = config_dict.get('timeout', 30)
+
+            # 构建模板变量
+            content_text = report_data.get('content', '')
+            if len(content_text) > 3000:
+                content_text = content_text[:3000] + "\n\n...(内容过长已截断)"
+
+            template_vars = {
+                '{project_name}': mr_info.get('project_name', '未知项目'),
+                '{mr_title}': mr_info.get('title', ''),
+                '{mr_author}': mr_info.get('author', ''),
+                '{mr_url}': mr_info.get('web_url', ''),
+                '{review_content}': content_text,
+                '{review_score}': str(report_data.get('score', 0)),
+                '{timestamp}': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                '{source_branch}': mr_info.get('source_branch', ''),
+                '{target_branch}': mr_info.get('target_branch', ''),
+            }
+
+            # 模板变量替换
+            def apply_template(obj):
+                if isinstance(obj, str):
+                    result = obj
+                    for var, value in template_vars.items():
+                        result = result.replace(var, value)
+                    return result
+                elif isinstance(obj, dict):
+                    return {apply_template(k): apply_template(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [apply_template(item) for item in obj]
+                return obj
+
+            payload = apply_template(payload_template) if payload_template else {
+                "msgtype": "text",
+                "text": {"content": template_vars['{review_content}']}
+            }
+
+            logger.info(f"[{self.request_id}] 自定义Webhook 发送 - URL:{url}, method:{method}")
+
+            if method == 'GET':
+                response = requests.get(url, headers=headers, timeout=req_timeout)
+            elif method == 'PUT':
+                response = requests.put(url, json=payload, headers=headers, timeout=req_timeout)
+            elif method == 'PATCH':
+                response = requests.patch(url, json=payload, headers=headers, timeout=req_timeout)
+            elif method == 'DELETE':
+                response = requests.delete(url, headers=headers, timeout=req_timeout)
+            else:
+                response = requests.post(url, json=payload, headers=headers, timeout=req_timeout)
+
+            elapsed_time = time.time() - start_time
+
+            if 200 <= response.status_code < 300:
+                logger.info(f"[{self.request_id}] 自定义Webhook 发送成功 - 耗时:{elapsed_time:.2f}秒, 状态码:{response.status_code}")
+                return {
+                    'success': True,
+                    'message': f'自定义Webhook发送成功 - HTTP {response.status_code}',
+                    'response_time': elapsed_time,
+                    'details': {'status_code': response.status_code, 'url': url}
+                }
+            else:
+                logger.error(f"[{self.request_id}] 自定义Webhook 发送失败 - 状态码:{response.status_code}, 响应:{response.text[:200]}")
+                return {
+                    'success': False,
+                    'message': f'自定义Webhook发送失败 - HTTP {response.status_code}',
+                    'response_time': elapsed_time,
+                    'details': {'status_code': response.status_code, 'response': response.text[:200]}
+                }
+
+        except requests.exceptions.Timeout:
+            elapsed_time = time.time() - start_time
+            return {
+                'success': False,
+                'message': '自定义Webhook请求超时',
+                'response_time': elapsed_time
+            }
+        except Exception as e:
+            elapsed_time = time.time() - start_time
+            logger.error(f"[{self.request_id}] 自定义Webhook 发送异常: {e}", exc_info=True)
+            return {
+                'success': False,
+                'message': f'自定义Webhook发送异常: {str(e)}',
                 'response_time': elapsed_time
             }

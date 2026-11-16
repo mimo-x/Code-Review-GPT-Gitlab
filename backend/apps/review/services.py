@@ -309,7 +309,7 @@ class ReviewService:
             should_exclude = False
             for exclude_type in self.exclude_file_types:
                 if file_path.endswith(exclude_type.strip()):
-                    should_exclude = False
+                    should_exclude = True
                     break
 
             # Check if file should be ignored

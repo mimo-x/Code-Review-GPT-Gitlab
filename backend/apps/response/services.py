@@ -1,6 +1,7 @@
 """
 Response services for sending notifications (DingTalk, Slack, Feishu, WeChat Work, Email)
 """
+import json
 import logging
 import time
 import hmac
@@ -273,9 +274,25 @@ class FeishuService:
             self.webhook_url = None
             self.secret = None
 
+    def _generate_signature(self, timestamp):
+        """
+        生成飞书签名（HMAC-SHA256，与钉钉算法相同）
+        飞书的安全设置中如果选择了"签名校验"，则需要在请求时生成签名
+        """
+        if not self.secret:
+            return None
+        string_to_sign = f'{timestamp}\n{self.secret}'
+        hmac_code = hmac.new(
+            self.secret.encode('utf-8'),
+            string_to_sign.encode('utf-8'),
+            digestmod=hashlib.sha256
+        ).digest()
+        sign = base64.b64encode(hmac_code).decode('utf-8')
+        return urllib.parse.quote_plus(sign)
+
     def send_text(self, text):
         """
-        Send simple text message to Feishu (不使用签名)
+        Send simple text message to Feishu（支持签名校验）
         """
         if not self.webhook_url:
             logger.warning(f"[{self.request_id}] Feishu webhook URL not configured")
@@ -287,7 +304,14 @@ class FeishuService:
         try:
             start_time = time.time()
 
-            # 简单的文本消息，不使用签名
+            # 如果配置了 secret，生成签名
+            url = self.webhook_url
+            if self.secret:
+                timestamp = str(round(time.time() * 1000))
+                sign = self._generate_signature(timestamp)
+                if sign:
+                    url = f"{self.webhook_url}&timestamp={timestamp}&sign={sign}"
+
             payload = {
                 "msg_type": "text",
                 "content": {
@@ -296,7 +320,7 @@ class FeishuService:
             }
 
             logger.debug(f"[{self.request_id}] 飞书请求payload: {payload}")
-            response = requests.post(self.webhook_url, json=payload, timeout=30)
+            response = requests.post(url, json=payload, timeout=30)
             elapsed_time = time.time() - start_time
 
             logger.info(f"[{self.request_id}] 飞书API响应 - 状态码:{response.status_code}, 响应内容:{response.text}")
@@ -330,6 +354,127 @@ class FeishuService:
 
         except Exception as e:
             logger.error(f"[{self.request_id}] 飞书消息发送异常: {e}", exc_info=True)
+            return {
+                'success': False,
+                'message': f'飞书消息发送异常: {str(e)}',
+                'response_time': time.time() - start_time if 'start_time' in locals() else 0
+            }
+
+    def send_interactive(self, title, content, extra_info=None):
+        """
+        发送飞书富文本卡片消息
+
+        使用飞书消息卡片（card）模板，支持标题、评分、MR 信息等结构化展示
+
+        Args:
+            title: 卡片标题
+            content: 审查报告内容（纯文本，自动截断至 2000 字符）
+            extra_info: 额外信息字典 {project_name, mr_title, score, timestamp}
+        """
+        if not self.webhook_url:
+            logger.warning(f"[{self.request_id}] Feishu webhook URL not configured")
+            return {
+                'success': False,
+                'message': 'Feishu webhook URL未配置'
+            }
+
+        try:
+            start_time = time.time()
+
+            url = self.webhook_url
+            if self.secret:
+                timestamp_ts = str(round(time.time() * 1000))
+                sign = self._generate_signature(timestamp_ts)
+                if sign:
+                    url = f"{self.webhook_url}&timestamp={timestamp_ts}&sign={sign}"
+
+            extra_info = extra_info or {}
+            project_name = extra_info.get('project_name', '未知项目')
+            mr_title = extra_info.get('mr_title', '')
+            score = extra_info.get('score', 0)
+            ts = extra_info.get('timestamp', time.strftime('%Y-%m-%d %H:%M:%S'))
+
+            # 内容截断
+            if len(content) > 2000:
+                content = content[:2000] + "\n\n...(内容过长已截断，请查看完整报告)"
+
+            # 评分颜色
+            if score >= 80:
+                score_color = "green"
+            elif score >= 60:
+                score_color = "yellow"
+            else:
+                score_color = "red"
+
+            # 构建飞书卡片消息
+            payload = {
+                "msg_type": "interactive",
+                "card": {
+                    "header": {
+                        "title": {
+                            "tag": "plain_text",
+                            "content": f"🤖 {title}"
+                        },
+                        "template": score_color
+                    },
+                    "elements": [
+                        {
+                            "tag": "div",
+                            "fields": [
+                                {"is_short": True, "text": {"tag": "lark_md", "content": f"**项目:**\n{project_name}"}},
+                                {"is_short": True, "text": {"tag": "lark_md", "content": f"**MR:**\n{mr_title}"}},
+                                {"is_short": True, "text": {"tag": "lark_md", "content": f"**评分:**\n{score}/100"}},
+                                {"is_short": True, "text": {"tag": "lark_md", "content": f"**时间:**\n{ts}"}},
+                            ]
+                        },
+                        {"tag": "hr"},
+                        {
+                            "tag": "markdown",
+                            "content": content
+                        },
+                        {"tag": "hr"},
+                        {
+                            "tag": "note",
+                            "elements": [
+                                {"tag": "plain_text", "content": "此消息由 AI 代码审查系统自动发送"}
+                            ]
+                        }
+                    ]
+                }
+            }
+
+            logger.debug(f"[{self.request_id}] 飞书卡片请求payload: {json.dumps(payload, ensure_ascii=False)[:300]}")
+            response = requests.post(url, json=payload, timeout=30)
+            elapsed_time = time.time() - start_time
+
+            logger.info(f"[{self.request_id}] 飞书卡片API响应 - 状态码:{response.status_code}")
+
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('code') == 0:
+                    logger.info(f"[{self.request_id}] 飞书卡片发送成功 - 耗时:{elapsed_time:.2f}秒")
+                    return {
+                        'success': True,
+                        'message': '飞书卡片发送成功',
+                        'response_time': elapsed_time,
+                        'details': {'code': result.get('code')}
+                    }
+                else:
+                    # 卡片消息失败时，回退到简单文本消息
+                    logger.warning(f"[{self.request_id}] 飞书卡片发送失败({result.get('msg')})，回退到文本消息")
+                    fallback_text = f"🤖 {title}\n\n项目: {project_name}\nMR: {mr_title}\n评分: {score}/100\n\n{content}"
+                    return self.send_text(fallback_text)
+            else:
+                logger.error(f"[{self.request_id}] 飞书卡片发送失败 - 状态码:{response.status_code}")
+                return {
+                    'success': False,
+                    'message': f'飞书发送失败 - HTTP {response.status_code}',
+                    'response_time': elapsed_time,
+                    'details': {'status_code': response.status_code}
+                }
+
+        except Exception as e:
+            logger.error(f"[{self.request_id}] 飞书卡片发送异常: {e}", exc_info=True)
             return {
                 'success': False,
                 'message': f'飞书消息发送异常: {str(e)}',

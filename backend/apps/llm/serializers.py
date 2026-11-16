@@ -5,7 +5,7 @@ from .models import LLMConfig, GitLabConfig, NotificationConfig, NotificationCha
 class LLMConfigSerializer(serializers.ModelSerializer):
     class Meta:
         model = LLMConfig
-        fields = ['id', 'provider', 'model', 'api_key', 'api_base', 'is_active', 'created_at', 'updated_at']
+        fields = ['id', 'provider', 'model', 'api_key', 'api_base', 'timeout', 'is_active', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def create(self, validated_data):
@@ -176,6 +176,15 @@ class NotificationChannelSerializer(serializers.ModelSerializer):
 
         if instance.notification_type in {'dingtalk', 'feishu'}:
             data['secret'] = config_data.get('secret', '')
+        elif instance.notification_type == 'custom_webhook':
+            import json
+            data['webhook_url'] = config_data.get('url') or config_data.get('webhook_url', '')
+            data['http_method'] = config_data.get('method', 'POST')
+            data['http_timeout'] = config_data.get('timeout', 30)
+            headers = config_data.get('headers', {})
+            data['headers_text'] = json.dumps(headers, ensure_ascii=False) if isinstance(headers, dict) else str(headers)
+            payload = config_data.get('payload_template', {})
+            data['payload_template_text'] = json.dumps(payload, ensure_ascii=False) if isinstance(payload, dict) else str(payload)
         elif instance.notification_type == 'email':
             data['smtp_host'] = config_data.get('smtp_host', '')
             data['smtp_port'] = config_data.get('smtp_port', '')
@@ -199,6 +208,23 @@ class NotificationChannelSerializer(serializers.ModelSerializer):
                 config_data['secret'] = secret.strip()
             else:
                 config_data['secret'] = ''
+        elif notification_type == 'custom_webhook':
+            import json
+            config_data['url'] = data.get('webhook_url', '')
+            config_data['method'] = data.get('http_method', 'POST')
+            config_data['timeout'] = data.get('http_timeout', 30)
+            # Parse headers JSON text
+            headers_text = data.get('headers_text', '')
+            try:
+                config_data['headers'] = json.loads(headers_text) if headers_text and headers_text.strip() else {}
+            except (json.JSONDecodeError, TypeError):
+                config_data['headers'] = {}
+            # Parse payload template JSON text
+            payload_text = data.get('payload_template_text', '')
+            try:
+                config_data['payload_template'] = json.loads(payload_text) if payload_text and payload_text.strip() else {}
+            except (json.JSONDecodeError, TypeError):
+                config_data['payload_template'] = {"msgtype": "text", "text": {"content": "{review_content}"}}
         elif notification_type == 'email':
             config_data = {
                 'smtp_host': data.get('smtp_host', ''),
