@@ -1,16 +1,18 @@
 import axios from 'axios'
 import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { API_CONFIG } from '@/config/api'
+import router from '@/router'
 
 const service: AxiosInstance = axios.create({
   timeout: API_CONFIG.TIMEOUT,
-  headers: API_CONFIG.HEADERS
+  headers: API_CONFIG.HEADERS,
+  withCredentials: true  // 允许携带 Cookie
 })
 
 // 请求拦截器
 service.interceptors.request.use(
   (config) => {
-    // 可以在这里添加token等
+    // Cookie 会自动携带，不需要手动添加 Authorization header
     return config
   },
   (error) => {
@@ -36,10 +38,21 @@ service.interceptors.response.use(
     console.error('Response error:', error)
 
     if (error.response) {
-      const { status } = error.response
+      const { status, config } = error.response
+
+      // 判断是否是登录接口
+      const isLoginRequest = config.url?.includes('/auth/login')
+
       switch (status) {
         case 401:
-          alert('未授权，请重新登录')
+          // 如果是登录接口返回 401，不做任何处理，让登录页面自己处理错误提示
+          if (isLoginRequest) {
+            break
+          }
+          // 其他接口返回 401，说明 token 过期，清除用户名并跳转到登录页
+          localStorage.removeItem('username')
+          router.push('/login')
+          alert('登录已过期，请重新登录')
           break
         case 403:
           alert('拒绝访问')
