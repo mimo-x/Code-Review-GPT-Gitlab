@@ -207,6 +207,18 @@ npm run build
           <sub><b>andaoai</b></sub>
         </a>
       </td>
+      <td align="center" valign="top" width="14.28%">
+        <a href="https://github.com/zhanghuaiwei">
+          <img src="https://avatars.githubusercontent.com/u/264941437?v=4" width="100px;" alt="zhanghuaiwei" style="border-radius: 50%;" /><br />
+          <sub><b>zhanghuaiwei</b></sub>
+        </a>
+      </td>
+      <td align="center" valign="top" width="14.28%">
+        <a href="https://github.com/chenhuping">
+          <img src="https://avatars.githubusercontent.com/u/38783289?v=4" width="100px;" alt="chenhuping" style="border-radius: 50%;" /><br />
+          <sub><b>chenhuping</b></sub>
+        </a>
+      </td>
     </tr>
   </tbody>
 </table>
