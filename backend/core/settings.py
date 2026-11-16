@@ -5,6 +5,19 @@ Django settings for Code Review GPT project.
 import os
 from pathlib import Path
 
+# 加载环境变量
+try:
+    from dotenv import load_dotenv
+    # .env 文件在项目根目录（backend 的上一级）
+    env_path = Path(__file__).resolve().parent.parent.parent / '.env'
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path)
+        print(f"✓ 已加载环境变量文件: {env_path}")
+    else:
+        print(f"⚠ 环境变量文件不存在: {env_path}")
+except ImportError:
+    print("⚠ python-dotenv 未安装，将使用系统环境变量")
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -31,6 +44,7 @@ INSTALLED_APPS = [
     'apps.review',
     'apps.response',
     'apps.llm',
+    'apps.api_auth',
 ]
 
 MIDDLEWARE = [
