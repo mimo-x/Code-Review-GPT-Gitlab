@@ -93,6 +93,10 @@ class TestApiPath:
             run_review(review_record, review_payload, rule)
         prompt = unionchat.call_args.kwargs["messages"][0]["content"]
         assert "只看 feat: add new feature 的安全问题" in prompt
+        # 自定义要求只替换审查重点，diff 和输出格式仍由平台追加
+        assert "+    result = 0" in prompt
+        assert '"findings"' in prompt
+        assert "你是一位资深代码审查专家" not in prompt
 
 
 @pytest.mark.django_db
@@ -107,7 +111,9 @@ class TestClaudePath:
         record = fake_claude.record()
         assert record["source"] == HEAD_SOURCE
         assert "+    result = 0" in record["stdin"]
-        assert record["argv"] == ["-p", "--output-format", "json"]
+        assert record["argv"][:3] == ["-p", "--output-format", "json"]
+        assert record["argv"][3:7] == ["--setting-sources", "user", "--strict-mcp-config", "--disallowedTools"]
+        assert "Bash" in record["argv"][7] and "Edit" in record["argv"][7]
         assert "test-token" not in record["git_config"]
         assert any("审查完成" in body for body in gitlab.bodies)
 
@@ -119,6 +125,26 @@ class TestClaudePath:
         review = run_review(review_record, review_payload)
         assert review.status == "failed"
         assert "仓库" in review.error_message
+
+    def test_relative_cli_path_is_resolved_before_entering_the_checkout(
+        self, gitlab, llm, fake_claude, review_record, review_payload
+    ):
+        import os
+        llm(provider="claude", model="claude")
+        fake_claude.config.cli_path = os.path.relpath(fake_claude.path)
+        fake_claude.config.save()
+        review = run_review(review_record, review_payload)
+        assert review.status == "completed", review.error_message
+
+    def test_empty_cli_result_is_a_failure(
+        self, gitlab, llm, fake_claude, review_record, review_payload
+    ):
+        llm(provider="claude", model="claude")
+        fake_claude.response.write_text("  ")
+        review = run_review(review_record, review_payload)
+        assert review.status == "failed"
+        assert "没有返回审查内容" in review.error_message
+        assert not gitlab.bodies
 
     def test_fails_when_the_cli_is_missing(
         self, gitlab, llm, fake_claude, review_record, review_payload

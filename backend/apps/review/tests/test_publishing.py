@@ -206,6 +206,54 @@ class TestInlineThreads:
         body = gitlab.plain_notes[0]["body"]
         assert "循环初值错误（仍存在）" in body and "本次未再报告" not in body
 
+    def test_carried_over_issue_stays_linked_on_later_pushes(self, gitlab, llm, review_payload):
+        llm()
+        review_with(model_output(problem()), review_payload)
+        moved = problem(code="for item in items:")
+        review_with(model_output(moved), review_payload)
+        review_with(model_output(moved), review_payload)
+        assert len(gitlab.inline_notes) == 1
+        assert "本次未再报告" not in gitlab.plain_notes[0]["body"]
+
+    def test_draft_created_by_the_owner_meanwhile_is_not_published(self, gitlab, llm, review_payload):
+        llm()
+        create = gitlab.draft_api
+
+        def owner_drafts_meanwhile(method, path, data=None):
+            result = create(method, path, data)
+            if method == "post" and path.endswith("/draft_notes"):
+                gitlab.drafts.append({"id": 1, "note": "本人刚写的草稿", "position": None})
+            return result
+
+        gitlab.draft_api = owner_drafts_meanwhile
+        review = review_with(model_output(problem()), review_payload)
+        assert review.status == "completed"
+        assert gitlab.bulk_publishes == 0
+        assert gitlab.drafts == [{"id": 1, "note": "本人刚写的草稿", "position": None}]
+        assert len(gitlab.inline_notes) == 1
+
+
+@pytest.mark.django_db
+class TestDiffSnapshot:
+    def test_truncated_diff_is_not_published_as_clean(self, gitlab, llm, review_payload):
+        llm()
+        gitlab._changes["overflow"] = True
+        review_with(model_output(summary="没有问题"), review_payload)
+        body = gitlab.plain_notes[0]["body"]
+        assert "### 已审查的部分未发现问题" in body and "部分改动" in body
+
+    def test_refs_from_a_later_push_are_not_used(self, gitlab, llm, review_payload, origin):
+        llm()
+        del gitlab._changes["diff_refs"]
+        gitlab._changes["sha"] = origin.head_sha
+        version = type("V", (), {"base_commit_sha": origin.base_sha,
+                                 "start_commit_sha": origin.base_sha, "head_commit_sha": "f" * 40})
+        gitlab.diffs = type("D", (), {"list": staticmethod(lambda **_: [version])})
+        review = review_with(model_output(problem()), review_payload)
+        assert review.status == "completed"
+        assert not gitlab.inline_notes
+        assert "未能挂到代码行的问题（1）" in gitlab.plain_notes[0]["body"]
+
 
 def with_im_channel(result=None):
     channel = type("Channel", (), {"id": 1, "name": "IM", "notification_type": "slack"})()

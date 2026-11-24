@@ -13,6 +13,7 @@ _LABELS = {
             Verdict.CHANGES_MAJOR: "建议修复后再合并",
             Verdict.ATTENTION: "可以合并，有几处建议",
             Verdict.CLEAN: "未发现需要处理的问题",
+            Verdict.PARTIAL: "已审查的部分未发现问题",
             Verdict.UNSTRUCTURED: "审查完成",
         },
         "separator": "：",
@@ -26,6 +27,7 @@ _LABELS = {
         "line": "第 {line} 行", "lines": "第 {start}-{end} 行", "old_prefix": "原",
         "reviewed_files": "已审查 {count} 个文件", "at_commit": "提交 {commit}",
         "skipped_files": "跳过 {count} 个文件",
+        "truncated": "GitLab 只返回了部分改动，没返回的部分这次没有审查。",
         "digest_verdict": "结论", "digest_issues": "问题", "digest_top": "最需要关注",
         "digest_link": "查看 MR", "digest_none": "无",
     },
@@ -36,6 +38,7 @@ _LABELS = {
             Verdict.CHANGES_MAJOR: "Fix before merging",
             Verdict.ATTENTION: "OK to merge, a few suggestions",
             Verdict.CLEAN: "No issues need attention",
+            Verdict.PARTIAL: "No issues in the reviewed part",
             Verdict.UNSTRUCTURED: "Review complete",
         },
         "separator": ": ",
@@ -49,6 +52,7 @@ _LABELS = {
         "line": "line {line}", "lines": "lines {start}-{end}", "old_prefix": "old ",
         "reviewed_files": "Reviewed {count} files", "at_commit": "at {commit}",
         "skipped_files": "skipped {count} files",
+        "truncated": "GitLab returned only part of the diff. The rest was not reviewed.",
         "digest_verdict": "Verdict", "digest_issues": "Issues", "digest_top": "Top issue",
         "digest_link": "Open MR", "digest_none": "None",
     },
@@ -59,6 +63,7 @@ VERDICT_ICONS = {
     Verdict.CHANGES_MAJOR: "🟠 ",
     Verdict.ATTENTION: "🟡 ",
     Verdict.CLEAN: "",
+    Verdict.PARTIAL: "",
     Verdict.UNSTRUCTURED: "",
 }
 
@@ -67,6 +72,7 @@ VERDICT_TONES = {
     Verdict.CHANGES_MAJOR: "orange",
     Verdict.ATTENTION: "yellow",
     Verdict.CLEAN: "green",
+    Verdict.PARTIAL: "blue",
     Verdict.UNSTRUCTURED: "blue",
 }
 

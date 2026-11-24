@@ -76,6 +76,9 @@ class DiffIndex:
             self._by_path.setdefault(new_path, file_diff)
             self._by_path.setdefault(old_path, file_diff)
 
+    def has_exact(self, path: str) -> bool:
+        return path.removeprefix("./") in self._by_path
+
     def get(self, path: str) -> FileDiff | None:
         path = path.removeprefix("./")
         return self._by_path.get(path) or self._by_path.get(re.sub(r"^[ab]/", "", path))

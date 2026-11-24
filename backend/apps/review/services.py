@@ -88,7 +88,8 @@ class GitlabService:
         try:
             project = self.gl.projects.get(project_id)
             merge_request = project.mergerequests.get(merge_request_iid)
-            changes = merge_request.changes()
+            # access_raw_diffs 绕过 GitLab 对单个 diff 的大小限制；旧版本会忽略这个参数
+            changes = merge_request.changes(access_raw_diffs=True)
 
             # changes() 已经返回字典格式，直接返回
             return changes

@@ -56,7 +56,7 @@ class LLMService:
             except Exception as exc:
                 logger.warning(f"[{self.request_id}] {name} 调用失败: {exc}")
                 continue
-            if text:
+            if text and text.strip():
                 logger.info(f"[{self.request_id}] {name} 调用成功, 响应长度: {len(text)}")
                 return Completion(text=text, client=name)
             logger.warning(f"[{self.request_id}] {name} 返回空响应")
@@ -82,10 +82,6 @@ def _routed_model(provider, model, api_base):
     prefix = _ROUTE_PREFIX.get((provider or '').lower())
     if not prefix or model.startswith(f'{prefix}/'):
         return model
-    if not api_base and '/' in model:
-        import litellm
-
-        # 没有自定义网关时，gemini/xxx 这类前缀是用户明确指定的路由
-        if model.split('/', 1)[0] in litellm.provider_list:
-            return model
+    # 模型名里的其他前缀（gemini/xxx 等）只当作模型名的一部分：
+    # 配置的 Key 属于所选提供商，不能被发到别家的接口
     return f'{prefix}/{model}'

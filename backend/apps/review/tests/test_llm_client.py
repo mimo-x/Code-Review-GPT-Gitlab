@@ -74,9 +74,19 @@ def test_credentials_are_not_written_to_the_process_environment(gateway, monkeyp
 @pytest.mark.parametrize("provider,model,base,routed", [
     ("deepseek", "deepseek-chat", None, "deepseek/deepseek-chat"),
     ("openai", "gpt-4o", None, "openai/gpt-4o"),
-    ("openai", "gemini/gemini-2.0-flash", None, "gemini/gemini-2.0-flash"),
+    # Key 属于所选提供商，模型名里的其他前缀不改变请求发往哪里
+    ("openai", "gemini/gemini-2.0-flash", None, "openai/gemini/gemini-2.0-flash"),
     ("gemini", "gemini-2.0-flash", None, "gemini/gemini-2.0-flash"),
     ("litellm", "groq/llama", None, "groq/llama"),
 ])
 def test_model_routing(provider, model, base, routed):
     assert _routed_model(provider, model, base) == routed
+
+
+def test_blank_response_falls_back_to_the_next_client():
+    from unittest.mock import patch
+    message = SimpleNamespace(content="回退结果")
+    with patch("unionllm.unionchat", return_value={"choices": [{"message": {"content": " \n "}}]}), \
+            patch("litellm.completion", return_value=SimpleNamespace(choices=[SimpleNamespace(message=message)])):
+        completion = LLMService(config("deepseek", "deepseek-chat", None)).complete("hello")
+    assert (completion.text, completion.client) == ("回退结果", "litellm")

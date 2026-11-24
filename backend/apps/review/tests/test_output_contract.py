@@ -46,8 +46,22 @@ class TestParseOutput:
         assert "第一条" in parsed.summary
 
     def test_drops_entries_without_path_or_title(self):
-        parsed = parse_output(json.dumps({"findings": [{"title": "无路径"}, "x", {"path": "a"}]}))
-        assert parsed.structured and parsed.findings == []
+        text = json.dumps({"findings": [{"title": "无路径"}, {"path": "pay.py", "title": "问题"}]})
+        assert [f.title for f in parse_output(text).findings] == ["问题"]
+
+    def test_findings_that_cannot_be_read_are_not_a_clean_result(self):
+        text = json.dumps({"summary": "有问题", "findings": [{"title": "无路径"}, "x"]})
+        parsed = parse_output(text)
+        assert not parsed.structured and parsed.summary == text
+
+    def test_empty_findings_are_a_clean_result(self):
+        assert parse_output('{"summary": "", "findings": []}').structured
+
+    def test_invalid_line_number_does_not_drop_later_findings(self):
+        text = '{"findings": [{"path": "pay.py", "title": "a", "start_line": 11, "end_line": 1e400},' \
+               ' {"path": "pay.py", "title": "b", "end_line": 12}]}'
+        first, second = parse_output(text).findings
+        assert (first.start_line, first.end_line, second.end_line) == (11, 11, 12)
 
 
 class TestAnchoring:
@@ -95,6 +109,25 @@ class TestPostprocess:
         finalize_findings([second], DiffIndex([{"old_path": "pay.py", "new_path": "pay.py", "diff": moved}]))
         assert first.end_line != second.end_line
         assert first.fingerprint == second.fingerprint
+
+    def test_same_title_on_separate_snippets_is_kept(self):
+        kept = finalize_findings([
+            finding(title="返回值没有检查", existing_code="if order.paid:"),
+            finding(title="返回值没有检查", existing_code="refund(order)"),
+        ], diff_index())
+        assert len(kept) == 2
+
+    def test_identical_lines_get_distinct_and_stable_fingerprints(self):
+        body = ["+a = 1", "+save()", "+b = 2", "+c = 3", "+save()", "+d = 4"]
+        def run(lines, start):
+            diff = DiffIndex([{"old_path": "m.py", "new_path": "m.py",
+                               "diff": f"@@ -0,0 +{start},{len(lines)} @@\n" + "\n".join(lines) + "\n"}])
+            items = [finding(path="m.py", title=f"问题{n}", existing_code="save()", end_line=start + n)
+                     for n in (1, 4)]
+            return [f.fingerprint for f in finalize_findings(items, diff)]
+        first = run(body, 1)
+        assert len(set(first)) == 2
+        assert run(body, 21) == first
 
     def test_is_idempotent(self):
         items = [finding(existing_code="if order.paid:")]

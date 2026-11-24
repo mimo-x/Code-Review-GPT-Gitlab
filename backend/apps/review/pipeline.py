@@ -112,6 +112,8 @@ def _execute(review, payload, matched_rule, request_id, log) -> None:
         revisions=revisions,
         language=request.language,
         skipped_paths=skipped_paths,
+        # GitLab 的 diff 超过实例限制时会截断并标记 overflow
+        truncated=bool(response.get("overflow")),
     )
     _save_result(review, report, changes)
     log.log_report_generation(
@@ -151,9 +153,12 @@ def _merge_request_info(review, payload, changes) -> MergeRequestInfo:
 
 def _revisions(gitlab, review, response) -> Revisions | None:
     """优先用和 diff 同一次响应返回的 diff_refs，保证 SHA 和审查内容一致。"""
-    refs = response.get("diff_refs") or gitlab.get_latest_diff_refs(
-        review.project_id, review.merge_request_iid
-    )
+    refs = response.get("diff_refs")
+    if not refs:
+        refs = gitlab.get_latest_diff_refs(review.project_id, review.merge_request_iid)
+        # 两次读取之间可能有新的 push，只有最新版本正是这份 diff 的提交时才能用
+        if refs and refs.get("head_sha") != response.get("sha"):
+            return None
     if not refs or not all(refs.get(key) for key in ("base_sha", "start_sha", "head_sha")):
         return None
     return Revisions(refs["base_sha"], refs["start_sha"], refs["head_sha"])

@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 
 _QUICK_ACTION = re.compile(r"^([ \t>]*)/(?=[A-Za-z])", re.MULTILINE)
-_MENTION = re.compile(r"(?<![\w.+/-])@(?=[\w.-])")
+_MENTION = re.compile(r"(?<!\w)@(?=[\w.-])")
 _LAYOUT_TAG = re.compile(r"<(/?)(details|summary)\b", re.IGNORECASE)
 _ZERO_WIDTH_SPACE = "​"
 

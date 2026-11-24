@@ -1,5 +1,6 @@
 """审查流程测试的共享替身：内存版 GitLab、真实本地 Git 仓库和假的 Claude CLI。"""
 import json
+import os
 import stat
 import subprocess
 import sys
@@ -30,7 +31,7 @@ def git(cwd, *args):
         capture_output=True,
         text=True,
         env={
-            "PATH": "/usr/bin:/bin:/opt/homebrew/bin",
+            "PATH": os.environ["PATH"],
             "GIT_AUTHOR_NAME": "t",
             "GIT_AUTHOR_EMAIL": "t@example.com",
             "GIT_COMMITTER_NAME": "t",
@@ -86,7 +87,7 @@ class FakeMergeRequest:
         self.notes = FakeNotes(self)
         self.discussions = FakeDiscussions(self)
 
-    def changes(self):
+    def changes(self, **_kwargs):
         return self._changes
 
     def add_note(self, body, position=None, author_id=99):
@@ -278,7 +279,7 @@ def fake_claude(tmp_path, monkeypatch, settings):
     response.write_text("审查完成，没有发现问题。")
     script = tmp_path / "fake-claude"
     script.write_text(f"""#!{sys.executable}
-import json, os, stat, sys
+import json, os, stat, subprocess, sys
 if "--help" in sys.argv or "--version" in sys.argv:
     print("fake claude 1.0")
     raise SystemExit(0)
@@ -288,7 +289,10 @@ json.dump({{
     "source": open("app.py").read(),
     "stdin": stdin,
     "argv": sys.argv[1:],
-    "git_config": open(os.path.join(os.popen("git rev-parse --git-common-dir").read().strip(), "config")).read(),
+    "git_config": open(os.path.join(subprocess.run(
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], capture_output=True, text=True, check=True,
+        env={{k: v for k, v in os.environ.items() if not k.startswith("GIT_")}},
+    ).stdout.strip(), "config")).read(),
 }}, open({str(record)!r}, "w"))
 print(json.dumps({{"type": "result", "subtype": "success", "is_error": False,
     "result": open({str(response)!r}).read(), "duration_ms": 10,

@@ -60,6 +60,9 @@ def parse_output(text: str) -> ParsedOutput:
     if data is None:
         return ParsedOutput(structured=False, summary=(text or "").strip())
     findings = [f for f in map(_to_finding, data["findings"]) if f is not None]
+    if data["findings"] and not findings:
+        # 报了问题但一个都读不出来，不能当成"没有问题"
+        return ParsedOutput(structured=False, summary=text.strip())
     return ParsedOutput(
         structured=True,
         summary=_text(data.get("summary")),
@@ -116,7 +119,7 @@ def _code(value) -> str | None:
 def _line(value) -> int | None:
     try:
         number = int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     return number if number > 0 else None
 

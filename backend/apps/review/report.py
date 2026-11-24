@@ -13,6 +13,7 @@ class Verdict(Enum):
     CHANGES_MAJOR = "changes_major"
     ATTENTION = "attention"
     CLEAN = "clean"
+    PARTIAL = "partial"
     UNSTRUCTURED = "unstructured"
 
 
@@ -26,12 +27,16 @@ class ReviewReport:
     revisions: Revisions | None
     language: str
     skipped_paths: tuple[str, ...] = ()
+    truncated: bool = False
 
     @property
     def verdict(self) -> Verdict:
         """结论由规则决定，只用于展示，不会触发 approve 或阻止合并。"""
         if not self.result.structured:
             return Verdict.UNSTRUCTURED
+        if self.truncated and not self.findings:
+            # 没看到全部改动，不能说"没有问题"
+            return Verdict.PARTIAL
         severities = {finding.severity for finding in self.findings}
         if "critical" in severities:
             return Verdict.CHANGES_CRITICAL

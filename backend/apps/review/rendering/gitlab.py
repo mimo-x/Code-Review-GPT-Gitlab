@@ -56,11 +56,13 @@ def render_summary(report: ReviewReport, history: PublishHistory | None = None) 
     labels = labels_for(report.language)
     verdict = report.verdict
     parts = [f"### {VERDICT_ICONS[verdict]}{labels['verdict'][verdict]}"]
+    if report.truncated:
+        parts.append(labels["truncated"])
 
     if verdict is Verdict.UNSTRUCTURED:
         parts += [labels["unstructured_hint"], sanitize(report.result.summary)]
     else:
-        if verdict is not Verdict.CLEAN and report.result.summary:
+        if verdict not in (Verdict.CLEAN, Verdict.PARTIAL) and report.result.summary:
             parts.append(sanitize(report.result.summary))
         parts += _render_findings(report, history, labels)
 
@@ -89,7 +91,9 @@ def _render_findings(report, history, labels) -> list[str]:
         parts.append(_details(title, _render_issue_list(unanchored, report, labels, set())))
     if rest:
         title = labels["more"].format(count=len(rest))
-        parts.append(_details(title, _render_issue_list(rest, report, labels, delivered)))
+        # 没有发布记录时（如存进数据库的副本）不知道哪些有讨论，说明都保留
+        known = delivered if history is not None else set()
+        parts.append(_details(title, _render_issue_list(rest, report, labels, known)))
     return parts
 
 

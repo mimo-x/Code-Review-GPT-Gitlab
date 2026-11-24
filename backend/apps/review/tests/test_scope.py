@@ -126,3 +126,11 @@ class TestPipelineScope:
         assert "不要针对它们报告问题" in record["stdin"]
         assert "SECRET_FLAG" not in record["stdin"]
         assert record["source"]
+
+
+def test_prefix_alias_cannot_bypass_an_exclusion():
+    included = {"old_path": "private.py", "new_path": "private.py", "diff": "@@ -1 +1 @@\n-a\n+b\n"}
+    scope = ReviewScope(ignore_patterns=("b/private.py",))
+    kept = finalize_findings([Finding(path="b/private.py", title="被排除的文件", end_line=1)],
+                             DiffIndex([included]), scope)
+    assert kept == []

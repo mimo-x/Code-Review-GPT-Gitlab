@@ -178,7 +178,25 @@ class TestMarkers:
         assert parse_findings_marker(old) == [{"fp": "abc"}]
 
 
+class TestPartialDiff:
+    def test_truncated_diff_is_never_called_clean(self):
+        built = report(summary="没有问题。")
+        built.truncated = True
+        text = render_summary(built)
+        assert text.startswith("### 已审查的部分未发现问题\n\nGitLab 只返回了部分改动")
+        assert "未发现需要处理的问题" not in text
+
+    def test_saved_copy_keeps_explanations_of_folded_items(self):
+        text = render_summary(report([issue(), issue("minor", title="循环内查询", body="会很慢。",
+                                                     end_line=3, existing_code="c = 3")]))
+        assert "会很慢。" in text
+
+
 class TestSafety:
+    def test_mentions_after_punctuation_do_not_notify(self):
+        for text in ("-@all", ".@all", "(@all)", "，@all"):
+            assert "@all" not in sanitize(text)
+
     def test_quick_actions_are_escaped(self):
         for line in ("/merge", "  /approve", "> /assign @x", "说明\n/close"):
             assert not re.search(r"^[ \t>]*/[a-z]", sanitize(line), re.MULTILINE)

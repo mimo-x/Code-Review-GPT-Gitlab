@@ -184,29 +184,50 @@ class GitLabReviewPublisher:
     def _submit_as_review(self, report, comments: list[_Comment]) -> tuple[set[str], int]:
         """先存成草稿再一次性发布，MR 上是一轮完整的 review，每个讨论仍可单独解决。"""
         mr = report.mr
-        self._discard_own_drafts(mr)
-        drafted, failed = [], 0
+        own, foreign = self._list_drafts(mr)
+        if foreign:
+            raise _ReviewUnavailable("账号在这个 MR 上还有其他未发布的草稿")
+        # 上次中断留下的草稿，不删会随这次一起发出
+        self._delete_drafts(mr, [draft["id"] for draft in own])
+
+        drafted, draft_ids, failed = [], [], 0
         for comment in comments:
             try:
-                self.gitlab.create_draft_note(mr.project_id, mr.mr_iid, comment.body, comment.position)
+                created = self.gitlab.create_draft_note(
+                    mr.project_id, mr.mr_iid, comment.body, comment.position
+                )
             except Exception as exc:
                 failed += 1
                 logger.warning("[%s] 行内草稿创建失败: %s", self.request_id, exc)
                 continue
             drafted.append(comment)
+            draft_ids.append(created["id"])
         if not drafted:
             return set(), failed
+
+        # 发布前再确认一次，账号本人在这期间新建的草稿不能被一起发出
+        try:
+            _, foreign = self._list_drafts(mr)
+        except _ReviewUnavailable:
+            foreign = 1
+        if foreign:
+            logger.info("[%s] 发布前出现了其他草稿，改为逐条发布", self.request_id)
+            self._delete_drafts(mr, draft_ids)
+            posted, retry_failed = self._submit_one_by_one(report, drafted)
+            return posted, failed + retry_failed
+
         try:
             self.gitlab.publish_draft_notes(mr.project_id, mr.mr_iid)
         except Exception as exc:
             logger.warning("[%s] 批量发布草稿失败，改为逐条补发: %s", self.request_id, exc)
-            return self._recover(report, drafted, failed)
+            return self._recover(report, drafted, draft_ids, failed)
         return set().union(*(comment.fingerprints for comment in drafted)), failed
 
-    def _discard_own_drafts(self, mr) -> None:
-        """批量发布会发出账号的全部草稿，所以只在草稿都是我们留下的时候使用。
+    def _list_drafts(self, mr) -> tuple[list[dict], int]:
+        """返回我们留下的草稿和其他草稿的数量。
 
-        配置的若是个人令牌，草稿里可能有本人没写完的评审，这时不能碰。
+        批量发布会发出账号的全部草稿，配置的若是个人令牌，里面可能有本人没写完的评审，
+        所以只在草稿都是我们生成的时候才批量发布。
         """
         try:
             drafts = self.gitlab.list_draft_notes(mr.project_id, mr.mr_iid)
@@ -215,19 +236,19 @@ class GitLabReviewPublisher:
         except Exception as exc:
             raise _ReviewUnavailable(f"读取草稿失败: {exc}") from exc
         own = [draft for draft in drafts if parse_findings_marker(draft.get("note", ""))]
-        if len(own) != len(drafts):
-            raise _ReviewUnavailable("账号在这个 MR 上还有其他未发布的草稿")
-        # 上次中断留下的草稿，不删会随这次一起发出
-        for draft in own:
-            self.gitlab.delete_draft_note(mr.project_id, mr.mr_iid, draft["id"])
+        return own, len(drafts) - len(own)
 
-    def _recover(self, report, drafted: list[_Comment], failed: int) -> tuple[set[str], int]:
-        """批量发布失败时可能已发出一部分：清掉剩余草稿，只补发确实没发出去的。"""
+    def _delete_drafts(self, mr, draft_ids) -> None:
+        for draft_id in draft_ids:
+            try:
+                self.gitlab.delete_draft_note(mr.project_id, mr.mr_iid, draft_id)
+            except Exception as exc:
+                logger.warning("[%s] 删除草稿 %s 失败: %s", self.request_id, draft_id, exc)
+
+    def _recover(self, report, drafted, draft_ids, failed: int) -> tuple[set[str], int]:
+        """批量发布失败时可能已发出一部分：删掉剩余草稿，只补发确实没发出去的。"""
         mr = report.mr
-        try:
-            self._discard_own_drafts(mr)
-        except _ReviewUnavailable as exc:
-            logger.warning("[%s] 清理草稿失败: %s", self.request_id, exc)
+        self._delete_drafts(mr, draft_ids)
         state, readable = self._load_state(mr.project_id, mr.mr_iid)
         if not readable:
             # 不知道哪些已发出，宁可让问题留在总结里，也不重复发
@@ -282,16 +303,19 @@ def _carry_over(findings: list[Finding], state: _PublishedState) -> set[str]:
     }
     carried: set[str] = set()
     for finding in findings:
-        if finding.fingerprint in previous:
+        # 只看行内讨论：上一轮总结里已经记的是新指纹，但讨论标记里仍是旧指纹
+        if finding.fingerprint in state.findings:
             continue
-        old = next((
+        candidates = [
             fp for fp, item in unmatched.items()
             if fp not in carried
             and _normalized(item.get("title", "")) == _normalized(finding.title)
             and str(item.get("location", "")).rsplit(":", 1)[0] == finding.path
-        ), None)
-        if old is None:
+        ]
+        if len(candidates) != 1:
+            # 同一文件里有多个同名问题时分不清是哪一个，宁可当成新问题
             continue
+        old = candidates[0]
         carried.add(old)
         for records in (state.findings, state.summarized):
             if old in records:

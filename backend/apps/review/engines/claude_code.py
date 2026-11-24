@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
 import subprocess
 
 from django.conf import settings
@@ -13,6 +14,16 @@ from .output import parse_output
 from .prompting import build_review_prompt
 
 logger = logging.getLogger(__name__)
+
+# 工作目录是 MR 的代码，内容不可信：
+# 不加载仓库里的 .claude 配置和 MCP 服务（其中的 hook 会在服务器上执行命令），
+# 也不允许执行命令或修改文件，只用读取和搜索类工具
+RUN_ARGS = (
+    "-p", "--output-format", "json",
+    "--setting-sources", "user",
+    "--strict-mcp-config",
+    "--disallowedTools", "Bash Edit Write NotebookEdit",
+)
 
 WORKSPACE_NOTE = (
     "当前目录是这个 MR 最新提交的工作区，需要上下文时可以读取和搜索其中的文件。"
@@ -78,9 +89,14 @@ class ClaudeCli:
             return False, None, result.stderr
         return True, result.stdout.strip(), None
 
+    def executable(self) -> str:
+        """相对路径按服务进程的目录解析；审查时工作目录是 MR 检出，不能再按它查找。"""
+        found = shutil.which(self.cli_path)
+        return os.path.abspath(found) if found else self.cli_path
+
     def _probe(self, flag: str) -> subprocess.CompletedProcess:
         return subprocess.run(
-            [self.cli_path, flag],
+            [self.executable(), flag],
             env=self.environment(),
             capture_output=True,
             text=True,
@@ -92,7 +108,7 @@ class ClaudeCli:
         """提示词走 stdin：diff 可能超过单个命令行参数的长度限制。"""
         try:
             process = subprocess.run(
-                [self.cli_path, "-p", "--output-format", "json"],
+                [self.executable(), *RUN_ARGS],
                 input=prompt,
                 cwd=cwd,
                 env=self.environment(),
@@ -114,8 +130,13 @@ class ClaudeCli:
             data = json.loads(process.stdout.strip())
         except json.JSONDecodeError as exc:
             raise EngineError("Failed to parse Claude CLI JSON output") from exc
+        if not isinstance(data, dict):
+            raise EngineError("Claude CLI 返回的不是 JSON 对象")
         if data.get("is_error"):
             raise EngineError(f"Claude CLI 返回错误: {data.get('result', 'unknown')}")
+        result = data.get("result")
+        if not isinstance(result, str) or not result.strip():
+            raise EngineError("Claude CLI 没有返回审查内容")
         return data
 
 

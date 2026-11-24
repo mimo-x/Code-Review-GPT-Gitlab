@@ -48,8 +48,13 @@ class RepositoryWorkspace:
             self._remove_stale_worktrees(mirror, project_id)
             self._ensure_mirror(mirror)
             self._fetch(mirror, clone_url, env, revisions, mr_iid, target_branch)
-            self._git(mirror, env, "worktree", "add", "--detach", str(worktree),
-                      revisions.head_sha)
+            try:
+                self._git(mirror, env, "worktree", "add", "--detach", str(worktree),
+                          revisions.head_sha)
+            except Exception:
+                # 超时等情况下目录可能已经建了一半
+                self._remove_worktree(mirror, worktree)
+                raise
         try:
             yield worktree
         finally:

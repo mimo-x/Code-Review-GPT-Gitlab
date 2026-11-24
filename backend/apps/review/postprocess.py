@@ -18,7 +18,8 @@ def finalize_findings(
     findings: list[Finding], diff: DiffIndex, scope: ReviewScope = ReviewScope()
 ) -> list[Finding]:
     # 引擎能读到被排除的文件，这里保证不会针对它们报告问题；已纳入审查的重命名文件不受影响
-    findings = [f for f in findings if diff.get(f.path) is not None or scope.allows(f.path)]
+    # 先按原样匹配路径：去掉 a/ b/ 前缀的兜底匹配不能绕过排除规则
+    findings = [f for f in findings if diff.has_exact(f.path) or scope.allows(f.path)]
     for finding in findings:
         _anchor(finding, diff)
     ordered = sorted(findings, key=_order)
@@ -74,23 +75,46 @@ def _dedupe(ordered: list[Finding]) -> list[Finding]:
 def _same_problem(a: Finding, b: Finding) -> bool:
     if a.path != b.path or a.side != b.side:
         return False
-    if a.end_line and b.end_line and abs(a.end_line - b.end_line) > _LINE_GAP:
-        return False
     if bool(a.end_line) != bool(b.end_line):
+        return False
+    if a.end_line and not _close(a, b):
         return False
     return SequenceMatcher(None, _normalized(a.title), _normalized(b.title)).ratio() >= _TITLE_SIMILARITY
 
 
+def _close(a: Finding, b: Finding) -> bool:
+    """都用代码片段定位时行号是准的，只合并重叠的；只给了行号的允许小幅偏差。"""
+    gap = max(a.start_line, b.start_line) - min(a.end_line, b.end_line)
+    precise = a.existing_code and b.existing_code
+    return gap <= (0 if precise else _LINE_GAP)
+
+
 def _assign_fingerprints(findings: list[Finding], diff: DiffIndex) -> None:
     """指纹基于代码内容而不是行号，这样 push 后行号移动也能认出同一个问题。"""
+    base = [
+        "\0".join((f.path, f.side, f.category, _anchor_text(f, diff))) for f in findings
+    ]
+    repeated = Counter(base)
+    # 同一文件里有相同的代码行时，带上前后各一行来区分，仍相同才按出现顺序编号
+    keys = [
+        identity + ("\0" + _context(f, diff) if repeated[identity] > 1 else "")
+        for f, identity in zip(findings, base)
+    ]
     seen: Counter = Counter()
-    for finding in findings:
-        identity = "\0".join((
-            finding.path, finding.side, finding.category, _anchor_text(finding, diff),
-        ))
-        ordinal = seen[identity]
-        seen[identity] += 1
-        finding.fingerprint = hashlib.sha256(f"{identity}\0{ordinal}".encode()).hexdigest()[:16]
+    for finding, key in zip(findings, keys):
+        finding.fingerprint = hashlib.sha256(f"{key}\0{seen[key]}".encode()).hexdigest()[:16]
+        seen[key] += 1
+
+
+def _context(finding: Finding, diff: DiffIndex) -> str:
+    file_diff = diff.get(finding.path)
+    if not finding.in_diff or file_diff is None:
+        return ""
+    around = (
+        file_diff.line(finding.side, finding.start_line - 1),
+        file_diff.line(finding.side, finding.end_line + 1),
+    )
+    return "\n".join(line.text.strip() if line else "" for line in around)
 
 
 def _anchor_text(finding: Finding, diff: DiffIndex) -> str:
