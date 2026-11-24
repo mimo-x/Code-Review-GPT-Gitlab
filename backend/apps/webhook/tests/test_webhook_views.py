@@ -53,7 +53,7 @@ class TestWebhookErrorResilience:
         # 返回 200 防止 GitLab 重试是更重要的事
         assert response.status_code == 200
 
-    @patch('apps.webhook.views.GitlabService')
+    @patch('apps.review.pipeline.GitlabService')
     def test_gitlab_config_missing_graceful_failure(
         self, mock_gitlab_svc, webhook_payload
     ):
@@ -61,10 +61,10 @@ class TestWebhookErrorResilience:
         当 GitLab 配置缺失时，审查线程应优雅失败而不是崩溃。
 
         模拟 GitlabService 初始化抛出 ImproperlyConfigured，
-        验证 process_merge_request_review 将其标记为 failed 而非崩溃。
+        验证审查流水线将其标记为 failed 而非崩溃。
         """
         from django.core.exceptions import ImproperlyConfigured
-        from apps.webhook.views import process_merge_request_review
+        from apps.review import pipeline
         from apps.webhook.models import MergeRequestReview, Project
 
         mock_gitlab_svc.side_effect = ImproperlyConfigured(
@@ -92,7 +92,7 @@ class TestWebhookErrorResilience:
         )
 
         # 直接调用审查处理函数（同步执行，不通过线程）
-        process_merge_request_review(1, 42, review.pk, webhook_payload)
+        pipeline.run(review.pk, webhook_payload)
 
         # 验证审查被标记为失败而非崩溃
         review.refresh_from_db()

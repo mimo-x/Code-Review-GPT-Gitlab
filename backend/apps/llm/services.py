@@ -1,628 +1,91 @@
 """
-LLM Service for code review using various LLM providers
+模型调用客户端：只负责把提示词发给配置好的模型并取回文本。
 """
-import os
 import logging
-from django.conf import settings
-from django.core.exceptions import ImproperlyConfigured
+import os
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
+# 页面上的提供商对应的 LiteLLM 路由前缀；unionllm/litellm 由模型名自带路由
+_ROUTE_PREFIX = {'openai': 'openai', 'deepseek': 'deepseek', 'gemini': 'gemini'}
+
+
+class LLMError(Exception):
+    """所有模型客户端都调用失败。"""
+
+
+@dataclass(frozen=True)
+class Completion:
+    text: str
+    client: str
+
 
 class LLMService:
-    """
-    Service for interacting with LLM providers
-    """
-
-    def __init__(self, request_id=None):
+    def __init__(self, llm_config, request_id=None):
         self.request_id = request_id
-        self._load_config()
-        self.prompt_template = getattr(settings, 'GPT_MESSAGE',
-                                     "请仔细审查以下代码变更，重点关注：\n1. 代码质量和最佳实践\n2. 潜在的bug和安全问题\n3. 性能优化建议\n4. 代码风格和可读性\n\n请提供具体的改进建议。")
-
-    def _load_config(self):
-        """
-        从数据库加载 LLM 配置，如缺失则抛出 ImproperlyConfigured
-        """
-        try:
-            from .models import LLMConfig
-        except ImportError as exc:
-            raise ImproperlyConfigured("无法导入 LLMConfig 模型，请确认 apps.llm 已正确安装") from exc
-
-        llm_config = LLMConfig.objects.filter(is_active=True).first()
-
-        if not llm_config:
-            raise ImproperlyConfigured("未检测到有效的 LLM 配置，请在后台管理或接口中创建并启用一条 LLM 配置")
-
         self.provider = llm_config.provider
+        self.model = llm_config.model
         self.api_key = llm_config.api_key
         self.api_base = llm_config.api_base
-        self.model = llm_config.model
-        self.config_source = "database"
-        self.is_mock = self.provider == 'mock'
-        # LLM API 调用超时时间（秒），避免 MR 文件较多时无限等待
+        # 避免 MR 文件较多时无限等待
         self.timeout = getattr(llm_config, 'timeout', None) or int(
             os.environ.get('LLM_API_TIMEOUT', '600')
         )
+        if not self.api_key:
+            logger.warning(f"[{self.request_id}] LLM 配置缺少 API Key，后续请求可能失败")
 
-        api_key_status = "已配置" if self.api_key else "未配置"
-        logger.info(
-            f"[{self.request_id}] LLM配置加载成功 - 提供商:{self.provider}, 模型:{self.model}, API密钥:{api_key_status}"
-        )
-
-        if not self.is_mock:
-            if not self.api_key:
-                logger.warning(f"[{self.request_id}] LLM 配置缺少 API Key，后续请求可能失败")
-            self._set_environment_variables()
-
-    def _set_environment_variables(self):
-        """
-        将数据库配置设置为环境变量，供 LLM 库使用
-        """
-        if self.is_mock:
-            return
-
-        try:
-            # 根据不同的提供商设置相应的环境变量
-            if self.provider.lower() == 'openai':
-                if self.api_key:
-                    os.environ['OPENAI_API_KEY'] = self.api_key
-                    logger.info(f"[{self.request_id}] 设置 OPENAI_API_KEY 环境变量")
-                if self.api_base:
-                    os.environ['OPENAI_API_BASE'] = self.api_base
-                    logger.info(f"[{self.request_id}] 设置 OPENAI_API_BASE 环境变量")
-
-            elif self.provider.lower() == 'deepseek':
-                if self.api_key:
-                    os.environ['DEEPSEEK_API_KEY'] = self.api_key
-                    logger.info(f"[{self.request_id}] 设置 DEEPSEEK_API_KEY 环境变量")
-                if self.api_base:
-                    os.environ['DEEPSEEK_API_BASE'] = self.api_base
-                    logger.info(f"[{self.request_id}] 设置 DEEPSEEK_API_BASE 环境变量")
-
-            elif self.provider.lower() == 'claude':
-                if self.api_key:
-                    os.environ['ANTHROPIC_API_KEY'] = self.api_key
-                    logger.info(f"[{self.request_id}] 设置 ANTHROPIC_API_KEY 环境变量")
-
-            elif self.provider.lower() == 'gemini':
-                if self.api_key:
-                    os.environ['GOOGLE_API_KEY'] = self.api_key
-                    logger.info(f"[{self.request_id}] 设置 GOOGLE_API_KEY 环境变量")
-
-            elif self.provider.lower() == 'unionllm':
-                if self.api_key:
-                    os.environ['UNIONLLM_API_KEY'] = self.api_key
-                    logger.info(f"[{self.request_id}] 设置 UNIONLLM_API_KEY 环境变量")
-                if self.api_base:
-                    os.environ['UNIONLLM_API_BASE'] = self.api_base
-                    logger.info(f"[{self.request_id}] 设置 UNIONLLM_API_BASE 环境变量")
-
-            elif self.provider.lower() == 'litellm':
-                if self.api_key:
-                    os.environ['LITELLM_API_KEY'] = self.api_key
-                    logger.info(f"[{self.request_id}] 设置 LITELLM_API_KEY 环境变量")
-
-            # 通用配置，适用于所有提供商
-            if self.model:
-                os.environ['LLM_MODEL'] = self.model
-                logger.info(f"[{self.request_id}] 设置 LLM_MODEL 环境变量: {self.model}")
-
-        except Exception as e:
-            logger.error(f"[{self.request_id}] 设置环境变量失败: {e}", exc_info=True)
-
-    def review_code(self, code_context=None, mr_info=None, repo_path=None,
-                    commit_range=None, custom_prompt=None):
-        """
-        代码审查入口 - 根据 provider 分发到不同的审查策略
-
-        双模式接口：
-        - Claude CLI 模式：需要 repo_path + commit_range（本地仓库审查）
-        - API 模式（unionllm/litellm/openai 等）：需要 code_context（文本审查）
-
-        Args:
-            code_context: 代码上下文文本（API 模式使用）
-            mr_info: MR 信息字典
-            repo_path: 本地仓库路径（Claude CLI 模式必需）
-            commit_range: Git 提交范围（Claude CLI 模式使用）
-            custom_prompt: 外部传入的自定义 prompt（优先级最高）
-
-        Returns:
-            统一格式的审查结果字典或错误消息字符串:
-            {
-                'content': str,       # 格式化的审查内容
-                'score': int,         # 0-100 评分
-                'issues': list,       # 解析出的问题列表
-                'metadata': dict,     # provider/model/duration 等元数据
-            }
-        """
-        import time
-        start_time = time.time()
-
-        # === Provider 分发 ===
-        if self.is_mock:
-            logger.info(f"[{self.request_id}] 使用 Mock 模式进行代码审查")
-            return self._review_with_mock(mr_info, start_time)
-
-        if self.provider == 'claude':
-            logger.info(f"[{self.request_id}] 使用 Claude CLI 模式进行代码审查")
-            return self._review_with_claude_cli(
-                repo_path, mr_info, commit_range, custom_prompt, start_time
-            )
-
-        # 所有 API 模式 provider（unionllm, litellm, openai, deepseek, gemini）
-        logger.info(f"[{self.request_id}] 使用 API 模式进行代码审查 (provider={self.provider})")
-        prompt = self._build_review_prompt(code_context, mr_info, custom_prompt)
-        return self._review_with_api_provider(prompt, start_time)
-
-    def _review_with_mock(self, mr_info, start_time):
-        """
-        Mock 模式：生成模拟审查报告
-        """
-        import time
-        from apps.review.report_generator import ReportGenerator
-
-        generator = ReportGenerator(request_id=self.request_id)
-        context = {
-            'project_name': mr_info.get('project_name', '') if mr_info else '',
-            'title': mr_info.get('title', '') if mr_info else '',
-            'author': mr_info.get('author', '') if mr_info else '',
-            'file_count': mr_info.get('file_count', 0) if mr_info else 0,
-            'changes_count': mr_info.get('changes_count', 0) if mr_info else 0,
+    @property
+    def _call_params(self):
+        """凭据只随本次请求传递，不写入进程环境，避免并发串用或泄漏给子进程。"""
+        params = {
+            'model': _routed_model(self.provider, self.model, self.api_base),
+            'timeout': self.timeout,
         }
-        report_data = generator.generate_mock(context)
+        if self.api_key:
+            params['api_key'] = self.api_key
+        if self.api_base:
+            params['api_base'] = self.api_base
+        return params
 
-        elapsed = time.time() - start_time
-        return {
-            'content': report_data.get('content', ''),
-            'score': int(report_data.get('metadata', {}).get('score', 0) * 20),
-            'issues': [],
-            'metadata': {
-                'provider': 'mock',
-                'model': 'mock',
-                'duration': elapsed,
-                'is_mock': True,
-            },
-        }
+    def complete(self, prompt):
+        """依次尝试 unionllm 和 litellm，全部失败时抛出 LLMError。"""
+        for name, call in (('unionllm', self._call_unionllm), ('litellm', self._call_litellm)):
+            try:
+                text = call(prompt)
+            except Exception as exc:
+                logger.warning(f"[{self.request_id}] {name} 调用失败: {exc}")
+                continue
+            if text:
+                logger.info(f"[{self.request_id}] {name} 调用成功, 响应长度: {len(text)}")
+                return Completion(text=text, client=name)
+            logger.warning(f"[{self.request_id}] {name} 返回空响应")
+        raise LLMError("unionllm 和 litellm 均调用失败")
 
-    def _review_with_claude_cli(self, repo_path, mr_info, commit_range,
-                                 custom_prompt, start_time):
-        """
-        Claude CLI 模式：通过 subprocess 执行 claude 命令行工具
-        保留原有逻辑不变
-        """
-        import time
-
-        logger.info(f"[{self.request_id}] 开始代码审查 - 使用 Claude CLI")
-        logger.info(f"[{self.request_id}] 仓库路径: {repo_path}")
-        logger.info(f"[{self.request_id}] 提交范围: {commit_range}")
-
-        if not repo_path:
-            error_msg = "代码审查失败：未提供仓库路径，Claude CLI 需要本地仓库"
-            logger.error(f"[{self.request_id}] {error_msg}")
-            return error_msg
-
-        try:
-            from apps.review.claude_cli_service import ClaudeCliService
-            from apps.review.review_result_parser import ReviewResultParser
-
-            cli_service = ClaudeCliService(request_id=self.request_id)
-
-            is_valid, validation_error = cli_service.validate_cli_installation()
-            if not is_valid:
-                error_msg = f"代码审查失败：{validation_error}"
-                logger.error(f"[{self.request_id}] {error_msg}")
-                return error_msg
-
-            final_prompt = None
-            if custom_prompt:
-                logger.info(f"[{self.request_id}] 使用外部传入的自定义 Prompt (长度: {len(custom_prompt)})")
-                final_prompt = custom_prompt
-            elif mr_info:
-                logger.info(f"[{self.request_id}] 使用系统默认 Prompt 构建逻辑")
-                final_prompt = self._build_claude_cli_prompt(mr_info)
-            else:
-                logger.info(f"[{self.request_id}] 未提供任何 Prompt，使用 Claude CLI 默认行为")
-
-            success, result_data, error = cli_service.review_code(
-                repo_path=repo_path,
-                custom_prompt=final_prompt,
-                commit_range=commit_range
-            )
-
-            elapsed_time = time.time() - start_time
-
-            if not success:
-                error_msg = f"代码审查失败: {error}"
-                logger.error(f"[{self.request_id}] {error_msg}")
-                return error_msg
-
-            parser = ReviewResultParser(request_id=self.request_id)
-            parsed_result = parser.parse(result_data)
-
-            logger.info(f"[{self.request_id}] 代码审查完成 - 耗时:{elapsed_time:.2f}秒")
-            logger.info(f"[{self.request_id}] 评分:{parsed_result['score']}, 问题数:{len(parsed_result['issues'])}")
-
-            return parsed_result
-
-        except ImportError as e:
-            logger.error(f"[{self.request_id}] 导入模块失败: {e}")
-            return f"代码审查失败：缺少必要的模块\n错误详情: {str(e)}"
-        except Exception as e:
-            elapsed_time = time.time() - start_time
-            logger.error(f"[{self.request_id}] 代码审查异常 - 耗时:{elapsed_time:.2f}秒, 错误:{e}", exc_info=True)
-            return f"代码审查失败: {str(e)}"
-
-    def _review_with_api_provider(self, prompt, start_time):
-        """
-        API 模式：通过 unionllm/litellm 调用 LLM API
-
-        回退链：unionllm → litellm → 错误返回
-        """
-        import time
-
-        # 尝试 unionllm
-        try:
-            result = self._try_unionllm(prompt)
-            if result is not None:
-                result['metadata'] = {
-                    **result.get('metadata', {}),
-                    'duration': time.time() - start_time,
-                }
-                return result
-        except Exception as e:
-            logger.warning(
-                f"[{self.request_id}] unionllm 调用失败，回退到 litellm: {e}"
-            )
-
-        # 回退到 litellm
-        try:
-            result = self._try_litellm(prompt)
-            if result is not None:
-                result['metadata'] = {
-                    **result.get('metadata', {}),
-                    'duration': time.time() - start_time,
-                }
-                return result
-        except Exception as e:
-            logger.error(f"[{self.request_id}] litellm 回退也失败: {e}")
-
-        # 全部失败
-        error_msg = "代码审查失败: unionllm 和 litellm 均调用失败"
-        logger.error(f"[{self.request_id}] {error_msg}")
-        return error_msg
-
-    def _try_unionllm(self, prompt):
-        """
-        通过 unionllm 调用 LLM API
-        """
+    def _call_unionllm(self, prompt):
         from unionllm import unionchat
 
-        logger.info(f"[{self.request_id}] 调用 unionllm, model={self.model}, timeout={self.timeout}s")
+        response = unionchat(messages=[{"role": "user", "content": prompt}], **self._call_params)
+        return response.get('choices', [{}])[0].get('message', {}).get('content', '')
 
-        response = unionchat(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            timeout=self.timeout,
-        )
-
-        content = response.get('choices', [{}])[0].get('message', {}).get('content', '')
-        if not content:
-            raise ValueError("unionllm 返回空响应")
-
-        logger.info(f"[{self.request_id}] unionllm 调用成功, 响应长度: {len(content)}")
-        return self._normalize_api_response(content, 'unionllm', self.model)
-
-    def _try_litellm(self, prompt):
-        """
-        通过 litellm 调用 LLM API（unionllm 的回退方案）
-        """
+    def _call_litellm(self, prompt):
         import litellm
 
-        logger.info(f"[{self.request_id}] 回退到 litellm, model={self.model}, timeout={self.timeout}s")
-
         response = litellm.completion(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            timeout=self.timeout,
+            messages=[{"role": "user", "content": prompt}], **self._call_params
         )
+        return response.choices[0].message.content
 
-        content = response.choices[0].message.content
-        if not content:
-            raise ValueError("litellm 返回空响应")
 
-        logger.info(f"[{self.request_id}] litellm 调用成功, 响应长度: {len(content)}")
-        return self._normalize_api_response(content, 'litellm', self.model)
+def _routed_model(provider, model, api_base):
+    """让页面上选的提供商配裸模型名也能工作，同时兼容已带前缀的写法。"""
+    prefix = _ROUTE_PREFIX.get((provider or '').lower())
+    if not prefix or model.startswith(f'{prefix}/'):
+        return model
+    if not api_base and '/' in model:
+        import litellm
 
-    def _normalize_api_response(self, content, provider, model):
-        """
-        将 LLM API 返回的原始文本统一为标准审查结果格式
-        所有 API provider 输出相同结构
-        """
-        import re
-
-        # 提取评分（匹配 "评分: 85"、"分数: 90"、"Score: 85" 等）
-        score = 0
-        score_pattern = r'(?:评分|分数|Score|代码评分)[:：\s]*(\d+)'
-        score_match = re.search(score_pattern, content)
-        if score_match:
-            try:
-                score = int(score_match.group(1))
-            except ValueError:
-                pass
-
-        # 提取问题列表
-        issues = self._extract_issues_from_text(content)
-
-        return {
-            'content': content,
-            'score': score,
-            'issues': issues,
-            'metadata': {
-                'provider': provider,
-                'model': model,
-            },
-        }
-
-    @staticmethod
-    def _extract_issues_from_text(text):
-        """
-        从审查文本中简单提取问题列表
-        匹配以 - [问题] 或数字序号开头的行
-        """
-        import re
-        issues = []
-        for match in re.finditer(
-            r'[-*]\s*\[.+\]\s*(.+?)(?=\n|$)',
-            text
-        ):
-            issues.append({
-                'title': match.group(1).strip(),
-                'severity': 'medium',
-            })
-        return issues
-
-    def _build_review_prompt(self, code_context, mr_info, custom_prompt):
-        """
-        为 API 模式构建审查 prompt
-        优先级：custom_prompt > 系统默认模板 + mr_info + code_context
-        """
-        if custom_prompt:
-            base = custom_prompt
-        else:
-            base = self.prompt_template
-
-        parts = [base]
-
-        if mr_info:
-            parts.append(
-                f"\n**MR 信息**: {mr_info.get('title', '')} "
-                f"作者: {mr_info.get('author', '')}"
-            )
-
-        if code_context:
-            parts.append(f"\n## 代码变更:\n{code_context}")
-
-        return '\n'.join(parts)
-
-    def _build_claude_cli_prompt(self, mr_info):
-        """
-        构建 Claude CLI 的审查提示
-
-        Args:
-            mr_info: MR 信息字典
-
-        Returns:
-            格式化的提示文本
-        """
-        prompt_parts = [
-            f"请对这个 Merge Request 进行详细的代码审查：",
-            f"",
-            f"**MR 信息**",
-            f"- 标题: {mr_info.get('title', '未知')}",
-            f"- 作者: {mr_info.get('author', '未知')}",
-            f"- 源分支: {mr_info.get('source_branch', '未知')}",
-            f"- 目标分支: {mr_info.get('target_branch', '未知')}",
-        ]
-
-        if mr_info.get('description'):
-            prompt_parts.append(f"- 描述: {mr_info['description']}")
-
-        prompt_parts.extend([
-            f"",
-            f"**审查要求**",
-            f"请对本次代码变更进行全面、深入的分析，提供一份详细、有条理、结构清晰的审查报告。",
-            f"报告需要具有专业性和实用性，不仅要指出问题，还要提供具体的改进方案。",
-            f"",
-            f"## 📋 审查维度",
-            f"",
-            f"### 1. **安全风险评估** 🔒",
-            f"- **认证与授权**：权限校验、身份验证、会话管理",
-            f"- **输入验证**：参数校验、类型检查、边界条件处理",
-            f"- **数据安全**：SQL 注入、XSS、CSRF、路径遍历等漏洞",
-            f"- **敏感信息**：硬编码密钥、密码泄露、调试信息暴露",
-            f"- **API 安全**：接口权限、数据传输安全、错误信息泄露",
-            f"",
-            f"### 2. **代码质量评估** 💎",
-            f"- **架构设计**：模块划分、依赖关系、设计模式使用",
-            f"- **代码规范**：命名约定、代码格式、注释质量",
-            f"- **可读性**：逻辑清晰度、变量命名、函数设计",
-            f"- **一致性**：代码风格统一、接口设计一致",
-            f"- **复杂度**：圈复杂度、嵌套层级、函数长度",
-            f"",
-            f"### 3. **性能分析与优化** ⚡",
-            f"- **算法效率**：时间复杂度、空间复杂度优化",
-            f"- **数据库性能**：查询优化、索引使用、N+1 问题",
-            f"- **资源管理**：内存使用、文件操作、网络请求",
-            f"- **并发处理**：线程安全、异步处理、锁机制",
-            f"- **缓存策略**：缓存设计、失效机制、缓存命中率",
-            f"",
-            f"### 4. **可维护性与扩展性** 🔧",
-            f"- **模块化程度**：单一职责、接口抽象、依赖注入",
-            f"- **错误处理**：异常处理机制、错误恢复、日志记录",
-            f"- **配置管理**：配置分离、环境管理、配置验证",
-            f"- **测试友好**：单元测试、集成测试、Mock 设计",
-            f"- **文档完整性**：API 文档、注释质量、架构文档",
-            f"",
-            f"### 5. **业务逻辑审查** 🎯",
-            f"- **功能完整性**：需求覆盖、边界条件、异常场景",
-            f"- **数据一致性**：事务处理、数据校验、状态管理",
-            f"- **用户体验**：响应时间、错误提示、操作流程",
-            f"- **业务规则**：逻辑正确性、规则完整性、约束检查",
-            f"",
-            f"## 📝 报告输出格式要求",
-            f"",
-            f"请严格按照以下结构输出报告：",
-            f"",
-            f"```markdown",
-            f"# 📊 代码审查报告",
-            f"",
-            f"## 📋 审查概述",
-            f"- **MR 标题**：[填写 MR 标题]",
-            f"- **审查范围**：[列出主要变更文件]",
-            f"- **变更类型**：[新功能/修复/重构/优化]",
-            f"- **风险等级**：[高/中/低/无]",
-            f"- **总体评分**：[0-100 分]",
-            f"",
-            f"## 🎯 关键发现",
-            f"",
-            f"### 🟢 优秀实践",
-            f"- 列出本次变更中的亮点和良好实践",
-            f"",
-            f"### 🔴 关键问题",
-            f"- 列出必须修复的严重问题",
-            f"- 每个问题包含：问题描述、影响、修复建议",
-            f"",
-            f"## 🔍 详细分析",
-            f"",
-            f"### 🔒 安全问题分析",
-            f"- [问题 1] 🔴/🟠/🟡/🟢 标题",
-            f"  - **文件**：`文件名:行号`",
-            f"  - **问题描述**：详细说明问题",
-            f"  - **风险评估**：潜在影响和安全风险",
-            f"  - **修复建议**：具体解决方案",
-            f"  - **代码示例**：修复前后对比",
-            f"",
-            f"### 💎 代码质量问题",
-            f"- [问题 1] 🔴/🟠/🟡/🟢 标题",
-            f"  - **文件**：`文件名:行号`",
-            f"  - **问题描述**：详细说明问题",
-            f"  - **影响分析**：对可维护性、可读性的影响",
-            f"  - **改进建议**：具体的重构建议",
-            f"  - **代码示例**：改进方案",
-            f"",
-            f"### ⚡ 性能问题分析",
-            f"- [问题 1] 🔴/🟠/🟡/🟢 标题",
-            f"  - **文件**：`文件名:行号`",
-            f"  - **问题描述**：性能瓶颈详细说明",
-            f"  - **性能影响**：对系统性能的具体影响",
-            f"  - **优化方案**：详细的优化策略",
-            f"  - **预期收益**：性能提升预估",
-            f"",
-            f"### 🔧 架构与设计问题",
-            f"- [问题 1] 🔴/🟠/🟡/🟢 标题",
-            f"  - **文件**：`文件名:行号`",
-            f"  - **设计问题**：架构层面的问题",
-            f"  - **影响分析**：对系统架构的影响",
-            f"  - **重构建议**：设计改进方案",
-            f"",
-            f"### 🎯 业务逻辑问题",
-            f"- [问题 1] 🔴/🟠/🟡/🟢 标题",
-            f"  - **文件**：`文件名:行号`",
-            f"  - **逻辑问题**：业务逻辑的缺陷",
-            f"  - **业务影响**：对业务功能的影响",
-            f"  - **修复方案**：逻辑修正建议",
-            f"",
-            f"## 📈 评分详情",
-            f"",
-            f"| 维度 | 评分 | 说明 |",
-            f"|------|------|------|",
-            f"| 安全性 | [0-25] | 安全问题严重程度 |",
-            f"| 代码质量 | [0-25] | 代码规范和质量问题 |",
-            f"| 性能表现 | [0-25] | 性能问题和优化空间 |",
-            f"| 可维护性 | [0-25] | 架构设计和维护成本 |",
-            f"| **总分** | **[0-100]** | **综合评价** |",
-            f"",
-            f"## 🚀 行动建议",
-            f"",
-            f"### 📋 必须修复（立即处理）",
-            f"- [ ] [严重问题 1] - 修复优先级：P0",
-            f"- [ ] [严重问题 2] - 修复优先级：P0",
-            f"",
-            f"### ⚠️ 建议修复（尽快处理）",
-            f"- [ ] [重要问题 1] - 修复优先级：P1",
-            f"- [ ] [重要问题 2] - 修复优先级：P1",
-            f"",
-            f"### 💡 优化建议（后续处理）",
-            f"- [ ] [优化项 1] - 修复优先级：P2",
-            f"- [ ] [优化项 2] - 修复优先级：P2",
-            f"",
-            f"## 📚 学习资源",
-            f"- 针对本次发现的问题，提供相关的最佳实践和学习资料",
-            f"",
-            f"## ✅ 审查结论",
-            f"",
-            f"**综合评价**：[对本次变更的整体评价]",
-            f"",
-            f"**风险提示**：[主要风险点提醒]",
-            f"",
-            f"**合并建议**：[建议：立即合并/修复后合并/不建议合并]",
-            f"",
-            f"---",
-            f"*审查完成时间：[当前时间]*",
-            f"*审查工具：Claude AI*",
-            f"```",
-            f"",
-            f"## ⚠️ 重要说明",
-            f"",
-            f"1. **必须包含具体文件路径和行号**，如：`backend/apps/models.py:45`",
-            f"2. **每个问题都要提供具体的代码示例**，展示修复前后的对比",
-            f"3. **严格按照模板格式输出**，确保报告的完整性和可读性",
-            f"4. **评分要客观公正**，基于实际代码质量进行评估",
-            f"5. **建议要具体可行**，避免模糊的描述",
-            f"6. **风险等级标记**：🔴严重（必须修复）、🟠高危（建议尽快修复）、🟡中危（可稍后修复）、🟢低危（优化建议）"
-        ])
-
-        return '\n'.join(prompt_parts)
-
-    def _review_with_openai(self, code_context, start_time):
-        """
-        Fallback to OpenAI client if UnionLLM is not available
-        """
-        import time
-        try:
-            from openai import OpenAI
-
-            prompt = self._build_prompt(code_context)
-
-            client = OpenAI(
-                api_key=self.api_key,
-                base_url=self.api_base if self.api_base else None
-            )
-
-            logger.info(f"[{self.request_id}] 使用OpenAI客户端开始调用API")
-            response = client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "你是一位资深的代码审查专家,擅长发现代码中的问题并提供建设性的改进建议。"},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                max_tokens=2000
-            )
-
-            elapsed_time = time.time() - start_time
-            review_content = response.choices[0].message.content
-            logger.info(f"[{self.request_id}] OpenAI客户端代码审查完成 - 耗时:{elapsed_time:.2f}秒, 响应长度:{len(review_content)}字符")
-            return review_content
-
-        except Exception as e:
-            elapsed_time = time.time() - start_time
-            logger.error(f"[{self.request_id}] OpenAI客户端调用失败 - 耗时:{elapsed_time:.2f}秒, 错误:{e}", exc_info=True)
-            return f"代码审查失败: {str(e)}"
-
-    def _build_prompt(self, code_context):
-        """
-        Build the review prompt with code context
-        """
-        return f"{self.prompt_template}\n\n## 代码变更内容:\n\n{code_context}"
+        # 没有自定义网关时，gemini/xxx 这类前缀是用户明确指定的路由
+        if model.split('/', 1)[0] in litellm.provider_list:
+            return model
+    return f'{prefix}/{model}'

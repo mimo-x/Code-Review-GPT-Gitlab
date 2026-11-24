@@ -1,18 +1,17 @@
 """
 Review services for GitLab code review
 """
-import os
-import re
-import shutil
 import logging
 import gitlab
+from gitlab.exceptions import GitlabHttpError
 from retrying import retry
 from django.core.exceptions import ImproperlyConfigured
 
-from apps.llm.services import LLMService
-from utils.gitlab_parser import parse_diff_content
-
 logger = logging.getLogger(__name__)
+
+
+class DraftNotesUnsupported(Exception):
+    """GitLab 版本过旧，没有草稿评论接口。"""
 
 
 class GitlabService:
@@ -150,6 +149,80 @@ class GitlabService:
             logger.error(f"[{self.request_id}] Error posting comment: {e}")
             return None
 
+    @property
+    def current_user_id(self):
+        """当前令牌对应的账号，用来识别机器人自己发过的评论。"""
+        if not self.gl or not self.gl.user:
+            raise RuntimeError("GitLab客户端未初始化")
+        return self.gl.user.id
+
+    def _merge_request(self, project_id, merge_request_iid):
+        if not self.gl:
+            raise RuntimeError("GitLab客户端未初始化")
+        return self.gl.projects.get(project_id).mergerequests.get(merge_request_iid)
+
+    def get_latest_diff_refs(self, project_id, merge_request_iid):
+        """changes 接口还没有 diff_refs 时，从 MR 最新的 diff 版本读取。"""
+        try:
+            versions = self._merge_request(project_id, merge_request_iid).diffs.list(
+                per_page=1, get_all=False
+            )
+        except Exception as e:
+            logger.warning(f"[{self.request_id}] 读取 MR diff 版本失败: {e}")
+            return None
+        if not versions:
+            return None
+        version = versions[0]
+        return {
+            'base_sha': version.base_commit_sha,
+            'start_sha': version.start_commit_sha,
+            'head_sha': version.head_commit_sha,
+        }
+
+    def list_merge_request_discussions(self, project_id, merge_request_iid):
+        merge_request = self._merge_request(project_id, merge_request_iid)
+        return [d.attributes for d in merge_request.discussions.list(get_all=True)]
+
+    def create_merge_request_discussion(self, project_id, merge_request_iid, body, position):
+        """发布行内评论。写操作不自动重试，避免重复发布。"""
+        merge_request = self._merge_request(project_id, merge_request_iid)
+        return merge_request.discussions.create({'body': body, 'position': position})
+
+    def update_merge_request_note(self, project_id, merge_request_iid, note_id, body):
+        merge_request = self._merge_request(project_id, merge_request_iid)
+        return merge_request.notes.update(note_id, {'body': body})
+
+    # 草稿评论：先存成只有自己可见的草稿，再一次性发布成一轮 review。
+    # python-gitlab 3.15 没有封装这组接口，直接走 HTTP。
+
+    def _draft_notes_path(self, project_id, merge_request_iid):
+        if not self.gl:
+            raise RuntimeError("GitLab客户端未初始化")
+        return f"/projects/{project_id}/merge_requests/{merge_request_iid}/draft_notes"
+
+    def list_draft_notes(self, project_id, merge_request_iid):
+        """当前账号在这个 MR 上未发布的草稿；GitLab 不支持草稿时抛出 DraftNotesUnsupported。"""
+        path = self._draft_notes_path(project_id, merge_request_iid)
+        try:
+            return self.gl.http_list(path, get_all=True)
+        except GitlabHttpError as exc:
+            if exc.response_code in (404, 405):
+                raise DraftNotesUnsupported(str(exc)) from exc
+            raise
+
+    def create_draft_note(self, project_id, merge_request_iid, body, position):
+        path = self._draft_notes_path(project_id, merge_request_iid)
+        return self.gl.http_post(path, post_data={'note': body, 'position': position})
+
+    def delete_draft_note(self, project_id, merge_request_iid, draft_id):
+        path = self._draft_notes_path(project_id, merge_request_iid)
+        self.gl.http_delete(f"{path}/{draft_id}")
+
+    def publish_draft_notes(self, project_id, merge_request_iid):
+        """发布当前账号在这个 MR 上的全部草稿。"""
+        path = self._draft_notes_path(project_id, merge_request_iid)
+        self.gl.http_post(f"{path}/bulk_publish")
+
     @retry(stop_max_attempt_number=3, wait_fixed=2000)
     def get_project_info(self, project_id):
         """
@@ -165,196 +238,3 @@ class GitlabService:
         except Exception as e:
             logger.error(f"[{self.request_id}] Error fetching project info: {e}")
             return None
-
-
-class ReviewService:
-    """
-    Service for performing code reviews
-    """
-
-    def __init__(self, project_id=None, request_id=None):
-        self.project_id = project_id
-        self.request_id = request_id
-        try:
-            self.llm_service = LLMService(request_id=request_id)
-            self.llm_error = None
-            self.is_mock_mode = getattr(self.llm_service, 'is_mock', False)
-        except ImproperlyConfigured as exc:
-            logger.error(f"[{self.request_id}] 初始化 LLMService 失败: {exc}")
-            self.llm_service = None
-            self.llm_error = str(exc)
-            self.is_mock_mode = False
-        self._load_config()
-
-    def _load_config(self):
-        """
-        从数据库加载配置（优先级：项目配置 > 全局配置 > 环境变量）
-        """
-        try:
-            from apps.llm.models import GitLabConfig
-            from apps.webhook.models import Project
-            
-            # 尝试加载项目级配置
-            if self.project_id:
-                try:
-                    project = Project.objects.get(project_id=self.project_id)
-                    # 如果项目有自定义配置，使用项目配置
-                    if project.exclude_file_types_list:
-                        self.exclude_file_types = project.exclude_file_types_list
-                    else:
-                        self.exclude_file_types = getattr(settings, 'EXCLUDE_FILE_TYPES', [])
-                    
-                    if project.ignore_file_patterns_list:
-                        self.ignore_file_types = project.ignore_file_patterns_list
-                    else:
-                        self.ignore_file_types = getattr(settings, 'IGNORE_FILE_TYPES', [])
-                    
-                    logger.info(f"[{self.request_id}] 使用项目级配置 - 项目ID:{self.project_id}")
-                except Project.DoesNotExist:
-                    # 项目不存在，使用默认配置
-                    self.exclude_file_types = getattr(settings, 'EXCLUDE_FILE_TYPES', [])
-                    self.ignore_file_types = getattr(settings, 'IGNORE_FILE_TYPES', [])
-            else:
-                # 没有项目ID，使用全局配置
-                self.exclude_file_types = getattr(settings, 'EXCLUDE_FILE_TYPES', [])
-                self.ignore_file_types = getattr(settings, 'IGNORE_FILE_TYPES', [])
-
-            logger.info(f"[{self.request_id}] Review配置加载成功")
-
-        except ImportError:
-            logger.warning(f"[{self.request_id}] 无法导入配置模型，使用环境变量配置")
-            self.exclude_file_types = getattr(settings, 'EXCLUDE_FILE_TYPES', [])
-            self.ignore_file_types = getattr(settings, 'IGNORE_FILE_TYPES', [])
-        except Exception as e:
-            logger.error(f"[{self.request_id}] Review配置加载失败: {e}", exc_info=True)
-            # 使用环境变量作为最后回退
-            self.exclude_file_types = getattr(settings, 'EXCLUDE_FILE_TYPES', [])
-            self.ignore_file_types = getattr(settings, 'IGNORE_FILE_TYPES', [])
-
-    def review_merge_request(self, changes, payload):
-        """
-        Review a merge request
-        """
-        try:
-            # Filter changes
-            filtered_changes = self._filter_changes(changes)
-
-            if not filtered_changes:
-                return {
-                    'content': '没有需要审查的代码变更',
-                    'score': None,
-                    'files_reviewed': []
-                }
-
-            mock_context = {
-                'project_name': payload.get('project', {}).get('name') if isinstance(payload, dict) else None,
-                'title': payload.get('object_attributes', {}).get('title') if isinstance(payload, dict) else None,
-                'author': payload.get('user', {}).get('name') if isinstance(payload, dict) else None,
-                'file_count': len(filtered_changes),
-                'changes_count': sum(change.get('diff', '').count('\n') for change in filtered_changes),
-            }
-
-            # Build review context
-            review_context = self._build_review_context(filtered_changes)
-
-            if self.is_mock_mode:
-                from apps.review.report_generator import ReportGenerator
-                generator = ReportGenerator(request_id=self.request_id)
-                mock_report = generator.generate_mock(mock_context)
-                return {
-                    'content': mock_report.get('content', ''),
-                    'score': mock_report.get('metadata', {}).get('score'),
-                    'files_reviewed': [change.get('new_path') for change in filtered_changes]
-                }
-
-            if not self.llm_service:
-                raise ImproperlyConfigured(self.llm_error or 'LLM 服务未初始化')
-
-            # Get review from LLM
-            review_result = self.llm_service.review_code(review_context)
-
-            # Parse review result
-            parsed_result = self._parse_review_result(review_result)
-
-            parsed_result['files_reviewed'] = [change['new_path'] for change in filtered_changes]
-
-            return parsed_result
-
-        except Exception as e:
-            logger.error(f"Error reviewing merge request: {e}", exc_info=True)
-            return {
-                'content': f'代码审查失败: {str(e)}',
-                'score': None,
-                'files_reviewed': []
-            }
-
-    def _filter_changes(self, changes):
-        """
-        Filter changes based on file types
-        """
-        filtered = []
-
-        for change in changes:
-            # Skip deleted files
-            if change.get('deleted_file'):
-                continue
-
-            # Skip renamed files without content changes
-            if change.get('renamed_file') and change.get('diff') == '':
-                continue
-
-            file_path = change.get('new_path', '')
-
-            # Check if file type should be excluded
-            should_exclude = False
-            for exclude_type in self.exclude_file_types:
-                if file_path.endswith(exclude_type.strip()):
-                    should_exclude = True
-                    break
-
-            # Check if file should be ignored
-            for ignore_pattern in self.ignore_file_types:
-                if ignore_pattern.strip() in file_path:
-                    should_exclude = True
-                    break
-
-            if not should_exclude:
-                filtered.append(change)
-
-        return filtered
-
-    def _build_review_context(self, changes):
-        """
-        Build review context from changes
-        """
-        context_parts = []
-
-        for change in changes:
-            file_path = change.get('new_path', 'unknown')
-            diff = change.get('diff', '')
-
-            context_parts.append(f"\n## 文件: {file_path}\n")
-            context_parts.append(f"```diff\n{diff}\n```\n")
-
-        return '\n'.join(context_parts)
-
-    def _parse_review_result(self, review_content):
-        """
-        Parse LLM review result to extract score and content
-        """
-        score = None
-
-        # Try to extract score from content
-        score_pattern = r'代码评分[:\s]*(\d+)'
-        score_match = re.search(score_pattern, review_content)
-
-        if score_match:
-            try:
-                score = int(score_match.group(1))
-            except ValueError:
-                pass
-
-        return {
-            'content': review_content,
-            'score': score
-        }
