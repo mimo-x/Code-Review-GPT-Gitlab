@@ -6,6 +6,8 @@ from rest_framework.test import APIClient
 
 from apps.llm.models import GitLabConfig, LLMConfig
 
+FRONTEND = {'HTTP_X_REQUESTED_WITH': 'XMLHttpRequest'}
+
 USERNAME = 'test-admin'
 PASSWORD = 'test-password'
 SUMMARY_URL = '/api/configs/summary/'
@@ -95,24 +97,50 @@ def test_gitlab_webhook_stays_public(db):
     assert response.status_code == 200
 
 
-@pytest.mark.parametrize('fetch_site', ['cross-site', 'same-site'])
-def test_cross_site_write_is_rejected(secrets_configured, logged_in, fetch_site):
+@pytest.mark.parametrize('headers', [
+    {},
+    {'HTTP_ORIGIN': 'http://evil.invalid'},
+    {'HTTP_ORIGIN': 'http://evil.invalid', 'HTTP_SEC_FETCH_SITE': 'same-site'},
+    {'HTTP_X_REQUESTED_WITH': 'fetch'},
+])
+def test_write_without_frontend_header_is_rejected(secrets_configured, logged_in, headers):
+    standby = LLMConfig.objects.create(provider='openai', model='standby', is_active=False)
     response = logged_in.post(
-        BATCH_UPDATE_URL,
-        {'gitlab': {'server_url': 'https://evil.invalid'}},
-        format='json',
-        HTTP_SEC_FETCH_SITE=fetch_site,
-        HTTP_ORIGIN='http://evil.invalid',
+        f'/api/llm-configs/{standby.id}/activate/',
+        'a=1',
+        content_type='application/x-www-form-urlencoded',
+        **headers,
     )
     assert response.status_code == 403
-    assert GitLabConfig.objects.get().server_url == 'https://gitlab.invalid'
+    assert LLMConfig.objects.get(is_active=True).model == 'test'
 
 
-@pytest.mark.parametrize('headers', [
-    {'HTTP_SEC_FETCH_SITE': 'same-origin'},
-    {'HTTP_SEC_FETCH_SITE': 'same-site', 'HTTP_ORIGIN': 'http://localhost:3000'},
-])
-def test_trusted_write_is_allowed(secrets_configured, logged_in, settings, headers):
-    settings.CORS_ALLOWED_ORIGINS = ['http://localhost:3000']
-    response = logged_in.post(BATCH_UPDATE_URL, {}, format='json', **headers)
+def test_write_from_frontend_is_allowed(secrets_configured, logged_in):
+    response = logged_in.post(
+        BATCH_UPDATE_URL,
+        {'gitlab': {'server_url': 'https://gitlab-new.invalid'}},
+        format='json',
+        HTTP_ORIGIN='http://10.0.0.5:3000',
+        **FRONTEND,
+    )
     assert response.status_code == 200
+    assert GitLabConfig.objects.get(is_active=True).server_url == 'https://gitlab-new.invalid'
+
+
+def test_reads_do_not_need_the_frontend_header(secrets_configured, logged_in):
+    assert logged_in.get(SUMMARY_URL).status_code == 200
+
+
+@pytest.mark.parametrize('origin,allowed', [
+    ('http://localhost:3000', True),
+    ('http://evil.invalid', False),
+])
+def test_only_allowed_origins_pass_the_preflight(settings, origin, allowed):
+    settings.CORS_ALLOWED_ORIGINS = ['http://localhost:3000']
+    response = APIClient().options(
+        BATCH_UPDATE_URL,
+        HTTP_ORIGIN=origin,
+        HTTP_ACCESS_CONTROL_REQUEST_METHOD='POST',
+        HTTP_ACCESS_CONTROL_REQUEST_HEADERS='content-type,x-requested-with',
+    )
+    assert (response.headers.get('Access-Control-Allow-Origin') == origin) is allowed
