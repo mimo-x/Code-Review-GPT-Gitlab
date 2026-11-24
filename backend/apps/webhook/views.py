@@ -6,7 +6,8 @@ import time
 from django.utils import timezone
 from django.db import models, transaction
 from rest_framework import status
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from .models import WebhookLog, MergeRequestReview, Project, ProjectNotificationSetting
@@ -30,6 +31,8 @@ logger = logging.getLogger(__name__)
 
 
 @api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def gitlab_webhook(request):
     """
     GitLab Webhook endpoint

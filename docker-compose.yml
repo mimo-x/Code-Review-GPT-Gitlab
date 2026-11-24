@@ -36,8 +36,6 @@ services:
 
   redis:
     image: redis:7.2-alpine
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
     command: redis-server --save "" --appendonly no
 
 volumes:

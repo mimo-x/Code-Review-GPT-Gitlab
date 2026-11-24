@@ -61,6 +61,8 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const savedUsername = localStorage.getItem('username')
       if (!savedUsername) {
+        isAuthenticated.value = false
+        username.value = ''
         return false
       }
 
