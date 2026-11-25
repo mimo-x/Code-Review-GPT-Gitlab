@@ -1,4 +1,4 @@
-"""用户可见文案。严重程度的圆点是输出里唯一保留的 emoji。"""
+"""用户可见文案。严重程度的圆点是输出里唯一保留的 emoji，除结论标题外都放在小号标签里。"""
 from __future__ import annotations
 
 from ..report import Verdict
@@ -17,7 +17,7 @@ _LABELS = {
             Verdict.UNSTRUCTURED: "审查完成",
         },
         "separator": "：",
-        "col_issue": "问题", "col_location": "位置",
+        "col_severity": "级别", "col_issue": "问题", "col_location": "位置",
         "new": "新增", "persisted": "仍存在", "not_located": "未定位到改动行",
         "more": "其余 {count} 条次要建议", "undelivered": "未能挂到代码行的问题",
         "not_reported": "本次未再报告",
@@ -42,7 +42,7 @@ _LABELS = {
             Verdict.UNSTRUCTURED: "Review complete",
         },
         "separator": ": ",
-        "col_issue": "Issue", "col_location": "Location",
+        "col_severity": "Severity", "col_issue": "Issue", "col_location": "Location",
         "new": "new", "persisted": "still present", "not_located": "not on a changed line",
         "more": "{count} more minor suggestions", "undelivered": "Issues without an inline comment",
         "not_reported": "Not reported this time",

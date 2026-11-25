@@ -215,6 +215,24 @@ class TestInlineThreads:
         assert len(gitlab.inline_notes) == 1
         assert "本次未再报告" not in gitlab.plain_notes[0]["body"]
 
+    def test_issue_whose_line_changes_on_every_push_keeps_one_thread(self, gitlab, llm, review_payload):
+        llm()
+        for code in ("result = 0", "for item in items:", "result += item", "return result"):
+            review_with(model_output(problem(code=code)), review_payload)
+            body = gitlab.plain_notes[0]["body"]
+            assert len(gitlab.inline_notes) == 1, code
+            assert "本次未再报告" not in body, code
+        assert "循环初值错误（仍存在）" in body
+
+    def test_distinct_old_issues_with_the_same_title_are_not_merged(self, gitlab, llm, review_payload):
+        llm()
+        review_with(model_output(problem(), problem(code="return result")), review_payload)
+        assert len(gitlab.inline_notes) == 2
+        review_with(model_output(problem(code="for item in items:")), review_payload)
+        # 两个旧问题同名，分不清新问题是哪一个，按新问题发出
+        assert len(gitlab.inline_notes) == 3
+        assert "本次未再报告（2）" in gitlab.plain_notes[0]["body"]
+
     def test_draft_created_by_the_owner_meanwhile_is_not_published(self, gitlab, llm, review_payload):
         llm()
         create = gitlab.draft_api

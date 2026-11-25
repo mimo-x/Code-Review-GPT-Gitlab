@@ -87,13 +87,20 @@ class GitLabReviewPublisher:
             }
 
         carried = _carry_over(report.findings, state)
+        reported = {finding.fingerprint for finding in report.findings}
+        threads = {
+            fp: record["fp"] for fp, record in state.findings.items()
+            if fp in reported and record.get("fp") != fp
+        }
         # 首次审查先占住总结的位置，MR 动态里总结才会排在行内评论之前
         updated = state.summary_note_id is not None
         note_id = state.summary_note_id or self._write_summary(
-            mr.project_id, mr.mr_iid, None, self._summary_body(report, None)
+            mr.project_id, mr.mr_iid, None, self._summary_body(report, None, threads)
         )
         inline, failed = self._post_inline(report, state) if history_available else (set(), 0)
-        current = {finding.fingerprint for finding in report.findings} | carried
+        current = reported | carried
+        # 讨论仍被这次报告的问题沿用时，它的旧指纹不算"未再报告"
+        live = {state.findings[fp]["discussion"] for fp in reported if fp in state.findings}
         previous = state.previous
         history = PublishHistory(
             previous=set(previous),
@@ -101,10 +108,11 @@ class GitLabReviewPublisher:
             not_reported=[
                 item for fingerprint, item in previous.items()
                 if fingerprint not in current and not item.get("resolved")
+                and item.get("discussion") not in live
             ],
         )
         note_id = self._write_summary(
-            mr.project_id, mr.mr_iid, note_id, self._summary_body(report, history)
+            mr.project_id, mr.mr_iid, note_id, self._summary_body(report, history, threads)
         )
         return {
             "success": True,
@@ -118,8 +126,8 @@ class GitLabReviewPublisher:
         }
 
     @staticmethod
-    def _summary_body(report: ReviewReport, history: PublishHistory | None) -> str:
-        marker = summary_marker(report.review_id, report.findings)
+    def _summary_body(report: ReviewReport, history: PublishHistory | None, threads) -> str:
+        marker = summary_marker(report.review_id, report.findings, threads)
         return f"{marker}\n\n{render_summary(report, history)}"
 
     def _load_state(self, project_id, mr_iid) -> tuple[_PublishedState, bool]:
@@ -150,6 +158,11 @@ class GitLabReviewPublisher:
                         "resolved": bool(note.get("resolved")),
                         "discussion": discussion.get("id"),
                     }
+        # 恢复上一轮的沿用关系：总结里的新指纹指向讨论标记里的旧指纹
+        for fp, item in state.summarized.items():
+            thread = state.findings.get(item.get("thread"))
+            if thread is not None and fp not in state.findings:
+                state.findings[fp] = thread
         return state, True
 
     def _post_inline(self, report: ReviewReport, state: _PublishedState) -> tuple[set[str], int]:
@@ -295,31 +308,33 @@ def _carry_over(findings: list[Finding], state: _PublishedState) -> set[str]:
     把旧记录挂到新指纹上，避免重复发讨论，也避免把它列进"本次未再报告"。
     返回被接续的旧指纹。
     """
-    previous = state.previous
     current = {finding.fingerprint for finding in findings}
     unmatched = {
-        fp: item for fp, item in previous.items()
+        fp: item for fp, item in state.previous.items()
         if fp not in current and not item.get("resolved")
     }
     carried: set[str] = set()
     for finding in findings:
-        # 只看行内讨论：上一轮总结里已经记的是新指纹，但讨论标记里仍是旧指纹
         if finding.fingerprint in state.findings:
             continue
-        candidates = [
-            fp for fp, item in unmatched.items()
-            if fp not in carried
-            and _normalized(item.get("title", "")) == _normalized(finding.title)
-            and str(item.get("location", "")).rsplit(":", 1)[0] == finding.path
-        ]
+        # 同一个问题沿用过的几个旧指纹共用一条讨论，按讨论合并成一个候选
+        candidates: dict[str, list[str]] = {}
+        for fp, item in unmatched.items():
+            if (
+                fp not in carried
+                and _normalized(item.get("title", "")) == _normalized(finding.title)
+                and str(item.get("location", "")).rsplit(":", 1)[0] == finding.path
+            ):
+                candidates.setdefault(item.get("discussion") or fp, []).append(fp)
         if len(candidates) != 1:
             # 同一文件里有多个同名问题时分不清是哪一个，宁可当成新问题
             continue
-        old = candidates[0]
-        carried.add(old)
+        old_fps = next(iter(candidates.values()))
+        carried.update(old_fps)
         for records in (state.findings, state.summarized):
-            if old in records:
-                records[finding.fingerprint] = records[old]
+            record = next((records[fp] for fp in old_fps if fp in records), None)
+            if record is not None:
+                records[finding.fingerprint] = record
     return carried
 
 

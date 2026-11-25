@@ -72,16 +72,16 @@ class TestSummary:
             issue("minor", title="循环内查询", end_line=4, existing_code="d = 4"),
             issue("nit", title="命名可以更清楚", end_line=5, existing_code="e = 5"),
         ]))
-        assert "|  | 问题 | 位置 |" in text
-        assert f"| 🔴 | 退款金额可被篡改 | [`src/app.py:2`](https://gitlab.example.com/org/app/-/blob/{HEAD}/src/app.py#L2) |" in text
-        assert "| 🟠 | 缺少归属校验 |" in text
-        assert "| 🟡 |" not in text
+        assert "| 级别 | 问题 | 位置 |" in text
+        assert f"| <sub>🔴 严重</sub> | 退款金额可被篡改 | [`src/app.py:2`](https://gitlab.example.com/org/app/-/blob/{HEAD}/src/app.py#L2) |" in text
+        assert "| <sub>🟠 重要</sub> | 缺少归属校验 |" in text
+        assert "🟡" not in text.split("<details>")[0]
         assert "<summary>其余 2 条次要建议</summary>" in text
-        assert "- 🟡 **循环内查询**" in text and "- ⚪ **命名可以更清楚**" in text
+        assert "- **循环内查询** <sub>🟡 一般</sub>" in text and "- **命名可以更清楚** <sub>⚪ 轻微</sub>" in text
 
     def test_minor_issues_lead_when_nothing_is_more_severe(self):
         text = render_summary(report([issue("minor", title="循环内查询"), issue("nit", title="命名", end_line=3)]))
-        assert "| 🟡 | 循环内查询 |" in text
+        assert "| <sub>🟡 一般</sub> | 循环内查询 |" in text
         assert "<summary>其余 1 条次要建议</summary>" in text
 
     def test_has_no_overview_or_review_metadata(self):
@@ -147,7 +147,7 @@ class TestInlineComment:
     def test_single_issue_has_title_and_explanation_only(self):
         built = report([issue()])
         text = render_inline_comment(built.findings, "zh-CN")
-        assert text.split("\n\n")[1:] == ["🟠 **并发请求可能重复退款**", "原因和修复方式。"]
+        assert text.split("\n\n")[1:] == ["**并发请求可能重复退款** <sub>🟠 重要</sub>", "原因和修复方式。"]
         assert "suggestion" not in text
 
     def test_adjacent_issues_are_numbered_with_their_lines(self):
@@ -156,7 +156,7 @@ class TestInlineComment:
             issue("minor", title="日志缺少订单号", body="难以定位。", start_line=3, end_line=4, existing_code="c = 3\nd = 4"),
         ])
         text = render_inline_comment(built.findings, "zh-CN")
-        assert "🟡 **这段代码有 2 个小问题**" in text
+        assert "**这段代码有 2 个小问题** <sub>🟡 一般</sub>" in text
         assert "1. **循环内查询**（第 2 行）：订单多时会很慢。\n   建议先批量取出。" in text
         assert "2. **日志缺少订单号**（第 3-4 行）：难以定位。" in text
 

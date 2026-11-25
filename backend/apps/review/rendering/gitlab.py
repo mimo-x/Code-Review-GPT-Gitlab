@@ -25,10 +25,10 @@ def render_inline_comment(findings: list[Finding], language: str) -> str:
     """一条行内讨论：一个问题，或同一段代码上相邻的几个次要问题。"""
     labels = labels_for(language)
     marker = findings_marker(findings)
-    icon = SEVERITY_ICONS[findings[0].severity]
+    badge = _badge(findings[0].severity, labels)
     if len(findings) == 1:
         finding = findings[0]
-        parts = [marker, f"{icon} **{single_line(finding.title)}**"]
+        parts = [marker, f"**{single_line(finding.title)}** {badge}"]
         if finding.body:
             parts.append(sanitize(finding.body))
         return "\n\n".join(parts)
@@ -40,7 +40,12 @@ def render_inline_comment(findings: list[Finding], language: str) -> str:
             item += labels["separator"] + sanitize(finding.body).replace("\n", "\n   ")
         items.append(item)
     title = labels["group_title"].format(count=len(findings))
-    return "\n\n".join([marker, f"{icon} **{title}**", "\n".join(items)])
+    return "\n\n".join([marker, f"**{title}** {badge}", "\n".join(items)])
+
+
+def _badge(severity: str, labels: dict) -> str:
+    """严重程度用小号标签：圆点只做颜色提示，不和标题抢位置。"""
+    return f"<sub>{SEVERITY_ICONS[severity]} {labels['severity'][severity]}</sub>"
 
 
 def _lines(finding: Finding, labels: dict) -> str:
@@ -105,14 +110,17 @@ def _delivered(findings, history) -> set[str]:
 
 
 def _render_table(findings, report, history, labels) -> str:
-    rows = [f"|  | {labels['col_issue']} | {labels['col_location']} |", "| --- | --- | --- |"]
+    rows = [
+        f"| {labels['col_severity']} | {labels['col_issue']} | {labels['col_location']} |",
+        "| --- | --- | --- |",
+    ]
     for finding in findings:
         issue = table_cell(finding.title)
         if history and history.previous:
             status = "persisted" if finding.fingerprint in history.previous else "new"
             issue = f"{issue}（{labels[status]}）"
         location = _location(finding, report, labels)
-        rows.append(f"| {SEVERITY_ICONS[finding.severity]} | {issue} | {location} |")
+        rows.append(f"| {_badge(finding.severity, labels)} | {issue} | {location} |")
     return "\n".join(rows)
 
 
@@ -136,8 +144,8 @@ def _render_issue_list(findings, report, labels, delivered: set[str]) -> str:
     """有行内讨论的只给位置；没有的要带上说明，内容不能丢。"""
     items = []
     for finding in findings:
-        icon = SEVERITY_ICONS[finding.severity]
-        item = f"- {icon} **{single_line(finding.title)}** — {_location(finding, report, labels)}"
+        badge = _badge(finding.severity, labels)
+        item = f"- **{single_line(finding.title)}** {badge} — {_location(finding, report, labels)}"
         if finding.body and finding.fingerprint not in delivered:
             item += "\n\n  " + sanitize(finding.body).replace("\n", "\n  ")
         items.append(item)
@@ -147,9 +155,10 @@ def _render_issue_list(findings, report, labels, delivered: set[str]) -> str:
 def _render_not_reported(items: list[dict], labels: dict) -> str:
     lines = [labels["not_reported_hint"], ""]
     for item in items:
-        icon = SEVERITY_ICONS.get(item.get("severity"), SEVERITY_ICONS["minor"])
+        severity = item.get("severity") if item.get("severity") in SEVERITY_ICONS else "minor"
         location = code_span(str(item.get("location", "")))
-        lines.append(f"- {icon} {single_line(str(item.get('title', '')))} — {location}")
+        title = single_line(str(item.get("title", "")))
+        lines.append(f"- {title} {_badge(severity, labels)} — {location}")
     return _details(f"{labels['not_reported']}（{len(items)}）", "\n".join(lines))
 
 

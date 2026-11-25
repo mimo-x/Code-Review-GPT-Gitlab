@@ -15,8 +15,9 @@ _SUMMARY = re.compile(
 _FINDINGS = re.compile(r"\A<!-- code-review-gpt:(finding:v1|findings:v2) ([A-Za-z0-9_=-]+) -->")
 
 
-def summary_marker(review_id: int, findings: list[Finding]) -> str:
-    return f"<!-- code-review-gpt:summary:v2 review={review_id} {_encode(findings)} -->"
+def summary_marker(review_id: int, findings: list[Finding], threads: dict[str, str] | None = None) -> str:
+    """threads：指纹变了但沿用旧讨论的问题，记下讨论标记里的旧指纹，下次才能接上。"""
+    return f"<!-- code-review-gpt:summary:v2 review={review_id} {_encode(findings, threads)} -->"
 
 
 def parse_summary_marker(body: str) -> tuple[int, list[dict]] | None:
@@ -37,19 +38,20 @@ def parse_findings_marker(body: str) -> list[dict]:
     return _decode(match.group(2), single=match.group(1) == "finding:v1")
 
 
-def _encode(findings: list[Finding]) -> str:
-    payload = json.dumps(
-        [
-            {
-                "fp": finding.fingerprint,
-                "title": finding.title,
-                "severity": finding.severity,
-                "location": finding.location,
-            }
-            for finding in findings
-        ],
-        ensure_ascii=False,
-    )
+def _encode(findings: list[Finding], threads: dict[str, str] | None = None) -> str:
+    threads = threads or {}
+    items = []
+    for finding in findings:
+        item = {
+            "fp": finding.fingerprint,
+            "title": finding.title,
+            "severity": finding.severity,
+            "location": finding.location,
+        }
+        if finding.fingerprint in threads:
+            item["thread"] = threads[finding.fingerprint]
+        items.append(item)
+    payload = json.dumps(items, ensure_ascii=False)
     return base64.urlsafe_b64encode(payload.encode()).decode()
 
 
