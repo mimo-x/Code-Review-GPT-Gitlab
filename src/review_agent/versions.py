@@ -11,8 +11,8 @@ from review_core.intel.tools import TOOLS_VERSION
 # the case record (orchestrator.CaseReview)
 REVIEW_VERSION = "review-v1"
 # investigator prompt text (prompts.SYSTEM), and the low tier's variant (SYSTEM_LOW)
-PROMPT_VERSION = "investigator-v5"
-LOW_PROMPT_VERSION = "investigator-low-v1"
+PROMPT_VERSION = "investigator-v5+handles1"
+LOW_PROMPT_VERSION = "investigator-low-v1+handles1"
 # the merge-blocking passages swapped into either variant (prompts.MERGE_BLOCKING)
 MERGE_BLOCKING_VERSION = "merge-blocking-v1"
 # the final review over the post-processed comments (final)

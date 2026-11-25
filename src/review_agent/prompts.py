@@ -70,7 +70,8 @@ read_file output (line prefixes such as "+L12" may be included; they are strippe
 required, a line number alone is not enough. Cite the evidence ids printed at the end of \
 the tool results that show the code ("evidence 2f371f2e7f44" -> ["2f371f2e7f44"]); the \
 code itself is evidence, proof that it fails is not required. Put the K# the finding \
-resolves in `candidate` only; never write K# ids in title or description. For a typo, quote \
+resolves in `candidate` only; never write K#, U# or C# handles in title or description: \
+the author does not see them. For a typo, quote \
 the misspelled word exactly as the code writes it. findings and evidence are JSON arrays, \
 never strings.
 5. Withdraw a finding with update_finding only when tool results show it is factually \
@@ -132,7 +133,8 @@ issue per finding. Anchor it with existing_code: 1-10 consecutive lines copied f
 read_diff or read_file output (line prefixes such as "+L12" may be included; they are \
 stripped); it is required, a line number alone is not enough. Cite the evidence ids \
 printed at the end of the tool results that show the code ("evidence 2f371f2e7f44" -> \
-["2f371f2e7f44"]). Put the K# a finding resolves in `candidate` only. findings and \
+["2f371f2e7f44"]). Put the K# a finding resolves in `candidate` only; never write K#, U# or C# handles in \
+title or description: the author does not see them. findings and \
 evidence are JSON arrays, never strings.
 4. Withdraw a finding with update_finding only when tool results show it is factually wrong.
 5. Call finish as soon as the main risks of your assignment are covered. List suspicions \
