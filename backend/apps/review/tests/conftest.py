@@ -289,6 +289,7 @@ json.dump({{
     "source": open("app.py").read(),
     "stdin": stdin,
     "argv": sys.argv[1:],
+    "env": dict(os.environ),
     "git_config": open(os.path.join(subprocess.run(
         ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], capture_output=True, text=True, check=True,
         env={{k: v for k, v in os.environ.items() if not k.startswith("GIT_")}},

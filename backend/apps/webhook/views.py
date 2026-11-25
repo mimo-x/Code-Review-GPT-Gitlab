@@ -1,3 +1,4 @@
+import json
 import logging
 import threading
 import uuid
@@ -425,6 +426,9 @@ def _start_merge_request_review(payload, webhook_log, project_id, project_name, 
 
         logger.info(f"Starting MR review: Project {project_id}, MR #{merge_request_iid}, Rule: {matched_rule.name}")
 
+        # payload 里的字段可能是 null
+        commit_author = (object_attributes.get('last_commit') or {}).get('author') or {}
+
         # 创建审查记录
         request_id = webhook_log.request_id if webhook_log else str(uuid.uuid4())
         review = MergeRequestReview.objects.create(
@@ -434,8 +438,8 @@ def _start_merge_request_review(payload, webhook_log, project_id, project_name, 
             merge_request_title=object_attributes.get('title', ''),
             source_branch=object_attributes.get('source_branch', ''),
             target_branch=object_attributes.get('target_branch', ''),
-            author_name=object_attributes.get('last_commit', {}).get('author', {}).get('name', ''),
-            author_email=object_attributes.get('last_commit', {}).get('author', {}).get('email', ''),
+            author_name=commit_author.get('name') or '',
+            author_email=commit_author.get('email') or '',
             status='pending',
             request_id=request_id,
             review_content=''
@@ -1256,7 +1260,6 @@ def list_logs(request):
             request_headers = None
             try:
                 if log.get('request_headers'):
-                    import json
                     request_headers = json.loads(log['request_headers'])
             except (json.JSONDecodeError, TypeError):
                 pass

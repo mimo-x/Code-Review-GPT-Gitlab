@@ -235,7 +235,17 @@ GPT_MESSAGE = """
 # 审查结果的输出语言：zh-CN 或 en
 REVIEW_OUTPUT_LANGUAGE = os.environ.get('REVIEW_OUTPUT_LANGUAGE', 'zh-CN')
 # 单个 MR 最多保留的行内评论数，超出的问题只出现在总结里
-REVIEW_MAX_INLINE_COMMENTS = int(os.environ.get('REVIEW_MAX_INLINE_COMMENTS', 10))
+def _env_int(name, default):
+    value = os.environ.get(name, '').strip()
+    if not value:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        raise ValueError(f'环境变量 {name} 必须是整数，当前值为 {value!r}') from None
+
+
+REVIEW_MAX_INLINE_COMMENTS = _env_int('REVIEW_MAX_INLINE_COMMENTS', 10)
 
 # Review Agent：用独立的 Python 3.12 环境运行仓库里的 agent/ 目录
 REVIEW_AGENT_PYTHON = os.environ.get(

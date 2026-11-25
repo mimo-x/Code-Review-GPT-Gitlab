@@ -184,7 +184,7 @@ class TestPartialDiff:
 
 class TestSafety:
     def test_mentions_after_punctuation_do_not_notify(self):
-        for text in ("-@all", ".@all", "(@all)", "，@all"):
+        for text in ("-@all", ".@all", "(@all)", "，@all", "请注意@all"):
             assert "@all" not in sanitize(text)
 
     def test_quick_actions_are_escaped(self):
