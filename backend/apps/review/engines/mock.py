@@ -20,6 +20,8 @@ _TEXT = {
 
 class MockEngine(ReviewEngine):
     kind = "mock"
+    label = "Mock"
+    description = "不调用模型，发一条示例评论，用于检查展示和发布流程。"
 
     def review(self, request: ReviewRequest) -> ReviewResult:
         text = _TEXT.get(request.language, _TEXT["zh-CN"])

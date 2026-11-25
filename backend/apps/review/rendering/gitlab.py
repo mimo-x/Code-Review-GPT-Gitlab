@@ -21,39 +21,19 @@ class PublishHistory:
     not_reported: list[dict] = field(default_factory=list)
 
 
-def render_inline_comment(findings: list[Finding], language: str) -> str:
-    """一条行内讨论：一个问题，或同一段代码上相邻的几个次要问题。"""
+def render_inline_comment(finding: Finding, language: str) -> str:
+    """一条行内讨论只讲一个问题：标题、严重程度和说明。"""
     labels = labels_for(language)
-    marker = findings_marker(findings)
-    badge = _badge(findings[0].severity, labels)
-    if len(findings) == 1:
-        finding = findings[0]
-        parts = [marker, f"**{single_line(finding.title)}** {badge}"]
-        if finding.body:
-            parts.append(sanitize(finding.body))
-        return "\n\n".join(parts)
-
-    items = []
-    for number, finding in enumerate(findings, 1):
-        item = f"{number}. **{single_line(finding.title)}**（{_lines(finding, labels)}）"
-        if finding.body:
-            item += labels["separator"] + sanitize(finding.body).replace("\n", "\n   ")
-        items.append(item)
-    title = labels["group_title"].format(count=len(findings))
-    return "\n\n".join([marker, f"**{title}** {badge}", "\n".join(items)])
+    parts = [findings_marker([finding]),
+             f"**{single_line(finding.title)}** {_badge(finding.severity, labels)}"]
+    if finding.body:
+        parts.append(sanitize(finding.body))
+    return "\n\n".join(parts)
 
 
 def _badge(severity: str, labels: dict) -> str:
     """严重程度用小号标签：圆点只做颜色提示，不和标题抢位置。"""
     return f"<sub>{SEVERITY_ICONS[severity]} {labels['severity'][severity]}</sub>"
-
-
-def _lines(finding: Finding, labels: dict) -> str:
-    if finding.start_line and finding.start_line != finding.end_line:
-        text = labels["lines"].format(start=finding.start_line, end=finding.end_line)
-    else:
-        text = labels["line"].format(line=finding.end_line)
-    return labels["old_prefix"] + text if finding.side == "old" else text
 
 
 def render_summary(report: ReviewReport, history: PublishHistory | None = None) -> str:

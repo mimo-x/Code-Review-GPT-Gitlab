@@ -10,6 +10,8 @@ from .prompting import build_review_prompt
 
 class DiffLLMEngine(ReviewEngine):
     kind = "diff_llm"
+    label = "模型 API"
+    description = "把 diff 发给配置的模型，一次调用完成审查。"
 
     def review(self, request: ReviewRequest) -> ReviewResult:
         client = LLMService(self.llm_config, request_id=self.request_id)

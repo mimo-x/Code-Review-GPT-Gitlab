@@ -341,6 +341,22 @@ export const getWebhookUrl = () => {
   })
 }
 
+// 审查引擎：可选引擎、各自的配置项和当前选择
+export const getReviewEngine = () => {
+  return request({
+    url: getApiUrl('/review/engine/'),
+    method: 'get'
+  })
+}
+
+export const updateReviewEngine = (data: { engine: string; options: Record<string, any> }) => {
+  return request({
+    url: getApiUrl('/review/engine/'),
+    method: 'put',
+    data
+  })
+}
+
 // 测试 Claude CLI 配置
 export const testClaudeCliConfigApi = (data: any) => {
   return request({

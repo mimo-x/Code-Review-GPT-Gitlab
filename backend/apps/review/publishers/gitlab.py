@@ -172,7 +172,7 @@ class GitLabReviewPublisher:
             report.findings, state.findings, settings.REVIEW_MAX_INLINE_COMMENTS
         )
         comments = [
-            _Comment(thread, render_inline_comment(thread, report.language),
+            _Comment(thread, render_inline_comment(thread[0], report.language),
                      self._position(report, thread[0]))
             for thread in threads
         ]

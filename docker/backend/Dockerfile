@@ -29,6 +29,13 @@ COPY backend/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt \
     && rm /tmp/requirements.txt
 
+# Review Agent 需要 Python 3.12，装在独立的虚拟环境里，和后端依赖互不影响
+COPY agent/ /opt/review-agent/src
+RUN pip install --no-cache-dir uv \
+    && uv venv --python 3.12 /opt/review-agent/venv \
+    && uv pip install --no-cache --python /opt/review-agent/venv/bin/python "/opt/review-agent/src[llm,python]"
+ENV REVIEW_AGENT_PYTHON=/opt/review-agent/venv/bin/python
+
 # 复制项目代码（运行时仍会挂载宿主目录，确保本地修改可生效）
 COPY backend/ /app
 

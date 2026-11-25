@@ -15,6 +15,46 @@ class EngineError(Exception):
 
 
 @dataclass(frozen=True)
+class Option:
+    """引擎可配置的一项。前端按这些声明显示配置表单，新增引擎不需要改前端。"""
+
+    key: str
+    label: str
+    kind: str  # "select" 或 "number"
+    default: Any
+    choices: tuple[tuple[str, str], ...] = ()  # select：(值, 显示名)
+    minimum: int | None = None
+    maximum: int | None = None
+    # 放在默认收起的“高级设置”里
+    advanced: bool = False
+    help: str = ""
+
+    def clean(self, value: Any) -> Any:
+        if value is None:
+            return self.default
+        if self.kind == "select":
+            if value not in {choice for choice, _ in self.choices}:
+                raise ValueError(f"{self.label}：不支持的取值 {value!r}")
+            return value
+        if isinstance(value, bool):
+            raise ValueError(f"{self.label}：需要整数")
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            raise ValueError(f"{self.label}：需要整数") from None
+        if number != value and not isinstance(value, str):
+            raise ValueError(f"{self.label}：需要整数")
+        if self.minimum is not None and number < self.minimum:
+            raise ValueError(f"{self.label}：不能小于 {self.minimum}")
+        if self.maximum is not None and number > self.maximum:
+            raise ValueError(f"{self.label}：不能大于 {self.maximum}")
+        return number
+
+    def describe(self) -> dict[str, Any]:
+        return {**asdict(self), "choices": [list(choice) for choice in self.choices]}
+
+
+@dataclass(frozen=True)
 class Revisions:
     base_sha: str
     start_sha: str
@@ -96,11 +136,29 @@ class ReviewResult:
 
 class ReviewEngine(ABC):
     kind: ClassVar[str]
+    label: ClassVar[str]
+    description: ClassVar[str] = ""
     needs_worktree: ClassVar[bool] = False
+    options: ClassVar[tuple[Option, ...]] = ()
 
-    def __init__(self, llm_config, request_id: str | None = None):
+    def __init__(self, llm_config, request_id: str | None = None, options: dict | None = None):
         self.llm_config = llm_config
         self.request_id = request_id
+        self.settings = self.clean_options(options or {})
+
+    @classmethod
+    def clean_options(cls, values: dict) -> dict[str, Any]:
+        """补上默认值并校验；未声明的键会被丢弃。取值不合法时抛出 ValueError。"""
+        return {option.key: option.clean(values.get(option.key)) for option in cls.options}
+
+    @classmethod
+    def describe(cls) -> dict[str, Any]:
+        return {
+            "kind": cls.kind,
+            "label": cls.label,
+            "description": cls.description,
+            "options": [option.describe() for option in cls.options],
+        }
 
     @abstractmethod
     def review(self, request: ReviewRequest) -> ReviewResult:

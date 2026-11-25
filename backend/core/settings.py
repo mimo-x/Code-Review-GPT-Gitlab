@@ -235,7 +235,15 @@ GPT_MESSAGE = """
 # 审查结果的输出语言：zh-CN 或 en
 REVIEW_OUTPUT_LANGUAGE = os.environ.get('REVIEW_OUTPUT_LANGUAGE', 'zh-CN')
 # 单个 MR 最多保留的行内评论数，超出的问题只出现在总结里
-REVIEW_MAX_INLINE_COMMENTS = int(os.environ.get('REVIEW_MAX_INLINE_COMMENTS', 20))
+REVIEW_MAX_INLINE_COMMENTS = int(os.environ.get('REVIEW_MAX_INLINE_COMMENTS', 10))
+
+# Review Agent：用独立的 Python 3.12 环境运行仓库里的 agent/ 目录
+REVIEW_AGENT_PYTHON = os.environ.get(
+    'REVIEW_AGENT_PYTHON', os.path.join(BASE_DIR.parent, 'agent', '.venv', 'bin', 'python')
+)
+REVIEW_AGENT_STATE_DIR = os.environ.get(
+    'REVIEW_AGENT_STATE_DIR', os.path.join(BASE_DIR, 'data', 'review-agent')
+)
 
 # Create logs directory if it doesn't exist
 os.makedirs(os.path.join(BASE_DIR, 'logs'), exist_ok=True)

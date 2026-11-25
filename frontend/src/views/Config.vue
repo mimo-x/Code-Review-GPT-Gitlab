@@ -42,8 +42,57 @@
       </nav>
     </div>
 
-    <!-- LLM Config -->
-    <div v-show="activeTab === 'llm'" class="config-section">
+    <!-- 审查引擎 -->
+    <div v-show="activeTab === 'engine'" class="config-section">
+      <div class="p-6 space-y-6">
+        <div class="flex items-center gap-3">
+          <div class="w-2 h-2 bg-apple-blue-500 rounded-full"></div>
+          <h3 class="text-lg font-semibold text-apple-900">审查引擎</h3>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <button v-for="item in engines" :key="item.kind" type="button" @click="selectEngine(item.kind)"
+            :class="['engine-card', engine.kind === item.kind ? 'engine-card-active' : '']">
+            <div class="font-medium text-apple-900">{{ item.label }}</div>
+            <div class="text-xs text-apple-500 mt-1">{{ item.description }}</div>
+          </button>
+        </div>
+
+        <p v-if="engine.kind === 'claude_code'" class="text-sm text-apple-500">
+          Claude Code 的连接方式在「Claude CLI 配置」中设置。
+        </p>
+
+        <div v-if="basicOptions.length" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div v-for="option in basicOptions" :key="option.key" class="config-field-group">
+            <label class="config-label">{{ option.label }}</label>
+            <select v-if="option.kind === 'select'" v-model="engine.options[option.key]" class="input-field">
+              <option v-for="[value, text] in option.choices" :key="value" :value="value">{{ text }}</option>
+            </select>
+            <input v-else v-model.number="engine.options[option.key]" type="number" class="input-field"
+              :min="option.minimum ?? undefined" :max="option.maximum ?? undefined" />
+            <p v-if="option.help" class="text-xs text-apple-500 mt-1">{{ option.help }}</p>
+          </div>
+        </div>
+
+        <details v-if="advancedOptions.length" class="engine-advanced">
+          <summary class="cursor-pointer text-sm font-medium text-apple-700">高级设置</summary>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+            <div v-for="option in advancedOptions" :key="option.key" class="config-field-group">
+              <label class="config-label">{{ option.label }}</label>
+              <select v-if="option.kind === 'select'" v-model="engine.options[option.key]" class="input-field">
+                <option v-for="[value, text] in option.choices" :key="value" :value="value">{{ text }}</option>
+              </select>
+              <input v-else v-model.number="engine.options[option.key]" type="number" class="input-field"
+                :min="option.minimum ?? undefined" :max="option.maximum ?? undefined" />
+              <p v-if="option.help" class="text-xs text-apple-500 mt-1">{{ option.help }}</p>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- LLM Config：只有需要调用模型的引擎才显示 -->
+    <div v-show="activeTab === 'engine' && engineUsesModel" class="config-section">
       <div class="p-6 space-y-6">
         <div class="flex items-center gap-3">
           <div class="w-2 h-2 bg-apple-blue-500 rounded-full"></div>
@@ -615,11 +664,13 @@ import {
   deleteWebhookEventRule,
   testWebhookEventRule,
   validateWebhookPayload,
-  initializeDefaultWebhookEventRules
+  initializeDefaultWebhookEventRules,
+  getReviewEngine,
+  updateReviewEngine
 } from '@/api/index'
 
 // 响应式数据
-const activeTab = ref('gitlab')
+const activeTab = ref('engine')
 const saving = ref(false)
 const message = ref('')
 const messageType = ref<'success' | 'error'>('success')
@@ -634,6 +685,7 @@ const showClaudeToken = ref(false)
 const testingClaude = ref(false)
 
 const tabs = [
+  { key: 'engine', label: '审查引擎' },
   { key: 'gitlab', label: 'GitLab 配置' },
   { key: 'claude-cli', label: 'Claude CLI 配置' },
   { key: 'webhook-events', label: 'Webhook 事件' },
@@ -842,6 +894,49 @@ const refreshChannels = async () => {
 }
 
 // 加载配置
+// 审查引擎：配置项由后端按引擎声明，这里只负责显示
+interface EngineOption {
+  key: string
+  label: string
+  kind: 'select' | 'number'
+  default: any
+  choices: [string, string][]
+  minimum: number | null
+  maximum: number | null
+  advanced: boolean
+  help: string
+}
+interface EngineInfo {
+  kind: string
+  label: string
+  description: string
+  options: EngineOption[]
+}
+const MODEL_ENGINES = ['diff_llm', 'review_agent']
+const engines = ref<EngineInfo[]>([])
+const engine = ref<{ kind: string; options: Record<string, any> }>({ kind: '', options: {} })
+const originalEngine = ref('')
+const currentEngine = computed(() => engines.value.find((item) => item.kind === engine.value.kind))
+const basicOptions = computed(() => (currentEngine.value?.options || []).filter((o) => !o.advanced))
+const advancedOptions = computed(() => (currentEngine.value?.options || []).filter((o) => o.advanced))
+const engineUsesModel = computed(() => MODEL_ENGINES.includes(engine.value.kind))
+
+const selectEngine = (kind: string) => {
+  const info = engines.value.find((item) => item.kind === kind)
+  const options: Record<string, any> = {}
+  for (const option of info?.options || []) {
+    options[option.key] = engine.value.options[option.key] ?? option.default
+  }
+  engine.value = { kind, options }
+}
+
+const loadEngine = async () => {
+  const data: any = await getReviewEngine()
+  engines.value = data.engines || []
+  engine.value = { kind: data.engine, options: { ...(data.options || {}) } }
+  originalEngine.value = JSON.stringify(engine.value)
+}
+
 const loadConfig = async () => {
   try {
     const response = await getConfigSummary()
@@ -893,6 +988,7 @@ const loadConfig = async () => {
     // 保存原始配置
     originalConfig.value = JSON.parse(JSON.stringify(config.value))
 
+    await loadEngine()
   } catch (error) {
     console.error('Failed to load config:', error)
     showMessage('加载配置失败', 'error')
@@ -956,6 +1052,10 @@ const handleSave = async () => {
     }
 
     await batchUpdateConfig(apiData)
+    if (engine.value.kind) {
+      await updateReviewEngine({ engine: engine.value.kind, options: engine.value.options })
+      originalEngine.value = JSON.stringify(engine.value)
+    }
     showMessage('配置保存成功')
 
     // 更新原始配置
@@ -1229,6 +1329,9 @@ const saveEventRule = async () => {
 
 // 重置配置
 const handleReset = () => {
+  if (originalEngine.value) {
+    engine.value = JSON.parse(originalEngine.value)
+  }
   if (JSON.stringify(originalConfig.value)) {
     config.value = JSON.parse(JSON.stringify(originalConfig.value))
     showMessage('配置已重置')
