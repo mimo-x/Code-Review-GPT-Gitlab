@@ -4,7 +4,8 @@ from __future__ import annotations
 import re
 
 _QUICK_ACTION = re.compile(r"^([ \t>]*)/(?=[A-Za-z])", re.MULTILINE)
-_MENTION = re.compile(r"(?<!\w)@(?=[\w.-])")
+# GitLab 用 Ruby 的 \w 判断提及边界，只认 ASCII：紧跟在汉字后的 @all 同样会通知
+_MENTION = re.compile(r"(?<![A-Za-z0-9_])@(?=[\w.-])")
 _LAYOUT_TAG = re.compile(r"<(/?)(details|summary)\b", re.IGNORECASE)
 _ZERO_WIDTH_SPACE = "​"
 

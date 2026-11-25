@@ -233,6 +233,20 @@ class TestInlineThreads:
         assert len(gitlab.inline_notes) == 3
         assert "本次未再报告（2）" in gitlab.plain_notes[0]["body"]
 
+    def test_drafts_that_cannot_be_created_fall_back_to_discussions(self, gitlab, llm, review_payload):
+        llm()
+        from gitlab.exceptions import GitlabHttpError
+        original = gitlab.draft_api
+
+        def forbid_drafts(method, path, data=None):
+            if method == "post" and path.endswith("/draft_notes"):
+                raise GitlabHttpError("403 Forbidden", response_code=403)
+            return original(method, path, data)
+
+        gitlab.draft_api = forbid_drafts
+        review_with(model_output(problem()), review_payload)
+        assert gitlab.bulk_publishes == 0 and len(gitlab.inline_notes) == 1
+
     def test_draft_created_by_the_owner_meanwhile_is_not_published(self, gitlab, llm, review_payload):
         llm()
         create = gitlab.draft_api

@@ -216,7 +216,8 @@ class GitLabReviewPublisher:
             drafted.append(comment)
             draft_ids.append(created["id"])
         if not drafted:
-            return set(), failed
+            # 一条草稿都建不了，多半是草稿功能被限制，而不是评论位置有问题
+            raise _ReviewUnavailable("草稿全部创建失败")
 
         # 发布前再确认一次，账号本人在这期间新建的草稿不能被一起发出
         try:

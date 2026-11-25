@@ -134,14 +134,15 @@ def _connect_gitlab(request_id: str) -> GitlabService:
 
 
 def _merge_request_info(review, payload, changes) -> MergeRequestInfo:
-    project = payload.get("project", {})
-    attributes = payload.get("object_attributes", {})
+    # GitLab 的 payload 里字段可能是 null，不能只靠 get 的默认值
+    project = payload.get("project") or {}
+    attributes = payload.get("object_attributes") or {}
     return MergeRequestInfo(
         project_id=review.project_id,
         mr_iid=review.merge_request_iid,
-        project_name=project.get("name", "未知项目"),
-        title=attributes.get("title", "未知MR"),
-        author=attributes.get("author", {}).get("name", "未知作者"),
+        project_name=project.get("name") or "未知项目",
+        title=attributes.get("title") or "未知MR",
+        author=(attributes.get("author") or {}).get("name") or "未知作者",
         description=attributes.get("description") or "",
         url=attributes.get("url", ""),
         source_branch=attributes.get("source_branch", ""),

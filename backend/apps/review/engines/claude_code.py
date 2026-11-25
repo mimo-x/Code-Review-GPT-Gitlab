@@ -6,6 +6,7 @@ import logging
 import os
 import shutil
 import subprocess
+import tempfile
 
 from django.conf import settings
 
@@ -23,6 +24,15 @@ RUN_ARGS = (
     "--setting-sources", "user",
     "--strict-mcp-config",
     "--disallowedTools", "Bash Edit Write NotebookEdit",
+)
+
+# 子进程只拿到运行所需的变量：MR 代码不可信，服务端的其他密钥不能被读到
+_PASSTHROUGH_ENV = (
+    "PATH", "LANG", "LC_ALL", "TZ",
+    "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY",
+    "http_proxy", "https_proxy", "no_proxy", "all_proxy",
+    "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE", "NODE_EXTRA_CA_CERTS",
+    "ANTHROPIC_API_KEY",
 )
 
 WORKSPACE_NOTE = (
@@ -61,8 +71,10 @@ class ClaudeCli:
             anthropic_auth_token=os.environ.get("ANTHROPIC_AUTH_TOKEN"),
         )
 
-    def environment(self) -> dict[str, str]:
-        env = os.environ.copy()
+    def environment(self, home) -> dict[str, str]:
+        """HOME 指向临时目录，CLI 读不到服务账号家目录里的凭据和配置。"""
+        env = {name: os.environ[name] for name in _PASSTHROUGH_ENV if name in os.environ}
+        env["HOME"] = str(home)
         if self.anthropic_base_url:
             env["ANTHROPIC_BASE_URL"] = self.anthropic_base_url
         if self.anthropic_auth_token:
@@ -95,28 +107,30 @@ class ClaudeCli:
         return os.path.abspath(found) if found else self.cli_path
 
     def _probe(self, flag: str) -> subprocess.CompletedProcess:
-        return subprocess.run(
-            [self.executable(), flag],
-            env=self.environment(),
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
+        with tempfile.TemporaryDirectory(prefix="claude-home-") as home:
+            return subprocess.run(
+                [self.executable(), flag],
+                env=self.environment(home),
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
 
     def run(self, prompt: str, cwd) -> dict:
         """提示词走 stdin：diff 可能超过单个命令行参数的长度限制。"""
         try:
-            process = subprocess.run(
-                [self.executable(), *RUN_ARGS],
-                input=prompt,
-                cwd=cwd,
-                env=self.environment(),
-                capture_output=True,
-                text=True,
-                timeout=self.timeout,
-                check=False,
-            )
+            with tempfile.TemporaryDirectory(prefix="claude-home-") as home:
+                process = subprocess.run(
+                    [self.executable(), *RUN_ARGS],
+                    input=prompt,
+                    cwd=cwd,
+                    env=self.environment(home),
+                    capture_output=True,
+                    text=True,
+                    timeout=self.timeout,
+                    check=False,
+                )
         except subprocess.TimeoutExpired as exc:
             raise EngineError(f"Claude CLI timeout after {self.timeout}s") from exc
         except FileNotFoundError as exc:

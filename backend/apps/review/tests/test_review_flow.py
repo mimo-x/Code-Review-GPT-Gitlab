@@ -126,6 +126,24 @@ class TestClaudePath:
         assert review.status == "failed"
         assert "仓库" in review.error_message
 
+    def test_cli_gets_only_the_environment_it_needs(
+        self, gitlab, llm, fake_claude, review_record, review_payload, monkeypatch
+    ):
+        import os
+        monkeypatch.setenv("DJANGO_SECRET_KEY", "server-secret")
+        monkeypatch.setenv("HTTPS_PROXY", "http://proxy.internal:3128")
+        llm(provider="claude", model="claude")
+        fake_claude.config.anthropic_auth_token = "claude-token"
+        fake_claude.config.save()
+        review = run_review(review_record, review_payload)
+        assert review.status == "completed", review.error_message
+        env = fake_claude.record()["env"]
+        assert "DJANGO_SECRET_KEY" not in env and "REDIS_URL" not in env
+        assert env["ANTHROPIC_AUTH_TOKEN"] == "claude-token"
+        assert env["HTTPS_PROXY"] == "http://proxy.internal:3128"
+        assert env["HOME"] != os.path.expanduser("~")
+        assert not os.path.exists(env["HOME"])
+
     def test_relative_cli_path_is_resolved_before_entering_the_checkout(
         self, gitlab, llm, fake_claude, review_record, review_payload
     ):
@@ -156,6 +174,18 @@ class TestClaudePath:
         assert review.status == "failed"
         assert "not found" in review.error_message.lower()
         assert not gitlab.bodies
+
+
+@pytest.mark.django_db
+class TestPayload:
+    def test_null_fields_in_the_payload_do_not_break_the_review(
+        self, gitlab, llm, review_record, review_payload
+    ):
+        llm(provider="mock", model="mock")
+        review_payload["object_attributes"]["author"] = None
+        review_payload["object_attributes"]["title"] = None
+        review = run_review(review_record, review_payload)
+        assert review.status == "completed", review.error_message
 
 
 @pytest.mark.django_db
