@@ -703,7 +703,8 @@ def test_review_pools_the_case_budget_in_high_and_can_run_uncapped_or_split(plan
     assert [episode.budget_tokens for episode in result.episodes] == [5_000_000]
     assert result.budget_pool is None
     assert result.versions == {
-        "review": "review-v1", "prompt": "investigator-v5", "low_prompt": "investigator-low-v1",
+        "review": "review-v1", "prompt": "investigator-v5+handles1",
+        "low_prompt": "investigator-low-v1+handles1",
         "merge_blocking": "merge-blocking-v1", "final_review": "final-review-v1",
         "budget_prompt": "budget-v2",
         "intel_tools": "tools-v3",
@@ -752,7 +753,7 @@ def test_low_tier_runs_its_own_prompt_with_the_same_tools(planned, tmp_path):
     assert result.config.tier == "low" and result.comments
     (path,) = (tmp_path / "episodes").glob("*.json")
     episode = json.loads(path.read_text())
-    assert episode["prompt_version"] == "investigator-low-v1"
+    assert episode["prompt_version"] == "investigator-low-v1+handles1"
     assert episode["budget_tokens"] == 600_000
     first = episode["messages"][episode["steps"][0]["request"][0]]
     assert first["content"] == prompts.SYSTEM_LOW
