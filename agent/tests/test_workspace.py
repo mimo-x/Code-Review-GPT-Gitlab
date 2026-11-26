@@ -52,6 +52,20 @@ def test_all_changed_lines_have_accurate_sides(reviewed):
     assert not workspace.is_diff_line("api.py", 1000, "head")
 
 
+def test_excluded_changes_do_not_remove_workspace_context(reviewed, tmp_path):
+    repository, full, _ = reviewed
+    snapshot = full.snapshot
+    args = (repository.path, tmp_path / "state", "test/project", snapshot.base_sha, snapshot.head_sha)
+    scoped = Workspace.create(*args, excluded_paths=["users.py", "tests/test_users.py"])
+    assert scoped.snapshot.id != snapshot.id
+    assert [change.new_path for change in scoped.read_diff()] == ["api.py"]
+    assert not scoped.read_diff("users.py")
+    assert scoped.read_file("users.py").text == full.read_file("users.py").text
+    assert scoped.read_file("users.py", "base").text == full.read_file("users.py", "base").text
+    same_scope = Workspace.create(*args, excluded_paths=["tests/test_users.py", "users.py", "users.py"])
+    assert same_scope.snapshot == scoped.snapshot
+
+
 def test_special_paths_binary_empty_mode_and_rename(repository, tmp_path):
     repository.write("旧 名\tfile.py", "value = 1\n")
     repository.write("binary.bin", b"\0old")

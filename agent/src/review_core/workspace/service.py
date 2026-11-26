@@ -53,6 +53,7 @@ class Workspace:
         previous_sha: str | None = None,
         merge_request: str | None = None,
         diff_version: str | None = None,
+        excluded_paths: Sequence[str] = (),
     ) -> Workspace:
         start_sha = start_sha or base_sha
         state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -66,7 +67,8 @@ class Workspace:
             diff_version=diff_version,
             diff_policy="git-myers-renames50-context3-v2",
         )
-        snapshot_id = stable_id(identity)
+        excluded = frozenset(excluded_paths)
+        snapshot_id = stable_id({**identity, "excluded_paths": sorted(excluded)} if excluded else identity)
         revisions = tuple(sha for sha in (base_sha, start_sha, head_sha, previous_sha) if sha)
         git = import_objects(
             repository, state_dir / "repositories" / (stable_id(repository_id) + ".git"), revisions
@@ -75,7 +77,7 @@ class Workspace:
         existing = store.get("snapshots-v1", snapshot_id)
         if existing:
             return cls(git, Snapshot.model_validate(existing), store)
-        changes = cls._diff(git, base_sha, head_sha, snapshot_id)
+        changes = cls._diff(git, base_sha, head_sha, snapshot_id, excluded)
         snapshot = Snapshot(id=snapshot_id, changes=changes, **identity)
         store.put("snapshots-v1", snapshot_id, snapshot.model_dump(mode="json"))
         return cls(git, snapshot, store)
@@ -116,7 +118,9 @@ class Workspace:
         return cls(git, snapshot, store)
 
     @staticmethod
-    def _diff(git: Git, base: str, head: str, snapshot_id: str) -> tuple[FileChange, ...]:
+    def _diff(
+        git: Git, base: str, head: str, snapshot_id: str, excluded: frozenset[str]
+    ) -> tuple[FileChange, ...]:
         raw = git.run(
             "diff",
             "--raw",
@@ -148,6 +152,8 @@ class Workspace:
                 old_path = None
             if status == "D":
                 new_path = None
+            if (new_path or old_path) in excluded:
+                continue
             old_blob = None if set(old_oid) == {"0"} else old_oid
             new_blob = None if set(new_oid) == {"0"} else new_oid
             file_id = stable_id([snapshot_id, old_path, new_path])
