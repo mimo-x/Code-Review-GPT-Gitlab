@@ -9,7 +9,7 @@ from .review_agent import ReviewAgentEngine
 
 ENGINES: dict[str, type[ReviewEngine]] = {
     engine.kind: engine
-    for engine in (DiffLLMEngine, ReviewAgentEngine, ClaudeCodeEngine, MockEngine)
+    for engine in (ReviewAgentEngine, DiffLLMEngine, ClaudeCodeEngine, MockEngine)
 }
 
 # 没有保存过引擎配置时，审查方式仍由 LLMConfig.provider 决定，兼容旧部署

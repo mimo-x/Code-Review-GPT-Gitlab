@@ -157,7 +157,8 @@ class ClaudeCli:
 class ClaudeCodeEngine(ReviewEngine):
     kind = "claude_code"
     label = "Claude Code"
-    description = "在 MR 代码的临时工作区里运行 Claude Code 命令行。"
+    description = "在 MR 的代码工作区运行 Claude Code。"
+    needs_model = False
     needs_worktree = True
 
     def review(self, request: ReviewRequest) -> ReviewResult:

@@ -107,12 +107,16 @@ class GitLabReviewPublisher:
             inline=inline | (set(state.findings) & current),
             not_reported=[
                 item for fingerprint, item in previous.items()
-                if fingerprint not in current and not item.get("resolved")
+                if not report.result.failed_investigations
+                and fingerprint not in current and not item.get("resolved")
                 and item.get("discussion") not in live
             ],
         )
+        retained = tuple(
+            item for fingerprint, item in state.summarized.items() if fingerprint not in current
+        ) if report.result.failed_investigations else ()
         note_id = self._write_summary(
-            mr.project_id, mr.mr_iid, note_id, self._summary_body(report, history, threads)
+            mr.project_id, mr.mr_iid, note_id, self._summary_body(report, history, threads, retained)
         )
         return {
             "success": True,
@@ -126,8 +130,8 @@ class GitLabReviewPublisher:
         }
 
     @staticmethod
-    def _summary_body(report: ReviewReport, history: PublishHistory | None, threads) -> str:
-        marker = summary_marker(report.review_id, report.findings, threads)
+    def _summary_body(report: ReviewReport, history: PublishHistory | None, threads, retained=()) -> str:
+        marker = summary_marker(report.review_id, report.findings, threads, retained=retained)
         return f"{marker}\n\n{render_summary(report, history)}"
 
     def _load_state(self, project_id, mr_iid) -> tuple[_PublishedState, bool]:

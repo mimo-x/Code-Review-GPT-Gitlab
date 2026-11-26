@@ -1,15 +1,19 @@
-from rest_framework import viewsets, status
+from rest_framework import mixins, viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
+from django.db import transaction
 from django.utils import timezone
 import logging
 import os
 import tempfile
 import subprocess
-from .models import LLMConfig, GitLabConfig, NotificationConfig, NotificationChannel, WebhookEventRule, ClaudeCliConfig
+from .models import LLMConfig, LLMProvider, GitLabConfig, NotificationConfig, NotificationChannel, WebhookEventRule, ClaudeCliConfig
 from .serializers import (
     LLMConfigSerializer,
+    LLMProviderSerializer,
+    LLMModelSummarySerializer,
+    ModelCatalogEntrySerializer,
     GitLabConfigSerializer,
     NotificationConfigSerializer,
     NotificationChannelSerializer,
@@ -17,8 +21,61 @@ from .serializers import (
     ConfigSummarySerializer,
     ClaudeCliConfigSerializer
 )
+from .provider_api import discover_models, ProviderAPIError, test_model
 
 logger = logging.getLogger(__name__)
+
+
+class LLMProviderViewSet(
+    mixins.ListModelMixin, mixins.CreateModelMixin, mixins.UpdateModelMixin,
+    mixins.DestroyModelMixin, viewsets.GenericViewSet
+):
+    queryset = LLMProvider.objects.prefetch_related('models')
+    serializer_class = LLMProviderSerializer
+    pagination_class = None
+
+    @action(detail=True, methods=['post'], url_path='endpoint-models')
+    def endpoint_models(self, request, pk=None):
+        try:
+            return Response({'models': discover_models(self.get_object())})
+        except ProviderAPIError as error:
+            return Response({'message': str(error)}, status=status.HTTP_502_BAD_GATEWAY)
+
+    @action(detail=True, methods=['post'], url_path='models')
+    @transaction.atomic
+    def add_models(self, request, pk=None):
+        provider = get_object_or_404(LLMProvider.objects.select_for_update(), pk=pk)
+        entries = ModelCatalogEntrySerializer(data=request.data, many=True, allow_empty=False, max_length=100)
+        entries.is_valid(raise_exception=True)
+        existing = set(provider.models.values_list('model', flat=True))
+        selected = {item['model']: item['label'] for item in entries.validated_data}
+        LLMConfig.objects.bulk_create([
+            LLMConfig(model_provider=provider, model=model, label=label, is_active=False)
+            for model, label in selected.items() if model not in existing
+        ])
+        return Response(LLMModelSummarySerializer(provider.models.all(), many=True).data)
+
+    @action(detail=True, methods=['post'])
+    @transaction.atomic
+    def duplicate(self, request, pk=None):
+        source = self.get_object()
+        provider = LLMProvider.objects.create(
+            name=source.name[:75] + ' · 副本', provider=source.provider,
+            preset=source.preset, api_base=source.api_base, timeout=source.timeout,
+        )
+        LLMConfig.objects.bulk_create([
+            LLMConfig(model_provider=provider, model=item.model, label=item.label, is_active=False)
+            for item in source.models.all()
+        ])
+        return Response(self.get_serializer(provider).data, status=status.HTTP_201_CREATED)
+
+    @transaction.atomic
+    def destroy(self, request, *args, **kwargs):
+        provider = self.get_object()
+        if provider.models.filter(is_active=True).exists():
+            return Response({'message': '请先切换默认审查模型。'}, status=status.HTTP_409_CONFLICT)
+        provider.models.all().delete()
+        return super().destroy(request, *args, **kwargs)
 
 
 class LLMConfigViewSet(viewsets.ModelViewSet):
@@ -26,26 +83,42 @@ class LLMConfigViewSet(viewsets.ModelViewSet):
     serializer_class = LLMConfigSerializer
 
     def get_queryset(self):
-        return LLMConfig.objects.all()
+        return LLMConfig.objects.select_related('model_provider')
+
+    @action(detail=True, methods=['post'])
+    def test(self, request, pk=None):
+        mode = request.data.get('mode', 'text')
+        if mode not in ('text', 'image', 'structured'):
+            return Response({'message': '请指定有效的测试内容。'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            return Response(test_model(self.get_object(), mode))
+        except ProviderAPIError as error:
+            return Response({'message': str(error)}, status=status.HTTP_502_BAD_GATEWAY)
+
+    def destroy(self, request, *args, **kwargs):
+        if self.get_object().is_active:
+            return Response({'message': '请先切换默认审查模型。'}, status=status.HTTP_409_CONFLICT)
+        return super().destroy(request, *args, **kwargs)
 
     @action(detail=False, methods=['get'])
     def active(self, request):
         """获取当前激活的LLM配置"""
-        config = LLMConfig.objects.filter(is_active=True).first()
+        config = self.get_queryset().filter(is_active=True).first()
         if config:
             serializer = self.get_serializer(config)
             return Response(serializer.data)
         return Response({'error': 'No active LLM config found'}, status=status.HTTP_404_NOT_FOUND)
 
     @action(detail=True, methods=['post'])
+    @transaction.atomic
     def activate(self, request, pk=None):
         """激活指定的LLM配置"""
         config = self.get_object()
         # 先禁用所有其他配置
-        LLMConfig.objects.filter(is_active=True).update(is_active=False)
+        LLMConfig.objects.update(is_active=False)
         # 激活当前配置
         config.is_active = True
-        config.save()
+        config.save(update_fields=['is_active', 'updated_at'])
         return Response({'message': 'LLM config activated successfully'})
 
 

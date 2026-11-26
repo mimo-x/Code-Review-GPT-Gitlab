@@ -14,6 +14,7 @@ class Verdict(Enum):
     ATTENTION = "attention"
     CLEAN = "clean"
     PARTIAL = "partial"
+    INCOMPLETE = "incomplete"
     UNSTRUCTURED = "unstructured"
 
 
@@ -32,9 +33,11 @@ class ReviewReport:
     @property
     def verdict(self) -> Verdict:
         """结论由规则决定，只用于展示，不会触发 approve 或阻止合并。"""
+        if self.result.failed_investigations:
+            return Verdict.INCOMPLETE
         if not self.result.structured:
             return Verdict.UNSTRUCTURED
-        if self.truncated and not self.findings:
+        if self.truncated and self.result.reviewed_paths is None and not self.findings:
             # 没看到全部改动，不能说"没有问题"
             return Verdict.PARTIAL
         severities = {finding.severity for finding in self.findings}

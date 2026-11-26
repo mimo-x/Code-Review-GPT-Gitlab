@@ -6,6 +6,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar
 
+from ..scope import ReviewScope
+
 SEVERITIES = ("critical", "major", "minor", "nit")
 CATEGORIES = ("defect", "security", "performance", "maintainability", "style")
 
@@ -33,7 +35,7 @@ class Option:
         if value is None:
             return self.default
         if self.kind == "select":
-            if value not in {choice for choice, _ in self.choices}:
+            if not isinstance(value, str) or value not in {choice for choice, _ in self.choices}:
                 raise ValueError(f"{self.label}：不支持的取值 {value!r}")
             return value
         if isinstance(value, bool):
@@ -99,6 +101,7 @@ class ReviewRequest:
     worktree: Path | None = None
     # 不在审查范围内的变更文件：可以读取作为上下文，不能报告问题
     skipped_paths: tuple[str, ...] = ()
+    scope: ReviewScope = field(default_factory=ReviewScope)
 
 
 @dataclass
@@ -132,13 +135,18 @@ class ReviewResult:
     structured: bool = True
     usage: dict = field(default_factory=dict)
     metadata: dict = field(default_factory=dict)
+    failed_investigations: int = 0
+    reviewed_paths: tuple[str, ...] | None = None
+    excluded_paths: tuple[str, ...] = ()
 
 
 class ReviewEngine(ABC):
     kind: ClassVar[str]
     label: ClassVar[str]
     description: ClassVar[str] = ""
+    needs_model: ClassVar[bool] = True
     needs_worktree: ClassVar[bool] = False
+    reviews_local_diff: ClassVar[bool] = False
     options: ClassVar[tuple[Option, ...]] = ()
 
     def __init__(self, llm_config, request_id: str | None = None, options: dict | None = None):

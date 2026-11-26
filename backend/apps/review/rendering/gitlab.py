@@ -41,8 +41,11 @@ def render_summary(report: ReviewReport, history: PublishHistory | None = None) 
     labels = labels_for(report.language)
     verdict = report.verdict
     parts = [f"### {VERDICT_ICONS[verdict]}{labels['verdict'][verdict]}"]
+    if report.result.failed_investigations:
+        parts.append(labels["failed_investigations"].format(count=report.result.failed_investigations))
     if report.truncated:
-        parts.append(labels["truncated"])
+        key = "truncated_positions" if report.result.reviewed_paths is not None else "truncated"
+        parts.append(labels[key])
 
     if verdict is Verdict.UNSTRUCTURED:
         parts += [labels["unstructured_hint"], sanitize(report.result.summary)]
@@ -143,7 +146,8 @@ def _render_not_reported(items: list[dict], labels: dict) -> str:
 
 
 def _footer(report: ReviewReport, labels: dict) -> str:
-    items = [labels["reviewed_files"].format(count=report.mr.file_count)]
+    file_count_label = "planned_files" if report.result.failed_investigations else "reviewed_files"
+    items = [labels[file_count_label].format(count=report.mr.file_count)]
     if report.revisions:
         items.append(labels["at_commit"].format(commit=_commit_link(report)))
     if report.skipped_paths:

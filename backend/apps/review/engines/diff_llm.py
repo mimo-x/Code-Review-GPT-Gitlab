@@ -10,8 +10,8 @@ from .prompting import build_review_prompt
 
 class DiffLLMEngine(ReviewEngine):
     kind = "diff_llm"
-    label = "模型 API"
-    description = "把 diff 发给配置的模型，一次调用完成审查。"
+    label = "单次模型审查"
+    description = "每次 PR 审查只调用一次大模型，快速审查本次 MR 的代码差异。跨文件影响的判断依赖差异中提供的上下文。"
 
     def review(self, request: ReviewRequest) -> ReviewResult:
         client = LLMService(self.llm_config, request_id=self.request_id)
@@ -21,7 +21,7 @@ class DiffLLMEngine(ReviewEngine):
             raise EngineError(f"代码审查失败: {exc}") from exc
         parsed = parse_output(completion.text)
         return ReviewResult(
-            provider=self.llm_config.provider,
+            provider=client.provider,
             model=self.llm_config.model,
             summary=parsed.summary,
             findings=parsed.findings,

@@ -3,11 +3,40 @@ from django.utils import timezone
 import json
 
 
+MODEL_ROUTES = (
+    ('openai_responses', 'OpenAI Responses'),
+    ('openai', 'OpenAI Chat Completions'),
+    ('deepseek', 'DeepSeek'),
+    ('anthropic', 'Anthropic Messages'),
+    ('gemini', 'Gemini 原生'),
+    ('unionllm', 'UnionLLM'),
+    ('litellm', 'LiteLLM'),
+)
+
+
+class LLMProvider(models.Model):
+    name = models.CharField(max_length=80)
+    preset = models.CharField(max_length=50, blank=True)
+    provider = models.CharField(max_length=50, choices=MODEL_ROUTES)
+    api_key = models.CharField(max_length=500, blank=True)
+    api_base = models.URLField(max_length=500, blank=True, null=True)
+    timeout = models.PositiveIntegerField(default=600)
+
+    class Meta:
+        ordering = ['name', 'id']
+
+    def __str__(self):
+        return self.name
+
+
 class LLMConfig(models.Model):
     """
     LLM配置模型
     """
     id = models.AutoField(primary_key=True)
+    model_provider = models.ForeignKey(
+        LLMProvider, null=True, blank=True, on_delete=models.PROTECT, related_name='models',
+    )
     provider = models.CharField(
         max_length=50,
         choices=[
@@ -22,6 +51,7 @@ class LLMConfig(models.Model):
         default='openai'
     )
     model = models.CharField(max_length=100, default='gpt-4')
+    label = models.CharField(max_length=100, blank=True)
     api_key = models.CharField(max_length=500, blank=True)
     api_base = models.URLField(max_length=500, blank=True, null=True)
     timeout = models.IntegerField(default=600, help_text="LLM API 调用超时时间（秒），默认 600 秒")
@@ -36,7 +66,11 @@ class LLMConfig(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.get_provider_display()} - {self.model}"
+        return f"{self.connection.get_provider_display()} - {self.model}"
+
+    @property
+    def connection(self):
+        return self.model_provider if self.model_provider_id is not None else self
 
 
 class GitLabConfig(models.Model):
