@@ -146,19 +146,6 @@
     @apply block text-sm font-medium text-apple-700 mb-2;
   }
 
-  .engine-card {
-    @apply text-left p-4 rounded-xl border border-apple-200 bg-white/70
-           hover:border-apple-blue-300 transition-all duration-200;
-  }
-
-  .engine-card-active {
-    @apply border-apple-blue-500 ring-2 ring-apple-blue-500/20;
-  }
-
-  .engine-advanced {
-    @apply border-t border-apple-200/70 pt-4;
-  }
-
   .config-toggle {
     @apply relative inline-flex items-center cursor-pointer;
   }

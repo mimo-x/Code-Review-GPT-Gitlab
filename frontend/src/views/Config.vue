@@ -42,106 +42,12 @@
       </nav>
     </div>
 
-    <!-- 审查引擎 -->
-    <div v-show="activeTab === 'engine'" class="config-section">
-      <div class="p-6 space-y-6">
-        <div class="flex items-center gap-3">
-          <div class="w-2 h-2 bg-apple-blue-500 rounded-full"></div>
-          <h3 class="text-lg font-semibold text-apple-900">审查引擎</h3>
-        </div>
+    <ReviewEngineSettings v-if="engines.length" v-show="activeTab === 'engine'"
+      :engines="engines" :kind="engine.kind" :options="engine.options"
+      @select="selectEngine" @update-option="updateEngineOption" @configure-claude="activeTab = 'claude-cli'" />
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <button v-for="item in engines" :key="item.kind" type="button" @click="selectEngine(item.kind)"
-            :class="['engine-card', engine.kind === item.kind ? 'engine-card-active' : '']">
-            <div class="font-medium text-apple-900">{{ item.label }}</div>
-            <div class="text-xs text-apple-500 mt-1">{{ item.description }}</div>
-          </button>
-        </div>
-
-        <p v-if="engine.kind === 'claude_code'" class="text-sm text-apple-500">
-          Claude Code 的连接方式在「Claude CLI 配置」中设置。
-        </p>
-
-        <div v-if="basicOptions.length" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div v-for="option in basicOptions" :key="option.key" class="config-field-group">
-            <label class="config-label">{{ option.label }}</label>
-            <select v-if="option.kind === 'select'" v-model="engine.options[option.key]" class="input-field">
-              <option v-for="[value, text] in option.choices" :key="value" :value="value">{{ text }}</option>
-            </select>
-            <input v-else v-model.number="engine.options[option.key]" type="number" class="input-field"
-              :min="option.minimum ?? undefined" :max="option.maximum ?? undefined" />
-            <p v-if="option.help" class="text-xs text-apple-500 mt-1">{{ option.help }}</p>
-          </div>
-        </div>
-
-        <details v-if="advancedOptions.length" class="engine-advanced">
-          <summary class="cursor-pointer text-sm font-medium text-apple-700">高级设置</summary>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-            <div v-for="option in advancedOptions" :key="option.key" class="config-field-group">
-              <label class="config-label">{{ option.label }}</label>
-              <select v-if="option.kind === 'select'" v-model="engine.options[option.key]" class="input-field">
-                <option v-for="[value, text] in option.choices" :key="value" :value="value">{{ text }}</option>
-              </select>
-              <input v-else v-model.number="engine.options[option.key]" type="number" class="input-field"
-                :min="option.minimum ?? undefined" :max="option.maximum ?? undefined" />
-              <p v-if="option.help" class="text-xs text-apple-500 mt-1">{{ option.help }}</p>
-            </div>
-          </div>
-        </details>
-      </div>
-    </div>
-
-    <!-- LLM Config：只有需要调用模型的引擎才显示 -->
-    <div v-show="activeTab === 'engine' && engineUsesModel" class="config-section">
-      <div class="p-6 space-y-6">
-        <div class="flex items-center gap-3">
-          <div class="w-2 h-2 bg-apple-blue-500 rounded-full"></div>
-          <h3 class="text-lg font-semibold text-apple-900">LLM 配置</h3>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div class="config-field-group">
-            <label class="config-label">LLM 提供商</label>
-            <select v-model="config.llm.provider" class="input-field">
-              <option value="openai">OpenAI GPT-4</option>
-              <option value="deepseek">DeepSeek</option>
-              <option value="claude">Anthropic Claude</option>
-              <option value="gemini">Google Gemini</option>
-            </select>
-          </div>
-
-          <div class="config-field-group">
-            <label class="config-label">模型名称</label>
-            <input v-model="config.llm.model" type="text" class="input-field" placeholder="例如: gpt-4" />
-          </div>
-
-          <div class="md:col-span-2 config-field-group">
-            <label class="config-label">API Key</label>
-            <div class="relative">
-              <input v-model="config.llm.apiKey" :type="showLlmApiKey ? 'text' : 'password'" class="input-field pr-20"
-                placeholder="请输入 API Key" />
-              <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                <button type="button" @click="toggleVisibility('llmApiKey')"
-                  class="p-1.5 text-apple-500 hover:text-apple-700 hover:bg-apple-50 rounded transition-colors"
-                  :title="showLlmApiKey ? '隐藏' : '显示'">
-                  <Eye v-if="!showLlmApiKey" class="w-4 h-4" />
-                  <EyeOff v-else class="w-4 h-4" />
-                </button>
-                <button type="button" @click="copyToClipboard(config.llm.apiKey, 'API Key')"
-                  class="p-1.5 text-apple-500 hover:text-apple-700 hover:bg-apple-50 rounded transition-colors"
-                  title="复制">
-                  <Copy class="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div class="md:col-span-2 config-field-group">
-            <label class="config-label">API Base URL (可选)</label>
-            <input v-model="config.llm.apiBase" type="text" class="input-field" placeholder="自定义API端点" />
-          </div>
-        </div>
-      </div>
+    <div v-if="engineUsesModel" v-show="activeTab === 'engine'" class="config-section">
+      <ModelSettings />
     </div>
 
     <!-- GitLab Config -->
@@ -649,7 +555,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
+import ModelSettings from '@/components/ModelSettings.vue'
+import ReviewEngineSettings from '@/components/ReviewEngineSettings.vue'
 import { Save, RotateCcw, CheckCircle, XCircle, PlusCircle, Pencil, Trash2, Eye, EyeOff, Copy, Play, X, Link } from 'lucide-vue-next'
+import type { EngineInfo, EngineOptions, EngineOptionValue } from '@/api/index'
 import {
   getConfigSummary,
   batchUpdateConfig,
@@ -676,7 +585,6 @@ const message = ref('')
 const messageType = ref<'success' | 'error'>('success')
 
 // 密码字段显示/隐藏状态
-const showLlmApiKey = ref(false)
 const showGitlabToken = ref(false)
 const showChannelSecret = ref(false)
 const showClaudeToken = ref(false)
@@ -693,12 +601,6 @@ const tabs = [
 ]
 
 const config = ref({
-  llm: {
-    provider: 'openai',
-    model: 'gpt-4',
-    apiKey: '',
-    apiBase: ''
-  },
   gitlab: {
     serverUrl: 'https://gitlab.com',
     privateToken: ''
@@ -827,9 +729,6 @@ const showMessage = (text: string, type: 'success' | 'error' = 'success') => {
 // 切换密码显示/隐藏
 const toggleVisibility = (field: string) => {
   switch (field) {
-    case 'llmApiKey':
-      showLlmApiKey.value = !showLlmApiKey.value
-      break
     case 'gitlabToken':
       showGitlabToken.value = !showGitlabToken.value
       break
@@ -893,65 +792,40 @@ const refreshChannels = async () => {
   }
 }
 
-// 加载配置
-// 审查引擎：配置项由后端按引擎声明，这里只负责显示
-interface EngineOption {
-  key: string
-  label: string
-  kind: 'select' | 'number'
-  default: any
-  choices: [string, string][]
-  minimum: number | null
-  maximum: number | null
-  advanced: boolean
-  help: string
-}
-interface EngineInfo {
+interface EngineSelection {
   kind: string
-  label: string
-  description: string
-  options: EngineOption[]
+  options: EngineOptions
 }
 const MODEL_ENGINES = ['diff_llm', 'review_agent']
 const engines = ref<EngineInfo[]>([])
-const engine = ref<{ kind: string; options: Record<string, any> }>({ kind: '', options: {} })
-const originalEngine = ref('')
-const currentEngine = computed(() => engines.value.find((item) => item.kind === engine.value.kind))
-const basicOptions = computed(() => (currentEngine.value?.options || []).filter((o) => !o.advanced))
-const advancedOptions = computed(() => (currentEngine.value?.options || []).filter((o) => o.advanced))
+const engine = ref<EngineSelection>({ kind: '', options: {} })
+const originalEngine = ref<EngineSelection | null>(null)
+const engineDrafts = new Map<string, EngineOptions>()
 const engineUsesModel = computed(() => MODEL_ENGINES.includes(engine.value.kind))
 
 const selectEngine = (kind: string) => {
   const info = engines.value.find((item) => item.kind === kind)
-  const options: Record<string, any> = {}
-  for (const option of info?.options || []) {
-    options[option.key] = engine.value.options[option.key] ?? option.default
-  }
+  if (!info || engine.value.kind === kind) return
+  engineDrafts.set(engine.value.kind, engine.value.options)
+  const options = engineDrafts.get(kind) ?? Object.fromEntries(info.options.map(option => [option.key, option.default]))
   engine.value = { kind, options }
 }
 
+const updateEngineOption = (key: string, value: EngineOptionValue) => {
+  engine.value = { kind: engine.value.kind, options: { ...engine.value.options, [key]: value } }
+}
+
 const loadEngine = async () => {
-  const data: any = await getReviewEngine()
-  engines.value = data.engines || []
-  engine.value = { kind: data.engine, options: { ...(data.options || {}) } }
-  originalEngine.value = JSON.stringify(engine.value)
+  const data = await getReviewEngine()
+  engines.value = data.engines
+  originalEngine.value = { kind: data.engine, options: data.options }
+  engine.value = { ...originalEngine.value }
+  engineDrafts.clear()
 }
 
 const loadConfig = async () => {
   try {
-    const response = await getConfigSummary()
-    console.log('API Response:', response) // 添加调试日志
-    const data = response
-
-    // 更新LLM配置
-    if (data.llm) {
-      config.value.llm = {
-        provider: data.llm.provider || 'openai',
-        model: data.llm.model || 'gpt-4',
-        apiKey: data.llm.api_key || '',
-        apiBase: data.llm.api_base || ''
-      }
-    }
+    const data = await getConfigSummary()
 
     // 更新GitLab配置
     if (data.gitlab) {
@@ -1026,17 +900,11 @@ const testClaudeCliConfig = async () => {
 
 // 保存配置
 const handleSave = async () => {
+  const selection = engine.value
   saving.value = true
   try {
     // 准备API数据格式
     const apiData = {
-      llm: {
-        provider: config.value.llm.provider,
-        model: config.value.llm.model,
-        api_key: config.value.llm.apiKey,
-        api_base: config.value.llm.apiBase || null,
-        is_active: true
-      },
       gitlab: {
         server_url: config.value.gitlab.serverUrl,
         private_token: config.value.gitlab.privateToken,
@@ -1052,9 +920,10 @@ const handleSave = async () => {
     }
 
     await batchUpdateConfig(apiData)
-    if (engine.value.kind) {
-      await updateReviewEngine({ engine: engine.value.kind, options: engine.value.options })
-      originalEngine.value = JSON.stringify(engine.value)
+    if (selection.kind) {
+      const saved = await updateReviewEngine({ engine: selection.kind, options: selection.options })
+      originalEngine.value = { kind: saved.engine, options: saved.options }
+      if (engine.value === selection) engine.value = { ...originalEngine.value }
     }
     showMessage('配置保存成功')
 
@@ -1330,7 +1199,8 @@ const saveEventRule = async () => {
 // 重置配置
 const handleReset = () => {
   if (originalEngine.value) {
-    engine.value = JSON.parse(originalEngine.value)
+    engine.value = { ...originalEngine.value }
+    engineDrafts.clear()
   }
   if (JSON.stringify(originalConfig.value)) {
     config.value = JSON.parse(JSON.stringify(originalConfig.value))
