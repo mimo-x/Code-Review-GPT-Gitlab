@@ -1,6 +1,6 @@
-"""行内讨论的分组和限额。"""
+"""行内讨论：哪些问题挂到代码行上，以及条数限制。"""
 from apps.review.engines.base import Finding
-from apps.review.publishers.threads import MAX_MINOR_THREADS, plan_threads
+from apps.review.publishers.threads import plan_threads
 
 
 def item(severity, line, fp=None, path="a.py", in_diff=True):
@@ -14,38 +14,27 @@ def titles(threads):
     return [[finding.title for finding in thread] for thread in threads]
 
 
-def test_severe_issues_get_their_own_thread_even_when_adjacent():
-    threads = plan_threads([item("critical", 1), item("major", 2)], {}, 20)
+def test_only_severe_issues_go_inline_each_in_its_own_thread():
+    threads = plan_threads([item("critical", 1), item("major", 2), item("minor", 3),
+                            item("nit", 4)], {}, 10)
     assert titles(threads) == [["critical-1"], ["major-2"]]
 
 
-def test_minor_issues_within_three_lines_are_merged():
-    threads = plan_threads([item("minor", 1), item("minor", 4), item("minor", 8),
-                            item("minor", 8, path="b.py")], {}, 20)
-    assert titles(threads) == [["minor-1", "minor-4"], ["minor-8"], ["minor-8"]]
+def test_unlocated_issues_stay_in_the_summary():
+    assert plan_threads([item("major", 2, in_diff=False)], {}, 10) == []
 
 
-def test_nits_and_unlocated_issues_stay_in_the_summary():
-    assert plan_threads([item("nit", 1), item("major", 2, in_diff=False)], {}, 20) == []
+def test_threads_are_capped():
+    findings = [item("major", line) for line in range(1, 15)]
+    assert len(plan_threads(findings, {}, 10)) == 10
 
 
-def test_minor_threads_are_capped():
-    findings = [item("minor", line * 10) for line in range(1, 9)]
-    assert len(plan_threads(findings, {}, 20)) == MAX_MINOR_THREADS
-
-
-def test_severe_issues_are_not_crowded_out_by_minor_ones():
-    findings = [item("minor", line * 10) for line in range(1, 4)] + [item("major", 100)]
-    assert titles(plan_threads(findings, {}, 2)) == [["major-100"], ["minor-10"]]
-
-
-def test_published_issues_are_skipped_and_count_against_the_limits():
-    findings = [item("minor", line * 10) for line in range(1, 9)]
-    published = {f.fingerprint: {"severity": "minor", "discussion": f"d{i}"}
+def test_published_issues_are_skipped_and_count_against_the_limit():
+    findings = [item("major", line) for line in range(1, 9)]
+    published = {f.fingerprint: {"severity": "major", "discussion": f"d{i}"}
                  for i, f in enumerate(findings[:3])}
-    threads = plan_threads(findings, published, 20)
-    assert len(threads) == MAX_MINOR_THREADS - 3
-    assert all(thread[0].fingerprint not in published for thread in threads)
+    threads = plan_threads(findings, published, 5)
+    assert titles(threads) == [["major-4"], ["major-5"]]
 
 
 def test_issues_no_longer_reported_free_their_slots():

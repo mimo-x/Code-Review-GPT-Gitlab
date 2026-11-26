@@ -4,6 +4,7 @@ import json
 import pytest
 from rest_framework.test import APIClient
 
+from apps.api_auth.authentication import ApiUser
 from apps.webhook.models import WebhookLog
 
 
@@ -14,6 +15,8 @@ def test_lists_logs_without_request_headers():
         source_branch="f", target_branch="main", request_headers="",
         payload=json.dumps({"object_kind": "merge_request"}),
     )
-    response = APIClient().get("/api/webhook/logs/")
+    client = APIClient()
+    client.force_authenticate(user=ApiUser("test-admin"))
+    response = client.get("/api/webhook/logs/")
     assert response.status_code == 200
     assert "merge_request" in json.dumps(response.json(), ensure_ascii=False)

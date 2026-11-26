@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gitlab-review-core"
+version = "0.1.0"
+requires-python = ">=3.12,<3.15"
+dependencies = [
+  "ast-grep-py>=0.51.1,<0.52",
+  "unidiff>=0.7.5,<0.8",
+  "pydantic>=2.10,<3",
+  "networkx>=3.4,<4",
+  "tiktoken>=0.9,<1",
+  "filelock>=3.16,<4",
+]
+
+[project.optional-dependencies]
+llm = ["litellm[mcp]>=1.108,<2"]
+# Type-aware C/C++ call resolution; Go and Java resolvers need their own toolchains.
+cpp = ["libclang>=18.1,<19"]
+python = ["pyrefly>=1.4,<2", "jedi>=0.20,<0.21"]
+test = ["pytest>=8,<10", "ruff>=0.11,<1"]
+
+[project.scripts]
+review-core = "review_core.cli:main"
+review-agent = "review_agent.run:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"review_core.intel.resolvers" = ["go/*.go", "java/*.java", "ts/*.js"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B"]

@@ -15,9 +15,12 @@ _SUMMARY = re.compile(
 _FINDINGS = re.compile(r"\A<!-- code-review-gpt:(finding:v1|findings:v2) ([A-Za-z0-9_=-]+) -->")
 
 
-def summary_marker(review_id: int, findings: list[Finding], threads: dict[str, str] | None = None) -> str:
+def summary_marker(
+    review_id: int, findings: list[Finding], threads: dict[str, str] | None = None,
+    *, retained: tuple[dict, ...] = (),
+) -> str:
     """threads：指纹变了但沿用旧讨论的问题，记下讨论标记里的旧指纹，下次才能接上。"""
-    return f"<!-- code-review-gpt:summary:v2 review={review_id} {_encode(findings, threads)} -->"
+    return f"<!-- code-review-gpt:summary:v2 review={review_id} {_encode(findings, threads, retained)} -->"
 
 
 def parse_summary_marker(body: str) -> tuple[int, list[dict]] | None:
@@ -38,9 +41,11 @@ def parse_findings_marker(body: str) -> list[dict]:
     return _decode(match.group(2), single=match.group(1) == "finding:v1")
 
 
-def _encode(findings: list[Finding], threads: dict[str, str] | None = None) -> str:
+def _encode(
+    findings: list[Finding], threads: dict[str, str] | None = None, retained: tuple[dict, ...] = (),
+) -> str:
     threads = threads or {}
-    items = []
+    items = list(retained)
     for finding in findings:
         item = {
             "fp": finding.fingerprint,

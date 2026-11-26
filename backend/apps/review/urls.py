@@ -1,8 +1,9 @@
 from django.urls import path
+
 from . import views
 
 app_name = 'review'
 
 urlpatterns = [
-    # Future review endpoints can be added here
+    path('engine/', views.engine_config, name='engine_config'),
 ]

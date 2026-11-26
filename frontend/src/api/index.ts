@@ -341,6 +341,49 @@ export const getWebhookUrl = () => {
   })
 }
 
+// 审查引擎：可选引擎、各自的配置项和当前选择
+export type EngineOptionValue = string | number
+export type EngineOptions = Record<string, EngineOptionValue>
+export interface EngineOption {
+  key: string
+  label: string
+  kind: 'select' | 'number'
+  default: EngineOptionValue
+  choices: [string, string][]
+  minimum: number | null
+  maximum: number | null
+  advanced: boolean
+  help: string
+}
+export interface EngineInfo {
+  kind: string
+  label: string
+  description: string
+  options: EngineOption[]
+}
+interface EngineConfig {
+  engine: string
+  options: EngineOptions
+  configured: boolean
+  engines: EngineInfo[]
+}
+
+export const getReviewEngine = () => {
+  return request<unknown, EngineConfig>({
+    url: getApiUrl('/review/engine/'),
+    method: 'get'
+  })
+}
+
+export const updateReviewEngine = (data: { engine: string; options: EngineOptions }) => {
+  return request<unknown, EngineConfig>({
+    url: getApiUrl('/review/engine/'),
+    method: 'put',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    data
+  })
+}
+
 // 测试 Claude CLI 配置
 export const testClaudeCliConfigApi = (data: any) => {
   return request({

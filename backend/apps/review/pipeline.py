@@ -74,17 +74,21 @@ def _execute(review, payload, matched_rule, request_id, log) -> None:
     changes, skipped_paths = scope.split(all_changes)
     if skipped_paths:
         log.info(f"按项目配置排除 {len(skipped_paths)} 个文件")
-    if all_changes and not changes:
+    truncated = bool(response.get("overflow"))
+    if all_changes and not changes and not truncated:
         _complete_without_review(review, len(all_changes), log)
         return
     mr = _merge_request_info(review, payload, changes)
     log.info(f"获取到 {mr.file_count} 个文件变更，{mr.changes_count} 行代码变更")
 
-    llm_config = LLMConfig.objects.filter(is_active=True).first()
-    if llm_config is None:
-        raise ReviewAborted("未找到有效的 LLM 配置")
+    llm_config = LLMConfig.objects.select_related("model_provider").filter(is_active=True).first()
     engine = engine_for(llm_config, request_id)
-    log.info(f"审查引擎: {engine.kind} (provider={llm_config.provider})")
+    if truncated and not changes and not engine.reviews_local_diff:
+        raise ReviewAborted("GitLab 只返回了部分改动，已返回的文件均在排除范围内")
+    if engine.needs_model and llm_config is None:
+        raise ReviewAborted("未找到有效的 LLM 配置")
+    provider = llm_config.connection.provider if engine.needs_model else engine.kind
+    log.info(f"审查引擎: {engine.kind} (provider={provider})")
 
     revisions = _revisions(gitlab, review, response)
     request = ReviewRequest(
@@ -95,13 +99,24 @@ def _execute(review, payload, matched_rule, request_id, log) -> None:
         revisions=revisions,
         custom_prompt=_custom_prompt(review.project_id, matched_rule, mr, log),
         skipped_paths=skipped_paths,
+        scope=scope,
     )
 
     started = time.monotonic()
     result = _run_engine(engine, request, payload, gitlab, log)
+    if result.reviewed_paths == () and result.excluded_paths:
+        _complete_without_review(review, len(result.excluded_paths), log)
+        return
     duration = time.monotonic() - started
-    log.log_llm_call(provider=result.provider, model=result.model, success=True, duration=duration)
+    log.log_llm_call(provider=result.provider, model=result.model,
+                     success=not result.failed_investigations, duration=duration)
 
+    paths = result.reviewed_paths
+    if paths is None:
+        paths = tuple(change.get("new_path") or change.get("old_path", "") for change in changes)
+    else:
+        mr = replace(mr, file_count=len(paths))
+        skipped_paths = result.excluded_paths
     diff = DiffIndex(changes)
     report = ReviewReport(
         review_id=review.pk,
@@ -113,14 +128,19 @@ def _execute(review, payload, matched_rule, request_id, log) -> None:
         language=request.language,
         skipped_paths=skipped_paths,
         # GitLab 的 diff 超过实例限制时会截断并标记 overflow
-        truncated=bool(response.get("overflow")),
+        truncated=truncated,
     )
-    _save_result(review, report, changes)
+    _save_result(review, report, paths)
     log.log_report_generation(
         is_mock=review.is_mock, file_count=mr.file_count, success=True,
         findings=len(report.findings),
     )
     publish_error = _publish_error(_notify(review, report, request_id, log))
+    if result.failed_investigations:
+        message = f"审查未完成，{result.failed_investigations} 项调查失败"
+        if publish_error:
+            message += f"。发布到 GitLab 失败: {publish_error}"
+        raise ReviewAborted(message)
     if publish_error:
         raise ReviewAborted(f"审查已完成，但发布到 GitLab 失败: {publish_error}")
     _mark_completed(review)
@@ -203,10 +223,10 @@ def _run_engine(engine: ReviewEngine, request: ReviewRequest, payload, gitlab, l
         raise ReviewAborted(str(exc)) from exc
 
 
-def _save_result(review, report: ReviewReport, changes) -> None:
+def _save_result(review, report: ReviewReport, paths: tuple[str, ...]) -> None:
     review.review_content = render_summary(report)
     review.review_score = None
-    review.files_reviewed_list = [change.get("new_path") for change in changes]
+    review.files_reviewed_list = list(paths)
     review.total_files = report.mr.file_count
     review.llm_provider = report.result.provider
     review.llm_model = report.result.model
@@ -226,6 +246,7 @@ def _complete_without_review(review, file_count: int, log) -> None:
 def _mark_completed(review) -> None:
     review.status = "completed"
     review.completed_at = timezone.now()
+    review.error_message = None
     review.save()
 
 
@@ -264,7 +285,8 @@ def _mark_failed(review, message: str, log) -> None:
     try:
         review.status = "failed"
         review.error_message = message
-        review.save(update_fields=["status", "error_message", "updated_at"])
+        review.completed_at = None
+        review.save(update_fields=["status", "error_message", "completed_at", "updated_at"])
     except Exception as exc:
         log.log_error_with_context(exc, context={
             "operation": "save_failed_review",

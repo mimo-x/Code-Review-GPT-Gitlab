@@ -257,7 +257,15 @@ def _env_int(name, default):
         raise ValueError(f'环境变量 {name} 必须是整数，当前值为 {value!r}') from None
 
 
-REVIEW_MAX_INLINE_COMMENTS = _env_int('REVIEW_MAX_INLINE_COMMENTS', 20)
+REVIEW_MAX_INLINE_COMMENTS = _env_int('REVIEW_MAX_INLINE_COMMENTS', 10)
+
+# Review Agent：用独立的 Python 3.12 环境运行仓库里的 agent/ 目录
+REVIEW_AGENT_PYTHON = os.environ.get(
+    'REVIEW_AGENT_PYTHON', os.path.join(BASE_DIR.parent, 'agent', '.venv', 'bin', 'python')
+)
+REVIEW_AGENT_STATE_DIR = os.environ.get(
+    'REVIEW_AGENT_STATE_DIR', os.path.join(BASE_DIR, 'data', 'review-agent')
+)
 
 # Create logs directory if it doesn't exist
 os.makedirs(os.path.join(BASE_DIR, 'logs'), exist_ok=True)

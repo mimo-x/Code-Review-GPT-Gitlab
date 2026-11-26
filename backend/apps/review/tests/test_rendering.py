@@ -146,24 +146,14 @@ class TestSummary:
 class TestInlineComment:
     def test_single_issue_has_title_and_explanation_only(self):
         built = report([issue()])
-        text = render_inline_comment(built.findings, "zh-CN")
+        text = render_inline_comment(built.findings[0], "zh-CN")
         assert text.split("\n\n")[1:] == ["**并发请求可能重复退款** <sub>🟠 重要</sub>", "原因和修复方式。"]
         assert "suggestion" not in text
 
-    def test_adjacent_issues_are_numbered_with_their_lines(self):
-        built = report([
-            issue("minor", title="循环内查询", body="订单多时会很慢。\n建议先批量取出。"),
-            issue("minor", title="日志缺少订单号", body="难以定位。", start_line=3, end_line=4, existing_code="c = 3\nd = 4"),
-        ])
-        text = render_inline_comment(built.findings, "zh-CN")
-        assert "**这段代码有 2 个小问题** <sub>🟡 一般</sub>" in text
-        assert "1. **循环内查询**（第 2 行）：订单多时会很慢。\n   建议先批量取出。" in text
-        assert "2. **日志缺少订单号**（第 3-4 行）：难以定位。" in text
-
-    def test_marker_records_every_issue_in_the_thread(self):
-        built = report([issue("minor"), issue("minor", title="另一个", end_line=3, existing_code="c = 3")])
-        items = parse_findings_marker(render_inline_comment(built.findings, "zh-CN"))
-        assert [item["fp"] for item in items] == [f.fingerprint for f in built.findings]
+    def test_marker_records_the_issue(self):
+        built = report([issue()])
+        items = parse_findings_marker(render_inline_comment(built.findings[0], "zh-CN"))
+        assert [item["fp"] for item in items] == [built.findings[0].fingerprint]
 
 
 class TestMarkers:

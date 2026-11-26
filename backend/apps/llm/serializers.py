@@ -1,23 +1,94 @@
+from django.db import transaction
 from rest_framework import serializers
-from .models import LLMConfig, GitLabConfig, NotificationConfig, NotificationChannel, WebhookEventRule, ClaudeCliConfig
+from .models import LLMConfig, LLMProvider, GitLabConfig, NotificationConfig, NotificationChannel, WebhookEventRule, ClaudeCliConfig
+from .provider_api import base_url, ProviderAPIError
+
+
+class LLMModelSummarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LLMConfig
+        fields = ['id', 'model', 'label', 'is_active']
+
+
+class ModelCatalogEntrySerializer(serializers.Serializer):
+    model = serializers.CharField(max_length=100)
+    label = serializers.CharField(max_length=100, allow_blank=True, default='')
+
+
+class LLMProviderSerializer(serializers.ModelSerializer):
+    api_key = serializers.CharField(write_only=True, allow_blank=True, required=False, max_length=500)
+    has_api_key = serializers.SerializerMethodField()
+    models = LLMModelSummarySerializer(many=True, read_only=True)
+    timeout = serializers.IntegerField(min_value=1, required=False)
+
+    class Meta:
+        model = LLMProvider
+        fields = ['id', 'name', 'preset', 'provider', 'api_base', 'api_key', 'has_api_key', 'timeout', 'models']
+
+    def get_has_api_key(self, instance):
+        return bool(instance.api_key)
+
+    def validate_api_base(self, value):
+        if value:
+            try:
+                return base_url('', value)
+            except ProviderAPIError as error:
+                raise serializers.ValidationError(str(error)) from error
+        return None
+
+    def validate(self, attrs):
+        if self.instance and self.instance.api_key and 'api_key' not in attrs:
+            previous_base = (self.instance.api_base or '').rstrip('/')
+            next_base = (attrs.get('api_base', self.instance.api_base) or '').rstrip('/')
+            if previous_base != next_base or attrs.get('provider', self.instance.provider) != self.instance.provider:
+                raise serializers.ValidationError('更改接口地址或格式时，请重新填写或清除 API Key。')
+        return attrs
 
 
 class LLMConfigSerializer(serializers.ModelSerializer):
     class Meta:
         model = LLMConfig
-        fields = ['id', 'provider', 'model', 'api_key', 'api_base', 'timeout', 'is_active', 'created_at', 'updated_at']
+        fields = ['id', 'provider', 'model', 'label', 'api_key', 'api_base', 'timeout', 'is_active', 'model_provider', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
+    def validate(self, attrs):
+        existing = self.instance.model_provider if self.instance else None
+        provider = attrs.get('model_provider', existing)
+        if self.instance and provider != existing:
+            raise serializers.ValidationError({'model_provider': '模型的供应商在添加后固定。'})
+        if provider is None:
+            return attrs
+        if any(field in attrs for field in ('provider', 'api_base', 'api_key', 'timeout')):
+            raise serializers.ValidationError('请在供应商设置中修改连接。')
+        model = attrs.get('model', self.instance.model if self.instance else '')
+        if not model:
+            raise serializers.ValidationError({'model': '请输入模型 ID。'})
+        matches = provider.models.filter(model=model)
+        if self.instance:
+            matches = matches.exclude(pk=self.instance.pk)
+        if matches.exists():
+            raise serializers.ValidationError({'model': '此供应商已添加该模型。'})
+        return attrs
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if instance.model_provider_id is not None:
+            connection = instance.connection
+            data.update(provider=connection.provider, api_base=connection.api_base, timeout=connection.timeout, api_key='')
+        return data
+
+    @transaction.atomic
     def create(self, validated_data):
         # 如果创建新的激活配置，先禁用其他配置
         if validated_data.get('is_active', True):
-            LLMConfig.objects.filter(is_active=True).update(is_active=False)
+            LLMConfig.objects.update(is_active=False)
         return super().create(validated_data)
 
+    @transaction.atomic
     def update(self, instance, validated_data):
         # 如果设置为激活状态，先禁用其他配置
         if validated_data.get('is_active', False) and not instance.is_active:
-            LLMConfig.objects.filter(is_active=True).update(is_active=False)
+            LLMConfig.objects.update(is_active=False)
         return super().update(instance, validated_data)
 
 

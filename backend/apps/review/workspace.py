@@ -148,6 +148,19 @@ class RepositoryWorkspace:
                 fcntl.flock(lock_file, fcntl.LOCK_UN)
 
 
+def changed_paths(worktree: Path, revisions: Revisions) -> list[str]:
+    """列出完整提交差异中的路径，重命名取新路径，删除取旧路径。"""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(worktree), "diff", "--name-only", "-z", "--find-renames=50%",
+             "--no-ext-diff", "--no-textconv", revisions.base_sha, revisions.head_sha, "--"],
+            env=_git_env(None), check=True, capture_output=True, timeout=_GIT_TIMEOUT_S,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        raise WorkspaceError("无法读取完整改动的文件列表") from exc
+    return result.stdout.decode("utf-8", "surrogateescape").split("\0")[:-1]
+
+
 def _git_env(access_token: str | None) -> dict[str, str]:
     """通过环境变量传认证头，令牌不进命令行、不进 .git/config。"""
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_LFS_SKIP_SMUDGE": "1"}

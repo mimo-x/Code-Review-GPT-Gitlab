@@ -4,11 +4,14 @@
 import logging
 import os
 from dataclasses import dataclass
+from urllib.parse import quote
+
+from .provider_api import DEFAULT_BASES, ProviderAPIError, base_url, provider_model_id, responses_reply
 
 logger = logging.getLogger(__name__)
 
 # 页面上的提供商对应的 LiteLLM 路由前缀；unionllm/litellm 由模型名自带路由
-_ROUTE_PREFIX = {'openai': 'openai', 'deepseek': 'deepseek', 'gemini': 'gemini'}
+_ROUTE_PREFIX = {'openai': 'openai', 'deepseek': 'deepseek', 'anthropic': 'anthropic', 'gemini': 'gemini'}
 
 
 class LLMError(Exception):
@@ -23,13 +26,14 @@ class Completion:
 
 class LLMService:
     def __init__(self, llm_config, request_id=None):
+        connection = getattr(llm_config, 'connection', llm_config)
         self.request_id = request_id
-        self.provider = llm_config.provider
+        self.provider = connection.provider
         self.model = llm_config.model
-        self.api_key = llm_config.api_key
-        self.api_base = llm_config.api_base
+        self.api_key = connection.api_key
+        self.api_base = connection.api_base
         # 避免 MR 文件较多时无限等待
-        self.timeout = getattr(llm_config, 'timeout', None) or int(
+        self.timeout = getattr(connection, 'timeout', None) or int(
             os.environ.get('LLM_API_TIMEOUT', '600')
         )
         if not self.api_key:
@@ -44,12 +48,31 @@ class LLMService:
         }
         if self.api_key:
             params['api_key'] = self.api_key
-        if self.api_base:
+        if self.api_base and self.provider == 'anthropic':
+            params['api_base'] = base_url(self.provider, self.api_base) + '/messages'
+        elif self.api_base and self.provider == 'gemini':
+            endpoint = base_url(self.provider, self.api_base)
+            if endpoint != DEFAULT_BASES['gemini']:
+                model_id = quote(provider_model_id(self.provider, self.model), safe='')
+                params['api_base'] = endpoint if '/models/' in endpoint else f'{endpoint}/models/{model_id}'
+        elif self.api_base:
             params['api_base'] = self.api_base
         return params
 
     def complete(self, prompt):
         """依次尝试 unionllm 和 litellm，全部失败时抛出 LLMError。"""
+        if self.provider == 'openai_responses':
+            try:
+                text = responses_reply(
+                    base_url(self.provider, self.api_base), self.api_key,
+                    provider_model_id(self.provider, self.model), prompt, self.timeout,
+                )
+            except ProviderAPIError as error:
+                raise LLMError(str(error)) from error
+            if not text.strip():
+                raise LLMError('接口没有返回文字。')
+            return Completion(text=text, client='responses')
+
         for name, call in (('unionllm', self._call_unionllm), ('litellm', self._call_litellm)):
             try:
                 text = call(prompt)

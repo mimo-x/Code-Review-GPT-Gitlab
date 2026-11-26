@@ -142,16 +142,16 @@ class TestInlineThreads:
         assert gitlab.bulk_publishes == 1 and gitlab.drafts == []
         assert len(gitlab.inline_notes) == 2
 
-    def test_adjacent_minor_issues_share_a_thread(self, gitlab, llm, review_payload):
+    def test_minor_issues_stay_in_the_summary(self, gitlab, llm, review_payload):
         llm()
         review_with(model_output(
+            problem(),
             problem("循环初值可以省略", severity="minor"),
-            problem("变量名不清楚", "result += item", severity="minor"),
+            problem("变量名不清楚", "result += item", severity="nit"),
         ), review_payload)
         assert len(gitlab.inline_notes) == 1
-        body = gitlab.inline_notes[0]["body"]
-        assert "这段代码有 2 个小问题" in body
-        assert "1. **循环初值可以省略**（第 2 行）" in body and "2. **变量名不清楚**（第 4 行）" in body
+        summary = gitlab.plain_notes[0]["body"]
+        assert "循环初值可以省略" in summary and "变量名不清楚" in summary
 
     def test_old_gitlab_posts_threads_one_by_one(self, gitlab, llm, review_payload):
         llm()
