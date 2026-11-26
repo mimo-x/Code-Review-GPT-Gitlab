@@ -2,7 +2,6 @@ import json
 import logging
 import threading
 import uuid
-import time
 from django.utils import timezone
 from django.db import models, transaction
 from rest_framework import status
@@ -21,9 +20,7 @@ from .serializers import (
     ProjectNotificationUpdateSerializer
 )
 from .services import ProjectService
-from django.core.exceptions import ImproperlyConfigured
-from apps.review.services import GitlabService, ReviewService
-from apps.llm.models import LLMConfig
+from apps.review import pipeline as review_pipeline
 from apps.common.logging_utils import get_logger, TimerContext
 
 logger = logging.getLogger(__name__)
@@ -432,6 +429,9 @@ def _start_merge_request_review(payload, webhook_log, project_id, project_name, 
 
         logger.info(f"Starting MR review: Project {project_id}, MR #{merge_request_iid}, Rule: {matched_rule.name}")
 
+        # payload 里的字段可能是 null
+        commit_author = (object_attributes.get('last_commit') or {}).get('author') or {}
+
         # 创建审查记录
         request_id = webhook_log.request_id if webhook_log else str(uuid.uuid4())
         review = MergeRequestReview.objects.create(
@@ -441,8 +441,8 @@ def _start_merge_request_review(payload, webhook_log, project_id, project_name, 
             merge_request_title=object_attributes.get('title', ''),
             source_branch=object_attributes.get('source_branch', ''),
             target_branch=object_attributes.get('target_branch', ''),
-            author_name=object_attributes.get('last_commit', {}).get('author', {}).get('name', ''),
-            author_email=object_attributes.get('last_commit', {}).get('author', {}).get('email', ''),
+            author_name=commit_author.get('name') or '',
+            author_email=commit_author.get('email') or '',
             status='pending',
             request_id=request_id,
             review_content=''
@@ -451,8 +451,8 @@ def _start_merge_request_review(payload, webhook_log, project_id, project_name, 
         # 启动审查线程（传递 matched_rule）
         def launch_review_thread():
             thread = threading.Thread(
-                target=process_merge_request_review,
-                args=(project_id, merge_request_iid, review.pk, payload, matched_rule)
+                target=review_pipeline.run,
+                args=(review.pk, payload, matched_rule)
             )
             thread.daemon = True
             thread.start()
@@ -480,386 +480,6 @@ def _start_merge_request_review(payload, webhook_log, project_id, project_name, 
             status=status.HTTP_200_OK
         )
 
-
-
-
-
-def process_merge_request_review(project_id, merge_request_iid, review_id, payload, matched_rule=None):
-    """
-    Process merge request review in a separate thread
-    新版本：整合报告生成器和多渠道通知分发器，使用结构化日志
-
-    Args:
-        project_id: 项目ID
-        merge_request_iid: MR IID
-        review_id: 审查记录ID
-        payload: Webhook payload
-        matched_rule: 匹配的 WebhookEventRule 实例（用于获取自定义 prompt）
-    """
-    import time
-    from django.conf import settings
-
-    # 获取request_id用于日志追踪
-    try:
-        review = MergeRequestReview.objects.get(pk=review_id)
-    except MergeRequestReview.DoesNotExist:
-        logger.error("MergeRequestReview %s not found when starting review processing", review_id)
-        return
-
-    request_id = review.request_id or str(uuid.uuid4())
-    structured_logger = get_logger('mr_review', request_id)
-
-    structured_logger.log_thread_start(project_id, merge_request_iid)
-
-    try:
-        # 获取MR基本信息
-        project_data = payload.get('project', {})
-        mr_data = payload.get('object_attributes', {})
-        mr_info = {
-            'project_id': project_id,
-            'mr_iid': merge_request_iid,
-            'project_name': project_data.get('name', '未知项目'),
-            'title': mr_data.get('title', '未知MR'),
-            'author': mr_data.get('author', {}).get('name', '未知作者'),
-            'description': mr_data.get('description', ''),
-            'url': mr_data.get('url', ''),
-        }
-
-        # 更新审查记录状态
-        review.status = 'processing'
-        review.save()
-        structured_logger.log_database_operation(
-            operation="update",
-            table="merge_request_reviews",
-            success=True,
-            record_id=review_id,
-            field="status"
-        )
-
-        # 初始化服务
-        try:
-            gitlab_service = GitlabService(request_id=request_id)
-        except ImproperlyConfigured as config_error:
-            structured_logger.error(f"GitLab配置缺失: {config_error}")
-            review.status = 'failed'
-            review.error_message = str(config_error)
-            review.save()
-            return
-        except Exception as service_error:
-            structured_logger.error(f"GitLab服务初始化失败: {service_error}", error=str(service_error))
-            review.status = 'failed'
-            review.error_message = str(service_error)
-            review.save()
-            return
-
-        # 获取MR变更信息
-        with TimerContext(structured_logger, "get_mr_changes"):
-            changes = gitlab_service.get_merge_request_changes(project_id, merge_request_iid)
-
-        if not changes:
-            structured_logger.error("未找到MR变更信息")
-            review.status = 'failed'
-            review.error_message = '未找到MR变更信息'
-            review.save()
-            return
-
-        # 统计文件和变更信息
-        file_count = len(changes.get('changes', []))
-        changes_count = sum(
-            change.get('diff', '').count('\n')
-            for change in changes.get('changes', [])
-        )
-        mr_info.update({
-            'file_count': file_count,
-            'changes_count': changes_count
-        })
-
-        structured_logger.info(f"获取到 {file_count} 个文件变更，{changes_count} 行代码变更")
-
-        # 判断是否使用Mock模式（基于 LLMConfig）
-        llm_config = LLMConfig.objects.filter(is_active=True).first()
-        if not llm_config:
-            structured_logger.error("未找到有效的 LLM 配置，请在管理后台创建并启用 LLM 配置")
-            review.status = 'failed'
-            review.error_message = '未找到有效的 LLM 配置'
-            review.save()
-            return
-
-        is_mock_mode = llm_config.provider == 'mock'
-        structured_logger.info(f"使用模式: {'Mock' if is_mock_mode else 'Real LLM'} (provider={llm_config.provider})")
-
-        # 生成报告
-        if is_mock_mode:
-            # Mock模式
-            from apps.review.report_generator import ReportGenerator
-            with TimerContext(structured_logger, "generate_mock_report"):
-                report_generator = ReportGenerator(request_id=request_id)
-                report_data = report_generator.generate_mock(mr_info)
-
-            llm_provider = 'mock'
-            llm_model = 'mock'
-
-            structured_logger.log_report_generation(
-                is_mock=True,
-                score=report_data['metadata'].get('score'),
-                file_count=file_count,
-                success=True
-            )
-        else:
-            # 真实 LLM 模式 - 根据 provider 选择审查路径
-            from apps.llm.services import LLMService
-            from apps.review.report_generator import ReportGenerator
-
-            # 获取项目自定义 Prompt（如果配置了）
-            custom_prompt = None
-            if matched_rule:
-                try:
-                    from .models import ProjectWebhookEventPrompt
-                    prompt_config = ProjectWebhookEventPrompt.objects.filter(
-                        project__project_id=project_id,
-                        event_rule=matched_rule,
-                        use_custom=True
-                    ).select_related('event_rule').first()
-
-                    if prompt_config and prompt_config.custom_prompt:
-                        custom_prompt = prompt_config.render_prompt(mr_info)
-                        structured_logger.info(f"使用项目自定义 Prompt (Event: {matched_rule.name}, 长度: {len(custom_prompt)})")
-                    else:
-                        structured_logger.info("使用系统默认 Prompt")
-                except Exception as e:
-                    structured_logger.warning(f"获取自定义 Prompt 失败: {e}，使用系统默认")
-
-            # 调用 LLM 进行代码审查
-            try:
-                llm_service = LLMService(request_id=request_id)
-            except ImproperlyConfigured as exc:
-                structured_logger.error(f"LLM 初始化失败: {exc}")
-                review.status = 'failed'
-                review.error_message = str(exc)
-                review.save()
-                return
-
-            llm_start_time = time.time()
-
-            if llm_config.provider == 'claude':
-                # === Claude CLI 路径：需要克隆仓库到本地 ===
-                from apps.review.repository_manager import RepositoryManager
-
-                repo_manager = RepositoryManager(request_id=request_id)
-                gitlab_svc = gitlab_service
-                access_token = gitlab_svc.private_token
-                project_url = ProjectService.build_clone_url(project_data, base_url=getattr(gitlab_svc, 'server_url', None))
-
-                structured_logger.info(
-                    "准备克隆项目",
-                    raw_url=project_data.get('git_http_url') or project_data.get('http_url'),
-                    normalized_url=project_url
-                )
-
-                with TimerContext(structured_logger, "clone_or_update_repository"):
-                    success, repo_path, clone_error = repo_manager.get_or_clone_repository(
-                        project_url=project_url,
-                        project_id=project_id,
-                        access_token=access_token
-                    )
-
-                if not success:
-                    structured_logger.error(f"仓库克隆失败: {clone_error}")
-                    review.status = 'failed'
-                    review.error_message = f'仓库克隆失败: {clone_error}'
-                    review.save()
-                    return
-
-                structured_logger.info(f"仓库路径: {repo_path}")
-
-                source_branch = mr_data.get('source_branch', '')
-                target_branch = mr_data.get('target_branch', 'main')
-
-                with TimerContext(structured_logger, "checkout_merge_request"):
-                    success, checkout_error = repo_manager.checkout_merge_request(
-                        repo_path=repo_path,
-                        mr_iid=merge_request_iid,
-                        source_branch=source_branch,
-                        target_branch=target_branch
-                    )
-
-                if not success:
-                    structured_logger.error(f"分支切换失败: {checkout_error}")
-                    review.status = 'failed'
-                    review.error_message = f'分支切换失败: {checkout_error}'
-                    review.save()
-                    return
-
-                success, commit_range, range_error = repo_manager.get_commit_range(
-                    repo_path=repo_path,
-                    target_branch=target_branch
-                )
-
-                if not success:
-                    structured_logger.warning(f"获取提交范围失败: {range_error}，使用默认范围")
-                    commit_range = "HEAD~1..HEAD"
-
-                structured_logger.info(f"提交范围: {commit_range}")
-
-                mr_info.update({
-                    'source_branch': source_branch,
-                    'target_branch': target_branch,
-                })
-
-                llm_result = llm_service.review_code(
-                    code_context=None,
-                    mr_info=mr_info,
-                    repo_path=repo_path,
-                    commit_range=commit_range,
-                    custom_prompt=custom_prompt
-                )
-
-                llm_provider = 'claude-cli'
-                llm_model = 'claude-sonnet-4-5'
-            else:
-                # === API 路径：直接使用 GitLab API 返回的 diff 文本 ===
-                code_context = build_code_context(changes)
-
-                llm_result = llm_service.review_code(
-                    code_context=code_context,
-                    mr_info=mr_info,
-                    repo_path=None,
-                    commit_range=None,
-                    custom_prompt=custom_prompt
-                )
-
-                llm_provider = llm_config.provider
-                llm_model = llm_config.model
-
-            llm_duration = time.time() - llm_start_time
-
-            # 检查审查结果
-            if isinstance(llm_result, str):
-                structured_logger.error(f"代码审查失败: {llm_result}")
-                review.status = 'failed'
-                review.error_message = llm_result
-                review.save()
-                return
-
-            # 成功获取审查结果（字典格式）
-            review_content = llm_result.get('content', '')
-            review_score = llm_result.get('score', 0)
-
-            structured_logger.log_llm_call(
-                provider=llm_provider,
-                model=llm_model,
-                success=True,
-                duration=llm_duration,
-                prompt_length=0,
-                response_length=len(review_content)
-            )
-
-            report_data = {
-                'content': review_content,
-                'metadata': llm_result.get('metadata', {}),
-            }
-
-            structured_logger.log_report_generation(
-                is_mock=False,
-                score=review_score,
-                file_count=file_count,
-                success=True
-            )
-
-        # 更新审查记录
-        review.review_content = report_data['content']
-        review.review_score = report_data['metadata'].get('score', 0)
-        review.files_reviewed = [change.get('new_path') for change in changes.get('changes', [])]
-        review.total_files = file_count
-        review.llm_provider = llm_provider
-        review.llm_model = llm_model
-        review.is_mock = is_mock_mode
-        review.status = 'completed'
-        review.completed_at = timezone.now()
-        review.save()
-
-        structured_logger.log_database_operation(
-            operation="update",
-            table="merge_request_reviews",
-            success=True,
-            record_id=review_id,
-            fields=["content", "score", "status", "metadata"]
-        )
-
-        structured_logger.info(f"报告生成完成 - 评分:{review.review_score}, 模型:{llm_model}")
-
-        # 分发通知到各个渠道
-        from apps.response.notification_dispatcher import NotificationDispatcher
-        notification_dispatcher = NotificationDispatcher(request_id=request_id)
-
-        with TimerContext(structured_logger, "notification_dispatch"):
-            notification_result = notification_dispatcher.dispatch(
-                report_data,
-                mr_info,
-                project_id=project_id
-            )
-
-        # 更新通知结果
-        review.notification_sent = notification_result.get('success', False)
-        review.notification_result = json.dumps(notification_result, ensure_ascii=False)
-        review.save()
-
-        structured_logger.log_notification_dispatch(
-            total_channels=notification_result.get('total_channels', 0),
-            success_channels=notification_result.get('success_channels', 0),
-            failed_channels=notification_result.get('failed_channels', 0),
-            duration=notification_result.get('results', [{}])[0].get('response_time', 0)
-        )
-
-        structured_logger.log_business_metric(
-            "mr_review_completed",
-            value={
-                "score": review.review_score,
-                "files": file_count,
-                "duration": notification_result.get('results', [{}])[0].get('response_time', 0),
-                "notification_success": notification_result.get('success', False)
-            }
-        )
-
-    except Exception as e:
-        structured_logger.log_error_with_context(
-            e,
-            context={
-                "operation": "mr_review_processing",
-                "project_id": project_id,
-                "mr_iid": merge_request_iid
-            }
-        )
-
-        try:
-            review.status = 'failed'
-            review.error_message = str(e)
-            review.save()
-        except Exception as save_error:
-            structured_logger.log_error_with_context(
-                save_error,
-                context={
-                    "operation": "save_failed_review",
-                    "review_id": review.pk,
-                    "original_error": str(e)
-                }
-            )
-
-
-def build_code_context(changes):
-    """
-    构建代码上下文用于LLM审查
-    """
-    context_parts = []
-
-    for change in changes.get('changes', []):
-        file_path = change.get('new_path') or change.get('old_path', '')
-        diff = change.get('diff', '')
-
-        if diff:
-            context_parts.append(f"## 文件: {file_path}\n```diff\n{diff}\n```")
-
-    return "\n\n".join(context_parts)
 
 
 # ==================== Project Management APIs ====================
@@ -1643,7 +1263,6 @@ def list_logs(request):
             request_headers = None
             try:
                 if log.get('request_headers'):
-                    import json
                     request_headers = json.loads(log['request_headers'])
             except (json.JSONDecodeError, TypeError):
                 pass

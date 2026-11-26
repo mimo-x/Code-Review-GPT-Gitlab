@@ -225,8 +225,8 @@ DINGDING_BOT_WEBHOOK = None
 DINGDING_SECRET = None
 
 # Code Review Settings
-EXCLUDE_FILE_TYPES = os.environ.get('EXCLUDE_FILE_TYPES', '.py,.java,.class,.vue,.go,.c,.cpp').split(',')
-IGNORE_FILE_TYPES = os.environ.get('IGNORE_FILE_TYPES', 'mod.go').split(',')
+EXCLUDE_FILE_TYPES = os.environ.get('EXCLUDE_FILE_TYPES', '.sql,.dump,.lock,.log,.tmp,.bak').split(',')
+IGNORE_FILE_TYPES = os.environ.get('IGNORE_FILE_TYPES', '.md,.txt,.json,.xml,.yml,.yaml').split(',')
 
 # LLM Configuration (configured via LLMConfig)
 LLM_PROVIDER = None
@@ -236,27 +236,28 @@ LLM_MODEL = None
 
 # Review Prompt Template
 GPT_MESSAGE = """
-你是一位资深编程专家,gitlab的分支代码变更将以git diff 字符串的形式提供,请你帮忙review本段代码。然后你review内容的返回内容必须严格遵守下面的格式,包括标题内容。模板中的变量内容解释:
-变量5为: 代码中的优点。变量1:给review打分,分数区间为0~100分。变量2:code review发现的问题点。变量3:具体的修改建议。变量4:是你给出的修改后的代码。
-必须要求:1. 以精炼的语言、严厉的语气指出存在的问题。2. 你的反馈内容必须使用严谨的markdown格式 3. 不要携带变量内容解释信息。4. 有清晰的标题结构。有清晰的标题结构。有清晰的标题结构。
-返回格式严格如下:
-
-### 😀代码评分:{变量1}
-
-#### ✅代码优点:
-{变量5}
-
-#### 🤔问题点:
-{变量2}
-
-#### 🎯修改建议:
-{变量3}
-
-#### 💻修改后的代码:
-```python
-{变量4}
-```
+你是一位资深代码审查专家。请审查这个 Merge Request 的代码变更，只报告真实、具体、值得处理的问题，重点关注：
+1. 逻辑错误、边界条件和异常处理
+2. 安全问题：鉴权、注入、敏感信息泄露
+3. 数据一致性和并发问题
+4. 性能问题
+5. 明显影响可维护性的设计问题
 """
+
+# 审查结果的输出语言：zh-CN 或 en
+REVIEW_OUTPUT_LANGUAGE = os.environ.get('REVIEW_OUTPUT_LANGUAGE', 'zh-CN')
+# 单个 MR 最多保留的行内评论数，超出的问题只出现在总结里
+def _env_int(name, default):
+    value = os.environ.get(name, '').strip()
+    if not value:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        raise ValueError(f'环境变量 {name} 必须是整数，当前值为 {value!r}') from None
+
+
+REVIEW_MAX_INLINE_COMMENTS = _env_int('REVIEW_MAX_INLINE_COMMENTS', 20)
 
 # Create logs directory if it doesn't exist
 os.makedirs(os.path.join(BASE_DIR, 'logs'), exist_ok=True)
@@ -274,16 +275,6 @@ REPOSITORY_BASE_PATH = os.environ.get(
 # Claude CLI Configuration
 CLAUDE_CLI_PATH = os.environ.get('CLAUDE_CLI_PATH', 'claude')
 CLAUDE_CLI_TIMEOUT = int(os.environ.get('CLAUDE_CLI_TIMEOUT', 300))  # seconds
-CLAUDE_CLI_DEFAULT_PROMPT = os.environ.get(
-    'CLAUDE_CLI_DEFAULT_PROMPT',
-    """请帮我 code review 最近一次提交的内容，从以下角度分析：
-1. 代码质量和最佳实践
-2. 潜在的 bug 和安全问题
-3. 性能优化建议
-4. 代码风格和可读性
-
-请提供具体的改进建议。"""
-)
 
 # Repository Cleanup Configuration
 REPOSITORY_CACHE_DAYS = int(os.environ.get('REPOSITORY_CACHE_DAYS', 7))  # 保留天数

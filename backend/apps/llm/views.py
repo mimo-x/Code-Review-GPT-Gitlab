@@ -959,19 +959,16 @@ class ConfigViewSet(viewsets.GenericViewSet):
         3. 实际调用 API 验证环境变量是否生效
         """
         try:
-            from apps.review.claude_cli_service import ClaudeCliService
+            from apps.review.engines.claude_code import ClaudeCli
 
-            # 获取前端传来的配置
+            # 获取前端传来的配置（用于测试，不保存到数据库）
             claude_cli_data = request.data.get('claude_cli', {})
-
-            # 创建测试服务实例
-            test_service = ClaudeCliService()
-
-            # 手动设置配置（用于测试，不保存到数据库）
-            test_service.anthropic_base_url = claude_cli_data.get('anthropic_base_url')
-            test_service.anthropic_auth_token = claude_cli_data.get('anthropic_auth_token')
-            test_service.cli_path = claude_cli_data.get('cli_path', 'claude')
-            test_service.timeout = claude_cli_data.get('timeout', 300)
+            test_service = ClaudeCli(
+                cli_path=claude_cli_data.get('cli_path', 'claude'),
+                timeout=claude_cli_data.get('timeout', 300),
+                anthropic_base_url=claude_cli_data.get('anthropic_base_url'),
+                anthropic_auth_token=claude_cli_data.get('anthropic_auth_token'),
+            )
 
             # 测试 1: 验证 CLI 安装
             is_valid, error = test_service.validate_cli_installation()

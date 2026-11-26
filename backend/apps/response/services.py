@@ -364,12 +364,12 @@ class FeishuService:
         """
         发送飞书富文本卡片消息
 
-        使用飞书消息卡片（card）模板，支持标题、评分、MR 信息等结构化展示
+        使用飞书消息卡片（card）模板，支持标题、结论、MR 信息等结构化展示
 
         Args:
             title: 卡片标题
             content: 审查报告内容（纯文本，自动截断至 2000 字符）
-            extra_info: 额外信息字典 {project_name, mr_title, score, timestamp}
+            extra_info: 额外信息字典 {project_name, mr_title, verdict, tone, timestamp}
         """
         if not self.webhook_url:
             logger.warning(f"[{self.request_id}] Feishu webhook URL not configured")
@@ -391,20 +391,13 @@ class FeishuService:
             extra_info = extra_info or {}
             project_name = extra_info.get('project_name', '未知项目')
             mr_title = extra_info.get('mr_title', '')
-            score = extra_info.get('score', 0)
+            verdict = extra_info.get('verdict', '审查完成')
+            tone = extra_info.get('tone', 'blue')
             ts = extra_info.get('timestamp', time.strftime('%Y-%m-%d %H:%M:%S'))
 
             # 内容截断
             if len(content) > 2000:
                 content = content[:2000] + "\n\n...(内容过长已截断，请查看完整报告)"
-
-            # 评分颜色
-            if score >= 80:
-                score_color = "green"
-            elif score >= 60:
-                score_color = "yellow"
-            else:
-                score_color = "red"
 
             # 构建飞书卡片消息
             payload = {
@@ -413,9 +406,9 @@ class FeishuService:
                     "header": {
                         "title": {
                             "tag": "plain_text",
-                            "content": f"🤖 {title}"
+                            "content": title
                         },
-                        "template": score_color
+                        "template": tone
                     },
                     "elements": [
                         {
@@ -423,7 +416,7 @@ class FeishuService:
                             "fields": [
                                 {"is_short": True, "text": {"tag": "lark_md", "content": f"**项目:**\n{project_name}"}},
                                 {"is_short": True, "text": {"tag": "lark_md", "content": f"**MR:**\n{mr_title}"}},
-                                {"is_short": True, "text": {"tag": "lark_md", "content": f"**评分:**\n{score}/100"}},
+                                {"is_short": True, "text": {"tag": "lark_md", "content": f"**结论:**\n{verdict}"}},
                                 {"is_short": True, "text": {"tag": "lark_md", "content": f"**时间:**\n{ts}"}},
                             ]
                         },
@@ -462,7 +455,7 @@ class FeishuService:
                 else:
                     # 卡片消息失败时，回退到简单文本消息
                     logger.warning(f"[{self.request_id}] 飞书卡片发送失败({result.get('msg')})，回退到文本消息")
-                    fallback_text = f"🤖 {title}\n\n项目: {project_name}\nMR: {mr_title}\n评分: {score}/100\n\n{content}"
+                    fallback_text = f"{title}\n\n项目: {project_name}\nMR: {mr_title}\n结论: {verdict}\n\n{content}"
                     return self.send_text(fallback_text)
             else:
                 logger.error(f"[{self.request_id}] 飞书卡片发送失败 - 状态码:{response.status_code}")

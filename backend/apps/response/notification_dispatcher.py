@@ -4,8 +4,6 @@
 import logging
 import time
 from typing import Dict, Any, Optional
-from django.conf import settings
-from django.core.exceptions import ImproperlyConfigured
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -38,7 +36,32 @@ class NotificationDispatcher:
             results = []
             failed_channels = []
 
-            # 先处理第三方渠道
+            # 先发布 MR 评论，IM 摘要才不会早于评论送达
+            if gitlab_enabled:
+                gitlab_start = time.time()
+                gitlab_result = self._send_to_gitlab(report_data, gitlab_start)
+
+                if gitlab_result:
+                    results.append({
+                        'channel': 'gitlab',
+                        'success': gitlab_result.get('success', False),
+                        'message': gitlab_result.get('message', ''),
+                        'response_time': gitlab_result.get('response_time', 0),
+                        'details': gitlab_result.get('details', {}),
+                        'channel_name': 'GitLab 评论',
+                    })
+
+                    if gitlab_result.get('success', False):
+                        logger.info(f"[{self.request_id}] GitLab 评论发送成功")
+                    else:
+                        logger.error(f"[{self.request_id}] GitLab 评论发送失败: {gitlab_result.get('message', '')}")
+                        failed_channels.append('gitlab')
+
+                    # 已有更新的审查结果时，过期结果也不再推送到 IM
+                    if gitlab_result.get('details', {}).get('skipped'):
+                        notification_channels = []
+
+            # 再处理第三方渠道
             for channel in notification_channels:
                 channel_type = channel.notification_type
                 logger.info(f"[{self.request_id}] 开始发送到渠道: {channel_type} ({channel.name})")
@@ -78,27 +101,6 @@ class NotificationDispatcher:
                         'channel_name': channel.name,
                     })
 
-            # GitLab 评论通知单独处理
-            if gitlab_enabled:
-                gitlab_start = time.time()
-                gitlab_result = self._send_to_gitlab(None, report_data, mr_info, gitlab_start)
-
-                if gitlab_result:
-                    results.append({
-                        'channel': 'gitlab',
-                        'success': gitlab_result.get('success', False),
-                        'message': gitlab_result.get('message', ''),
-                        'response_time': gitlab_result.get('response_time', 0),
-                        'details': gitlab_result.get('details', {}),
-                        'channel_name': 'GitLab 评论',
-                    })
-
-                    if gitlab_result.get('success', False):
-                        logger.info(f"[{self.request_id}] GitLab 评论发送成功")
-                    else:
-                        logger.error(f"[{self.request_id}] GitLab 评论发送失败: {gitlab_result.get('message', '')}")
-                        failed_channels.append('gitlab')
-
             # 汇总结果
             success_count = len([r for r in results if r['success']])
             total_count = len(results)
@@ -117,16 +119,6 @@ class NotificationDispatcher:
 
             return summary
 
-        except ImproperlyConfigured as config_error:
-            elapsed_time = time.time() - start_time
-            error_msg = f'GitLab配置缺失: {config_error}'
-            logger.error(f"[{self.request_id}] {error_msg}")
-            return {
-                'success': False,
-                'message': error_msg,
-                'response_time': elapsed_time,
-                'details': {'error': str(config_error)}
-            }
         except Exception as e:
             logger.error(f"[{self.request_id}] 通知分发异常: {e}", exc_info=True)
             return {
@@ -198,8 +190,6 @@ class NotificationDispatcher:
         try:
             if channel_type == 'dingtalk':
                 return self._send_to_dingtalk(channel, report_data, mr_info, start_time)
-            elif channel_type == 'gitlab':
-                return self._send_to_gitlab(channel, report_data, mr_info, start_time)
             elif channel_type == 'slack':
                 return self._send_to_slack(channel, report_data, mr_info, start_time)
             elif channel_type == 'feishu':
@@ -258,7 +248,7 @@ class NotificationDispatcher:
             if len(content) > 1500:
                 content = content[:1500] + "\n\n...(内容过长已截断，请查看完整报告)"
 
-            message = f"""### 🤖 AI代码审查报告
+            message = f"""### AI 代码审查
 
 **项目**: {project_name}
 **MR**: {mr_title}
@@ -286,69 +276,22 @@ class NotificationDispatcher:
                 'response_time': elapsed_time
             }
 
-    def _send_to_gitlab(self, config, report_data: Dict[str, Any], mr_info: Dict[str, Any], start_time: float) -> Dict[str, Any]:
+    def _send_to_gitlab(self, report_data: Dict[str, Any], start_time: float) -> Dict[str, Any]:
         """
-        发送到GitLab（MR评论）
+        发布到 GitLab MR：总结评论和行内评论
         """
+        from apps.review.publishers.gitlab import GitLabReviewPublisher
+        from apps.review.services import GitlabService
+
         try:
-            from apps.review.services import GitlabService
-
-            project_id = mr_info.get('project_id')
-            mr_iid = mr_info.get('mr_iid')
-
-            if not project_id or not mr_iid:
-                error_msg = f'GitLab项目ID或MR IID缺失 - project_id:{project_id}, mr_iid:{mr_iid}'
-                logger.error(f"[{self.request_id}] {error_msg}")
-                return {
-                    'success': False,
-                    'message': error_msg,
-                    'response_time': time.time() - start_time,
-                    'details': {'project_id': project_id, 'mr_iid': mr_iid}
-                }
-
-            content = report_data['content']
-            logger.info(f"[{self.request_id}] 开始发送GitLab MR评论 - project_id:{project_id}, mr_iid:{mr_iid}, content_length:{len(content)}")
-
             service = GitlabService(request_id=self.request_id)
-            result = service.post_merge_request_comment(project_id, mr_iid, content)
-
-            elapsed_time = time.time() - start_time
-
-            if result is None:
-                error_msg = f'GitLab API调用失败 - project_id:{project_id}, mr_iid:{mr_iid}'
-                logger.error(f"[{self.request_id}] {error_msg}")
-                return {
-                    'success': False,
-                    'message': error_msg,
-                    'response_time': elapsed_time,
-                    'details': {'project_id': project_id, 'mr_iid': mr_iid, 'api_result': None}
-                }
-            elif isinstance(result, dict) and 'id' in result:
-                logger.info(f"[{self.request_id}] GitLab评论发送成功 - comment_id:{result.get('id')}, 耗时:{elapsed_time:.2f}秒")
-                result['response_time'] = elapsed_time
-                result['success'] = True
-                result['message'] = 'GitLab评论发送成功'
-                return result
-            else:
-                error_msg = f'GitLab API返回异常结果 - project_id:{project_id}, mr_iid:{mr_iid}, result:{result}'
-                logger.error(f"[{self.request_id}] {error_msg}")
-                return {
-                    'success': False,
-                    'message': error_msg,
-                    'response_time': elapsed_time,
-                    'details': {'project_id': project_id, 'mr_iid': mr_iid, 'api_result': result}
-                }
-
+            result = GitLabReviewPublisher(service, self.request_id).publish(report_data['report'])
         except Exception as e:
-            elapsed_time = time.time() - start_time
             error_msg = f'GitLab评论发送异常: {str(e)}'
             logger.error(f"[{self.request_id}] {error_msg}", exc_info=True)
-            return {
-                'success': False,
-                'message': error_msg,
-                'response_time': elapsed_time,
-                'details': {'error': str(e), 'project_id': mr_info.get('project_id'), 'mr_iid': mr_info.get('mr_iid')}
-            }
+            result = {'success': False, 'message': error_msg, 'details': {'error': str(e)}}
+        result['response_time'] = time.time() - start_time
+        return result
 
     def _send_to_slack(self, channel, report_data: Dict[str, Any], mr_info: Dict[str, Any], start_time: float) -> Dict[str, Any]:
         """
@@ -377,13 +320,13 @@ class NotificationDispatcher:
                 content = content[:1000] + "\n\n...(内容过长已截断)"
 
             payload = {
-                "text": f"🤖 AI代码审查报告 - {mr_title}",
+                "text": f"AI 代码审查 - {mr_title}",
                 "blocks": [
                     {
                         "type": "header",
                         "text": {
                             "type": "plain_text",
-                            "text": f"🤖 AI代码审查报告"
+                            "text": "AI 代码审查"
                         }
                     },
                     {
@@ -410,7 +353,7 @@ class NotificationDispatcher:
                         "type": "section",
                         "text": {
                             "type": "mrkdwn",
-                            "text": f"```\n{content}\n```"
+                            "text": content
                         }
                     }
                 ]
@@ -464,7 +407,7 @@ class NotificationDispatcher:
                 }
 
             content = report_data.get('content', '')
-            score = report_data.get('score', 0)
+            verdict = report_data.get('verdict', {})
 
             service = FeishuService(webhook_url=webhook_url, secret=secret, request_id=self.request_id)
             result = service.send_interactive(
@@ -473,7 +416,8 @@ class NotificationDispatcher:
                 extra_info={
                     'project_name': mr_info.get('project_name', '未知项目'),
                     'mr_title': mr_info.get('title', ''),
-                    'score': score,
+                    'verdict': verdict.get('label'),
+                    'tone': verdict.get('tone'),
                     'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 }
             )
@@ -517,7 +461,7 @@ class NotificationDispatcher:
             if len(content) > 1500:
                 content = content[:1500] + "\n\n...(内容过长已截断)"
 
-            message_content = f"""🤖 AI代码审查报告
+            message_content = f"""AI 代码审查
 
 项目: {project_name}
 MR: {mr_title}
@@ -591,7 +535,7 @@ MR: {mr_title}
             html_content = f"""
             <html>
             <body>
-                <h2>🤖 AI代码审查报告</h2>
+                <h2>AI 代码审查</h2>
                 <p><strong>项目:</strong> {project_name}</p>
                 <p><strong>MR:</strong> {mr_title}</p>
                 <p><strong>时间:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
@@ -686,7 +630,8 @@ MR: {mr_title}
                 '{mr_author}': mr_info.get('author', ''),
                 '{mr_url}': mr_info.get('web_url', ''),
                 '{review_content}': content_text,
-                '{review_score}': str(report_data.get('score', 0)),
+                '{review_score}': '',  # 评分已废弃，保留变量避免旧模板出现占位符
+                '{review_verdict}': report_data.get('verdict', {}).get('label', ''),
                 '{timestamp}': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 '{source_branch}': mr_info.get('source_branch', ''),
                 '{target_branch}': mr_info.get('target_branch', ''),
