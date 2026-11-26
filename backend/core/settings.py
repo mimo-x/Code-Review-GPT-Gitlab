@@ -132,6 +132,12 @@ REST_FRAMEWORK = {
     'DEFAULT_PARSER_CLASSES': [
         'rest_framework.parsers.JSONParser',
     ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'apps.api_auth.authentication.CookieTokenAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 100,
     'EXCEPTION_HANDLER': 'core.exceptions.custom_exception_handler',
@@ -140,9 +146,15 @@ REST_FRAMEWORK = {
 }
 
 # CORS settings
-# 开发环境允许所有源，生产环境需要配置具体的允许源
-CORS_ALLOW_ALL_ORIGINS = DEBUG
-CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:5173,http://localhost:5175,http://127.0.0.1:5175').split(',') if not DEBUG else []
+# 接口使用 Cookie 登录态，只允许白名单中的源携带凭据跨域访问
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get(
+        'CORS_ALLOWED_ORIGINS',
+        'http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://localhost:5175,http://127.0.0.1:5175',
+    ).split(',')
+    if origin.strip()
+]
 
 # 更详细的CORS配置
 CORS_ALLOW_CREDENTIALS = True

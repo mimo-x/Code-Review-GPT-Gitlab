@@ -13,7 +13,9 @@ export const API_CONFIG = {
 
   // 请求头
   HEADERS: {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    // 后端据此识别本站前端发起的写请求，防止其他页面借用登录状态
+    'X-Requested-With': 'XMLHttpRequest'
   }
 }
 
