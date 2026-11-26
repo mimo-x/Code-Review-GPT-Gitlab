@@ -52,6 +52,7 @@ class RunRequest(BaseModel):
     head_sha: str
     start_sha: str | None = None
     merge_request: str | None = None
+    excluded_paths: tuple[str, ...] = ()
     state_dir: Path  # private, persistent: snapshots and episodes are kept here
     config: dict = Field(default_factory=dict)  # ReviewConfig data, e.g. {"tier": "low"}
     model: ModelSpec
@@ -72,6 +73,7 @@ def make_policy(spec: ModelSpec, api_key: str | None):
 
 
 def run(request: RunRequest, policy) -> dict:
+    from review_core.common import stable_id
     from review_core.intel import CodeIntel
     from review_core.workspace import Workspace
 
@@ -82,10 +84,13 @@ def run(request: RunRequest, policy) -> dict:
     config = ReviewConfig.model_validate(request.config)
     workspace = Workspace.create(
         request.repository, request.state_dir, request.repository_id, request.base_sha,
-        request.head_sha, start_sha=request.start_sha, merge_request=request.merge_request)
+        request.head_sha, start_sha=request.start_sha, merge_request=request.merge_request,
+        excluded_paths=request.excluded_paths)
     case_id = workspace.snapshot.id
     out_dir = request.state_dir / "reviews" / case_id
-    result = review(CodeIntel(workspace), policy, config, run_id=config.tier,
+    model = request.model
+    model_route = stable_id((model.protocol, model.name, model.api_base))
+    result = review(CodeIntel(workspace), policy, config, run_id=f"{config.tier}-{model_route}",
                     case_id=case_id, out_dir=out_dir)
     store = EpisodeStore(out_dir / "episodes")
     return {
