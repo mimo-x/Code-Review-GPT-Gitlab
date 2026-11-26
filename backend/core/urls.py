@@ -4,6 +4,7 @@ URL configuration for Code Review GPT project.
 from django.contrib import admin
 from django.urls import path, include
 from django.http import JsonResponse
+from rest_framework.decorators import api_view
 from apps.webhook import urls as webhook_urls
 from apps.review import urls as review_urls
 from apps.llm import urls as llm_urls
@@ -22,6 +23,7 @@ def health_check(request):
     return JsonResponse({'status': 'ok', 'message': 'Code Review GPT is running'})
 
 
+@api_view(['GET'])
 def system_info(request):
     """System information endpoint"""
     try:

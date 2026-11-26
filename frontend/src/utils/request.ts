@@ -3,6 +3,8 @@ import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { API_CONFIG } from '@/config/api'
 import router from '@/router'
 
+let redirectingToLogin = false
+
 const service: AxiosInstance = axios.create({
   timeout: API_CONFIG.TIMEOUT,
   headers: API_CONFIG.HEADERS,
@@ -51,8 +53,14 @@ service.interceptors.response.use(
           }
           // 其他接口返回 401，说明 token 过期，清除用户名并跳转到登录页
           localStorage.removeItem('username')
-          router.push('/login')
-          alert('登录已过期，请重新登录')
+          // 一个页面可能同时发出多个请求，只跳转和提示一次
+          if (!redirectingToLogin && router.currentRoute.value.path !== '/login') {
+            redirectingToLogin = true
+            router.push('/login').finally(() => {
+              redirectingToLogin = false
+            })
+            alert('登录已过期，请重新登录')
+          }
           break
         case 403:
           alert('拒绝访问')
